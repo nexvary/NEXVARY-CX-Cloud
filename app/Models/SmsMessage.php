@@ -12,7 +12,8 @@ class SmsMessage extends Model
 
     protected $fillable = [
         'conversation_id', 'direction', 'body', 'status',
-        'telnyx_message_id', 'sent_at', 'delivered_at',
+        'telnyx_message_id', 'telnyx_event_id', 'sent_by',
+        'error_message', 'cost', 'sent_at', 'delivered_at',
     ];
 
     protected function casts(): array

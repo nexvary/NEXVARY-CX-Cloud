@@ -24,6 +24,9 @@ nx_add_sury_php() {
     return
   fi
 
+  nx_info "Refreshing package lists…"
+  _apt update -qq 2>&1 | nx_log_passthrough || true
+
   nx_info "Adding Sury PHP 8.3 repository…"
   _apt install -y ca-certificates apt-transport-https lsb-release gnupg curl
 

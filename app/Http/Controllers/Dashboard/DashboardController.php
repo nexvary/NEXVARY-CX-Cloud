@@ -85,26 +85,18 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard/Index', [
             'stats' => [
-                'active_calls'           => $activeCalls,
-                'registered_extensions'  => $totalExtensions,
-                'total_extensions'       => $totalExtensions,
-                'online_agents'          => 0,
-                'total_agents'           => 0,
-                'waiting_calls'          => 0,
-                'available_trunks'       => $enabledTrunks,
-                'total_trunks'           => $totalTrunks,
-                'unread_sms'             => $unreadSms,
-                'unread_email'           => 0,
-                'open_tickets'           => $openTickets,
-                'today_call_cost'        => '0.00',
-                'today_call_count'       => $callsToday,
+                'extensions'             => $totalExtensions,
+                'trunks'                 => $totalTrunks,
                 'calls_today'            => $callsToday,
+                'open_tickets'           => $openTickets,
+                'active_calls'           => $activeCalls,
+                'available_trunks'       => $enabledTrunks,
+                'unread_sms'             => $unreadSms,
                 'today_call_minutes'     => $minutesToday,
             ],
-            'pbx' => [
+            'pbx_health' => [
                 'connected' => $pbxStatus['connected'] ?? false,
                 'version'   => $pbxStatus['version'] ?? null,
-                'uptime'    => null,
             ],
             'server' => [
                 'cpu_percent'  => $cpuPercent,

@@ -129,20 +129,34 @@ class MobileController extends Controller
     public function smsInbox(Request $request): JsonResponse
     {
         $perPage = min((int) ($request->query('per_page', 25)), 100);
-        $conversations = SmsConversation::latest('last_message_at')
-            ->paginate($perPage, ['id', 'contact_number', 'status', 'last_message_at']);
+
+        // Scope to current user's tenant when tenant isolation is active
+        $query = SmsConversation::query();
+        $tenantId = $request->user()->tenant_id ?? null;
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $conversations = $query->latest('last_message_at')
+            ->paginate($perPage, ['id', 'did_number', 'contact_number', 'status', 'last_message_at']);
 
         return response()->json($conversations);
     }
 
-    public function smsMessages(SmsConversation $conversation): JsonResponse
+    public function smsMessages(Request $request, SmsConversation $conversation): JsonResponse
     {
+        // Verify ownership: conversation must belong to same tenant as the user
+        $tenantId = $request->user()->tenant_id ?? null;
+        if ($tenantId && $conversation->tenant_id !== $tenantId) {
+            return response()->json(['error' => 'Not found'], 404);
+        }
+
         $messages = $conversation->messages()->latest()->limit(100)->get(
-            ['id', 'direction', 'body', 'status', 'sent_at', 'delivered_at']
+            ['id', 'direction', 'body', 'status', 'telnyx_message_id', 'sent_at', 'delivered_at']
         );
 
         return response()->json([
-            'conversation' => $conversation->only('id', 'contact_number', 'status'),
+            'conversation' => $conversation->only('id', 'did_number', 'contact_number', 'status'),
             'messages'     => $messages,
         ]);
     }
@@ -180,9 +194,11 @@ class MobileController extends Controller
         $user->tokens()->where('name', 'like', 'mobile-%')->delete();
 
         // Create a short-lived pairing token (valid 10 minutes)
+        // The Android app exchanges this for a durable device session via
+        // POST /api/mobile/v1/pair/exchange (device completes pairing)
         $token = $user->createToken(
-            name: 'mobile-' . now()->timestamp,
-            abilities: ['mobile'],
+            name: 'mobile-pairing-' . now()->timestamp,
+            abilities: ['mobile', 'mobile.admin'],
             expiresAt: now()->addMinutes(10)
         );
 

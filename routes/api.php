@@ -20,20 +20,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 // ── Mobile API v1 (NEXVARY CX Manager Android) ───────────────────────────
-Route::prefix('mobile/v1')->name('mobile.')->middleware(['auth:sanctum'])->group(function () {
+// All routes require a valid Sanctum bearer token with the 'mobile' ability.
+// Privileged operations additionally require the 'mobile.admin' ability.
+Route::prefix('mobile/v1')->name('mobile.')->middleware(['auth:sanctum', 'mobile.token:mobile'])->group(function () {
     // Server and service health
-    Route::get('/status',      [MobileController::class, 'serverStatus'])->name('status');
-    Route::get('/alerts',      [MobileController::class, 'alerts'])->name('alerts');
+    Route::get('/status',       [MobileController::class, 'serverStatus'])->name('status');
+    Route::get('/alerts',       [MobileController::class, 'alerts'])->name('alerts');
 
     // PBX
-    Route::get('/extensions',  [MobileController::class, 'extensions'])->name('extensions');
-    Route::get('/calls/active',[MobileController::class, 'activeCalls'])->name('calls.active');
-    Route::get('/calls',       [MobileController::class, 'callHistory'])->name('calls');
+    Route::get('/extensions',   [MobileController::class, 'extensions'])->name('extensions');
+    Route::get('/calls/active', [MobileController::class, 'activeCalls'])->name('calls.active');
+    Route::get('/calls',        [MobileController::class, 'callHistory'])->name('calls');
 
-    // SMS
-    Route::get('/sms',                                          [MobileController::class, 'smsInbox'])->name('sms');
-    Route::get('/sms/{conversation}',                           [MobileController::class, 'smsMessages'])->name('sms.messages');
+    // SMS — only return conversations owned by the authenticated user's tenant
+    Route::get('/sms',                        [MobileController::class, 'smsInbox'])->name('sms');
+    Route::get('/sms/{conversation}',         [MobileController::class, 'smsMessages'])->name('sms.messages');
 
-    // Device pairing (admin ability required)
-    Route::post('/pair',       [MobileController::class, 'generatePairingQr'])->name('pair');
+    // Device pairing — requires admin-level mobile token ability
+    Route::post('/pair', [MobileController::class, 'generatePairingQr'])
+         ->middleware('mobile.token:mobile.admin')
+         ->name('pair');
 });

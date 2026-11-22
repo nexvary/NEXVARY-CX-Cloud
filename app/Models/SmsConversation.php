@@ -11,7 +11,10 @@ class SmsConversation extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $fillable = ['contact_id', 'did_number', 'contact_number', 'status', 'last_message_at'];
+    protected $fillable = [
+        'tenant_id', 'contact_id', 'did_number', 'contact_number',
+        'status', 'last_message_at',
+    ];
 
     protected function casts(): array
     {
@@ -26,5 +29,10 @@ class SmsConversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(SmsMessage::class, 'conversation_id');
+    }
+
+    public function latestMessage(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SmsMessage::class, 'conversation_id')->latestOfMany();
     }
 }

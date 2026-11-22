@@ -8,7 +8,15 @@ use App\Http\Controllers\CRM\ContactController;
 use App\Http\Controllers\CRM\TicketController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Install\WizardController;
+use App\Http\Controllers\PBX\CallQueueController;
 use App\Http\Controllers\PBX\CallRecordController;
+use App\Http\Controllers\PBX\DidController;
+use App\Http\Controllers\PBX\ExtensionController;
+use App\Http\Controllers\PBX\IvrController;
+use App\Http\Controllers\PBX\RingGroupController;
+use App\Http\Controllers\PBX\RouteController;
+use App\Http\Controllers\PBX\TrunkController;
+use App\Http\Controllers\PBX\VoicemailController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +54,58 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/{module}', [\App\Http\Controllers\Admin\GuideController::class, 'show'])->name('show');
         Route::post('/contacts', [\App\Http\Controllers\Admin\GuideController::class, 'storeContact'])->name('contacts.store');
         Route::post('/{module}/draft', [\App\Http\Controllers\Admin\ConfigurationController::class, 'store'])->name('draft.store');
+    });
+
+    // ── PBX ───────────────────────────────────────────────────────────────
+
+    Route::prefix('pbx')->name('pbx.')->middleware('nexvary.admin')->group(function () {
+        // Extensions
+        Route::resource('extensions', ExtensionController::class);
+        Route::post('extensions/{extension}/dnd',     [ExtensionController::class, 'setDnd'])->name('extensions.dnd');
+        Route::post('extensions/{extension}/forward', [ExtensionController::class, 'setForward'])->name('extensions.forward');
+        Route::get('extensions/{extension}/status',   [ExtensionController::class, 'status'])->name('extensions.status');
+
+        // SIP Trunks
+        Route::resource('trunks', TrunkController::class);
+        Route::post('trunks/{trunk}/reload', [TrunkController::class, 'reload'])->name('trunks.reload');
+        Route::get('trunks/{trunk}/health',  [TrunkController::class, 'health'])->name('trunks.health');
+
+        // DIDs
+        Route::resource('dids', DidController::class);
+
+        // Inbound & Outbound Routes
+        Route::prefix('inbound-routes')->name('inbound_routes.')->group(function () {
+            Route::get('/',          [RouteController::class, 'index'])->name('index');
+            Route::get('/create',    [RouteController::class, 'create'])->name('create');
+            Route::post('/',         [RouteController::class, 'store'])->name('store');
+            Route::get('/{id}',      [RouteController::class, 'show'])->name('show');
+            Route::get('/{id}/edit', [RouteController::class, 'edit'])->name('edit');
+            Route::patch('/{id}',    [RouteController::class, 'update'])->name('update');
+            Route::delete('/{id}',   [RouteController::class, 'destroy'])->name('destroy');
+        });
+        Route::prefix('outbound-routes')->name('outbound_routes.')->group(function () {
+            Route::get('/',          [RouteController::class, 'index'])->name('index');
+            Route::get('/create',    [RouteController::class, 'create'])->name('create');
+            Route::post('/',         [RouteController::class, 'store'])->name('store');
+            Route::get('/{id}',      [RouteController::class, 'show'])->name('show');
+            Route::get('/{id}/edit', [RouteController::class, 'edit'])->name('edit');
+            Route::patch('/{id}',    [RouteController::class, 'update'])->name('update');
+            Route::delete('/{id}',   [RouteController::class, 'destroy'])->name('destroy');
+        });
+
+        // IVR
+        Route::resource('ivr', IvrController::class);
+
+        // Call Queues
+        Route::resource('queues', CallQueueController::class);
+
+        // Ring Groups
+        Route::resource('ring-groups', RingGroupController::class)->parameters(['ring-groups' => 'ringGroup']);
+
+        // Voicemail
+        Route::get('/voicemail',              [VoicemailController::class, 'index'])->name('voicemail.index');
+        Route::get('/voicemail/{box}',        [VoicemailController::class, 'show'])->name('voicemail.show');
+        Route::delete('/voicemail/{box}/{msg}', [VoicemailController::class, 'destroy'])->name('voicemail.destroy');
     });
 
     // ── Call Center ───────────────────────────────────────────────────────
@@ -91,7 +151,10 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::post('/server/freeswitch/restart', [ServerController::class, 'restartFreeswitch'])->name('server.fs_restart');
         Route::get('/organization', fn() => inertia('Settings/Organization'))->name('organization');
         Route::post('/organization', [ServerController::class, 'saveOrganization'])->name('organization.save');
-        Route::get('/security', fn() => inertia('Settings/Security'))->name('security');
+        Route::get('/security',      fn() => inertia('Settings/Security'))->name('security');
+        Route::get('/users',         fn() => inertia('Settings/Users'))->name('users');
+        Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
+        Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
     });
 
     // ── Info Pages ────────────────────────────────────────────────────────

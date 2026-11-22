@@ -37,6 +37,19 @@ class TelnyxService
         return !empty(config('nexvary.telnyx.api_key'));
     }
 
+    /**
+     * Verify an incoming Telnyx webhook without requiring an API key.
+     * Fails closed: returns false if the public key is not configured.
+     */
+    public static function verifyIncomingWebhook(Request $request): bool
+    {
+        $publicKey = config('nexvary.telnyx.webhook_public_key');
+        if (empty($publicKey)) {
+            return false;
+        }
+        return (new static(apiKey: ''))->verifyWebhookSignature($request);
+    }
+
     // ── Account ───────────────────────────────────────────────────────────────
 
     public function validateConnection(): array

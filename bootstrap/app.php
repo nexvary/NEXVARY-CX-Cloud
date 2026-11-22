@@ -20,8 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'installed'  => EnsureInstalled::class,
+            'installed'     => EnsureInstalled::class,
             'nexvary.admin' => EnsureAdmin::class,
+            'mobile.token'  => \App\Http\Middleware\EnsureMobileToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
