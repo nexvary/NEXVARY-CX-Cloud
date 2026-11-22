@@ -103,8 +103,7 @@ nx_install_redis_debian() {
   nx_step "Installing Redis 7"
 
   if dpkg -l redis-server &>/dev/null; then
-    local ver; ver="$(redis-server --version 2>/dev/null | awk '{print $3}' | tr -d 'v=')"
-    nx_ok "Redis $ver already installed"
+    nx_ok "Redis already installed"
     if systemctl is-system-running --quiet 2>/dev/null; then
       systemctl enable redis-server --now || true
     else
@@ -114,7 +113,7 @@ nx_install_redis_debian() {
   fi
 
   nx_spinner_start "Installing Redis…"
-  _apt install -y redis-server 2>&1 | nx_log_passthrough
+  _apt install -y redis-server redis-tools 2>&1 | nx_log_passthrough
   nx_spinner_stop
 
   # Harden: bind to localhost only, disable protected-mode (we set a password later)
@@ -128,7 +127,7 @@ nx_install_redis_debian() {
   else
     redis-server --daemonize yes 2>/dev/null || true
   fi
-  nx_ok "Redis $(redis-server --version | awk '{print $3}' | tr -d 'v=') installed and started"
+  nx_ok "Redis installed and started"
 }
 
 # ── Install Nginx ─────────────────────────────────────────────────────────────

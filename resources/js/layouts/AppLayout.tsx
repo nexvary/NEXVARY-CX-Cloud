@@ -250,7 +250,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const pbxStatus = rawProps.pbxStatus ?? { connected: false, active_calls: 0 };
   const unread = rawProps.unread ?? { sms: 0, email: 0, tickets: 0 };
   const navItems = useNavItems(unread);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   // Set document direction from locale
