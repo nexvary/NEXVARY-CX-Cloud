@@ -168,7 +168,7 @@ try {
         const toggle = page.locator('button[aria-controls="app-navigation"]');
         if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
     }
-    await page.locator('#app-navigation button').click();
+    await page.locator('#app-navigation [data-action="logout"]').click();
     await page.waitForURL('**/login');
     const protectedPage = await page.request.get(base + '/dashboard', { maxRedirects: 0 });
     assert.equal(protectedPage.status(), 302);

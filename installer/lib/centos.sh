@@ -79,7 +79,11 @@ nx_install_postgresql_centos() {
       /var/lib/pgsql/16/data/postgresql.conf
   fi
 
-  systemctl enable postgresql-16 --now
+  if systemctl is-system-running --quiet 2>/dev/null; then
+    systemctl enable postgresql-16 --now
+  else
+    su - postgres -c '/usr/pgsql-16/bin/pg_ctl start -D /var/lib/pgsql/16/data -l /tmp/pg16.log' 2>/dev/null || true
+  fi
   nx_ok "PostgreSQL $(psql --version 2>/dev/null | awk '{print $3}') installed and started"
 }
 
@@ -90,7 +94,11 @@ nx_install_redis_centos() {
 
   if rpm -q redis &>/dev/null; then
     nx_ok "Redis already installed"
-    systemctl enable redis --now || true
+    if systemctl is-system-running --quiet 2>/dev/null; then
+      systemctl enable redis --now || true
+    else
+      redis-server --daemonize yes 2>/dev/null || true
+    fi
     return
   fi
 
@@ -104,7 +112,11 @@ nx_install_redis_centos() {
     sed -i 's/^bind .*/bind 127.0.0.1 -::1/' "$redis_conf" || true
   fi
 
-  systemctl enable redis --now
+  if systemctl is-system-running --quiet 2>/dev/null; then
+    systemctl enable redis --now
+  else
+    redis-server --daemonize yes 2>/dev/null || true
+  fi
   nx_ok "Redis installed and started"
 }
 

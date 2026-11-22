@@ -157,7 +157,8 @@
     "about_system": "عن النظام",
     "help_faq": "المساعدة والأسئلة الشائعة",
     "about_developer": "عن المطور",
-    "language": "اللغة"
+    "language": "اللغة",
+    "administration": "الإدارة"
   },
   "dashboard": {
     "title": "لوحة التحكم",

@@ -51,6 +51,11 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
       icon: LayoutDashboard,
     },
     {
+      label: t('nav.administration'),
+      href: '/admin',
+      icon: Shield,
+    },
+    {
       label: t('nav.pbx'),
       href: '#pbx',
       icon: Phone,
@@ -276,6 +281,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="nx-btn-ghost p-1.5 -ms-1.5"
+            aria-controls="app-navigation"
+            aria-expanded={sidebarOpen}
           >
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
@@ -381,6 +388,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside
+        id="app-navigation"
         className={`nx-sidebar overflow-y-auto transition-transform ${sidebarOpen ? '' : '-translate-x-full rtl:translate-x-full'}`}
       >
         <nav className="py-3">
@@ -389,10 +397,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
           ))}
         </nav>
 
-        {/* Version */}
+        {/* Version + Logout */}
         <div className="px-4 pb-4 mt-4 border-t border-nx pt-4">
-          <div className="text-xs text-nx-muted">NEXVARY CX Cloud v1.0</div>
-          <div className="text-xs text-nx-muted">nexvary.com</div>
+          <div className="text-xs text-nx-muted mb-3">NEXVARY CX Cloud v1.0</div>
+          <Link
+            href="/logout"
+            method="post"
+            as="button"
+            data-action="logout"
+            className="nx-nav-item text-red-400 w-full text-start"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{t('auth.logout')}</span>
+          </Link>
         </div>
       </aside>
 

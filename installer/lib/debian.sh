@@ -89,7 +89,11 @@ nx_install_postgresql_debian() {
   _apt install -y postgresql-16 2>&1 | nx_log_passthrough
   nx_spinner_stop
 
-  systemctl enable postgresql --now
+  if systemctl is-system-running --quiet 2>/dev/null; then
+    systemctl enable postgresql --now
+  else
+    pg_ctlcluster 16 main start 2>&1 | nx_log_passthrough || true
+  fi
   nx_ok "PostgreSQL $(psql --version | awk '{print $3}') installed and started"
 }
 
@@ -101,7 +105,11 @@ nx_install_redis_debian() {
   if dpkg -l redis-server &>/dev/null; then
     local ver; ver="$(redis-server --version 2>/dev/null | awk '{print $3}' | tr -d 'v=')"
     nx_ok "Redis $ver already installed"
-    systemctl enable redis-server --now || true
+    if systemctl is-system-running --quiet 2>/dev/null; then
+      systemctl enable redis-server --now || true
+    else
+      redis-server --daemonize yes 2>/dev/null || true
+    fi
     return
   fi
 
@@ -115,7 +123,11 @@ nx_install_redis_debian() {
     sed -i 's/^bind .*/bind 127.0.0.1 -::1/' "$redis_conf"
   fi
 
-  systemctl enable redis-server --now
+  if systemctl is-system-running --quiet 2>/dev/null; then
+    systemctl enable redis-server --now
+  else
+    redis-server --daemonize yes 2>/dev/null || true
+  fi
   nx_ok "Redis $(redis-server --version | awk '{print $3}' | tr -d 'v=') installed and started"
 }
 

@@ -20,7 +20,7 @@ class GuideController extends Controller
         'outbound' => ['outbound_routes', ['name', 'dial_pattern', 'enabled'], false],
         'ivr' => ['ivr_menus', ['name', 'description', 'enabled'], false],
         'queues' => ['call_queues', ['name', 'extension', 'strategy', 'enabled'], false],
-        'sms' => ['sms_conversations', ['our_number', 'their_number', 'status'], false],
+        'sms' => ['sms_conversations', ['did_number', 'contact_number', 'status'], false],
         'contacts' => ['contacts', ['first_name', 'last_name', 'email', 'phone'], true],
         'billing' => ['rate_tables', ['name', 'currency', 'enabled'], false],
         'voice' => ['ai_sessions', ['status', 'created_at'], false],

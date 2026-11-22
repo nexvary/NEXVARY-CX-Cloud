@@ -157,7 +157,8 @@
     "about_system": "About System",
     "help_faq": "Help & FAQ",
     "about_developer": "About Developer",
-    "language": "Language"
+    "language": "Language",
+    "administration": "Administration"
   },
   "dashboard": {
     "title": "Dashboard",
