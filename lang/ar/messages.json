@@ -152,7 +152,12 @@
     "server": "الخادم",
     "integrations": "التكاملات",
     "backup": "النسخ الاحتياطي",
-    "profile": "الملف الشخصي"
+    "profile": "الملف الشخصي",
+    "info": "معلومات",
+    "about_system": "عن النظام",
+    "help_faq": "المساعدة والأسئلة الشائعة",
+    "about_developer": "عن المطور",
+    "language": "اللغة"
   },
   "dashboard": {
     "title": "لوحة التحكم",

@@ -2,8 +2,15 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaController;
+use App\Http\Controllers\Billing\BillingAccountController;
+use App\Http\Controllers\Billing\RateTableController;
+use App\Http\Controllers\CRM\ContactController;
+use App\Http\Controllers\CRM\TicketController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Install\WizardController;
+use App\Http\Controllers\PBX\CallRecordController;
+use App\Http\Controllers\Server\ServerController;
+use App\Http\Controllers\SMS\SmsController;
 use Illuminate\Support\Facades\Route;
 
 // ── Setup Wizard (pre-install) ────────────────────────────────────────────
@@ -41,6 +48,63 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::post('/{module}/draft', [\App\Http\Controllers\Admin\ConfigurationController::class, 'store'])->name('draft.store');
     });
 
-    Route::redirect('/pbx/extensions', '/admin/extensions')->name('pbx.extensions.index');
-    Route::redirect('/pbx/trunks', '/admin/trunks')->name('pbx.trunks.index');
+    // ── Call Center ───────────────────────────────────────────────────────
+
+    Route::prefix('call-center')->name('call_center.')->group(function () {
+        Route::get('/live',       [CallRecordController::class, 'live'])->name('live');
+        Route::delete('/live/{uuid}', [CallRecordController::class, 'hangup'])->name('hangup');
+        Route::get('/records',   [CallRecordController::class, 'index'])->name('records');
+        Route::get('/recordings',[CallRecordController::class, 'recordings'])->name('recordings');
+    });
+
+    // ── SMS ───────────────────────────────────────────────────────────────
+
+    Route::prefix('sms')->name('sms.')->group(function () {
+        Route::get('/',                      [SmsController::class, 'index'])->name('index');
+        Route::get('/{conversation}',        [SmsController::class, 'show'])->name('show');
+        Route::post('/{conversation}',       [SmsController::class, 'send'])->name('send');
+        Route::post('/new',                  [SmsController::class, 'compose'])->name('compose');
+    });
+
+    // ── CRM ───────────────────────────────────────────────────────────────
+
+    Route::prefix('crm')->name('crm.')->group(function () {
+        Route::resource('contacts', ContactController::class);
+        Route::resource('tickets', TicketController::class);
+        Route::patch('tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
+        Route::patch('tickets/{ticket}/status', [TicketController::class, 'changeStatus'])->name('tickets.status');
+    });
+
+    // ── Billing ───────────────────────────────────────────────────────────
+
+    Route::prefix('billing')->name('billing.')->middleware('nexvary.admin')->group(function () {
+        Route::resource('accounts', BillingAccountController::class);
+        Route::resource('rates', RateTableController::class);
+        Route::get('/invoices', fn() => inertia('Billing/Invoices'))->name('invoices');
+        Route::get('/reports',  fn() => inertia('Billing/Reports'))->name('reports');
+    });
+
+    // ── Server / Settings ─────────────────────────────────────────────────
+
+    Route::prefix('settings')->name('settings.')->middleware('nexvary.admin')->group(function () {
+        Route::get('/server', [ServerController::class, 'index'])->name('server');
+        Route::post('/server/freeswitch/restart', [ServerController::class, 'restartFreeswitch'])->name('server.fs_restart');
+        Route::get('/organization', fn() => inertia('Settings/Organization'))->name('organization');
+        Route::post('/organization', [ServerController::class, 'saveOrganization'])->name('organization.save');
+        Route::get('/security', fn() => inertia('Settings/Security'))->name('security');
+    });
+
+    // ── Info Pages ────────────────────────────────────────────────────────
+
+    Route::prefix('info')->name('info.')->group(function () {
+        Route::get('/about',     fn() => inertia('Info/About'))->name('about');
+        Route::get('/help',      fn() => inertia('Info/Help'))->name('help');
+        Route::get('/developer', fn() => inertia('Info/Developer'))->name('developer');
+    });
+
+});
+
+// ── Webhooks (no auth, signature-verified) ────────────────────────────────
+Route::prefix('webhooks')->name('webhooks.')->group(function () {
+    Route::post('/telnyx', [SmsController::class, 'webhook'])->name('telnyx');
 });

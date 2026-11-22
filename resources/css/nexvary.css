@@ -1,51 +1,59 @@
 /* =============================================================================
    NEXVARY CX Cloud — Design System
-   Premium black-metallic-crimson aesthetic
+   Premium black-metallic-neon aesthetic
    ============================================================================= */
 
 @import "tailwindcss";
 
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  /* Backgrounds */
-  --nx-bg-base:        #0a0a0f;
-  --nx-bg-surface:     #111118;
-  --nx-bg-card:        #16161e;
-  --nx-bg-card-hover:  #1c1c27;
-  --nx-bg-elevated:    #1e1e2a;
-  --nx-bg-input:       #12121a;
-  --nx-bg-modal:       #14141c;
+  /* Backgrounds — deep gloss black */
+  --nx-bg-base:        #080810;
+  --nx-bg-surface:     #0d0d18;
+  --nx-bg-card:        #12121f;
+  --nx-bg-card-hover:  #18182a;
+  --nx-bg-elevated:    #1a1a2e;
+  --nx-bg-input:       #0f0f1c;
+  --nx-bg-modal:       #10101b;
 
   /* Metallic silver frames */
-  --nx-border:         #2a2a3a;
-  --nx-border-active:  #3d3d55;
-  --nx-border-focus:   #5a5a85;
-  --nx-silver:         #c0c8d8;
-  --nx-silver-dim:     #7a8299;
+  --nx-border:         #252538;
+  --nx-border-active:  #38385a;
+  --nx-border-focus:   #5050a0;
+  --nx-silver:         #c8d0e0;
+  --nx-silver-dim:     #7a829a;
 
-  /* Crimson accent */
+  /* Neon green — primary accent */
+  --nx-green:          #00e676;
+  --nx-green-light:    #69ffb0;
+  --nx-green-dark:     #00b050;
+  --nx-green-muted:    rgba(0,230,118,0.12);
+  --nx-green-glow:     rgba(0,230,118,0.25);
+  --nx-glow-green:     0 0 20px rgba(0,230,118,0.3);
+
+  /* Crimson — danger / delete only */
   --nx-crimson:        #e02020;
   --nx-crimson-light:  #ff3535;
   --nx-crimson-dark:   #a81515;
   --nx-crimson-muted:  rgba(224,32,32,0.15);
   --nx-crimson-glow:   rgba(224,32,32,0.25);
+  --nx-glow-crimson:   0 0 20px rgba(224,32,32,0.3);
 
   /* Text */
-  --nx-text-primary:   #e8eaf2;
+  --nx-text-primary:   #eaecf5;
   --nx-text-secondary: #9497b0;
   --nx-text-muted:     #5c5f7a;
-  --nx-text-inverse:   #0a0a0f;
+  --nx-text-inverse:   #080810;
 
   /* Status */
-  --nx-success:        #22c55e;
-  --nx-warning:        #f59e0b;
-  --nx-error:          #ef4444;
-  --nx-info:           #3b82f6;
+  --nx-success:        #00e676;
+  --nx-warning:        #ffab40;
+  --nx-error:          #ff1744;
+  --nx-info:           #40c4ff;
 
   /* Luminous effects */
-  --nx-glow-crimson:   0 0 20px rgba(224,32,32,0.3);
-  --nx-glow-silver:    0 0 15px rgba(192,200,216,0.15);
-  --nx-glow-blue:      0 0 20px rgba(59,130,246,0.2);
+  --nx-glow-silver:    0 0 15px rgba(200,208,224,0.12);
+  --nx-glow-blue:      0 0 20px rgba(64,196,255,0.2);
 
   /* Typography */
   --nx-font-sans:      'Inter var', 'Inter', system-ui, -apple-system, sans-serif;
@@ -112,17 +120,18 @@
   .nx-card {
     background: var(--nx-bg-card);
     border: 1px solid var(--nx-border);
-    border-radius: 10px;
+    border-radius: 16px;
     transition: border-color var(--nx-transition), box-shadow var(--nx-transition);
   }
   .nx-card:hover {
     border-color: var(--nx-border-active);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
   }
 
   .nx-card-elevated {
     background: var(--nx-bg-elevated);
     border: 1px solid var(--nx-border-active);
-    border-radius: 10px;
+    border-radius: 16px;
     box-shadow: var(--nx-glow-silver);
   }
 
@@ -130,13 +139,14 @@
     @apply p-5;
     position: relative;
     overflow: hidden;
+    border-radius: 16px;
   }
   .nx-stat-card::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--nx-crimson), transparent);
+    background: linear-gradient(90deg, var(--nx-green), transparent);
   }
 
   /* ── Buttons ───────────────────────────────────────────────────── */
@@ -153,14 +163,14 @@
   }
 
   .nx-btn-primary {
-    color: #fff;
-    background: var(--nx-crimson);
-    border: 1px solid var(--nx-crimson-dark);
-    box-shadow: 0 1px 8px var(--nx-crimson-glow);
+    color: #000;
+    background: var(--nx-green);
+    border: 1px solid var(--nx-green-dark);
+    box-shadow: 0 1px 8px var(--nx-green-glow);
   }
   .nx-btn-primary:hover:not(:disabled) {
-    background: var(--nx-crimson-light);
-    box-shadow: var(--nx-glow-crimson);
+    background: var(--nx-green-light);
+    box-shadow: var(--nx-glow-green);
   }
 
   .nx-btn-secondary {
@@ -269,9 +279,9 @@
     color: var(--nx-text-primary);
   }
   .nx-nav-item.active {
-    background: var(--nx-crimson-muted);
-    color: var(--nx-crimson-light);
-    border-inline-start: 2px solid var(--nx-crimson);
+    background: var(--nx-green-muted);
+    color: var(--nx-green);
+    border-inline-start: 2px solid var(--nx-green);
   }
   .nx-nav-section {
     @apply px-4 py-2 mt-4 text-xs font-semibold uppercase tracking-wider;
@@ -296,7 +306,7 @@
   .nx-spinner {
     @apply w-5 h-5 rounded-full border-2 animate-spin;
     border-color: var(--nx-border-active);
-    border-top-color: var(--nx-crimson);
+    border-top-color: var(--nx-green);
   }
 
   /* ── Live Call Indicator ───────────────────────────────────────── */
@@ -335,6 +345,7 @@
   .text-nx-secondary { color: var(--nx-text-secondary); }
   .text-nx-muted     { color: var(--nx-text-muted); }
   .text-nx-crimson   { color: var(--nx-crimson); }
+  .text-nx-green     { color: var(--nx-green); }
   .text-nx-silver    { color: var(--nx-silver); }
 
   .bg-nx-base     { background: var(--nx-bg-base); }
@@ -346,6 +357,7 @@
   .border-nx-active{ border-color: var(--nx-border-active); }
 
   .glow-crimson { box-shadow: var(--nx-glow-crimson); }
+  .glow-green   { box-shadow: var(--nx-glow-green); }
   .glow-silver  { box-shadow: var(--nx-glow-silver); }
 
   /* RTL-aware start/end utilities */

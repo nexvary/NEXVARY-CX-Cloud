@@ -152,7 +152,12 @@
     "server": "Server",
     "integrations": "Integrations",
     "backup": "Backup",
-    "profile": "Profile"
+    "profile": "Profile",
+    "info": "Info",
+    "about_system": "About System",
+    "help_faq": "Help & FAQ",
+    "about_developer": "About Developer",
+    "language": "Language"
   },
   "dashboard": {
     "title": "Dashboard",
