@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npm run types:check
+        run: npm run typecheck
 
       - name: Lint
         run: npm run lint || true
@@ -79,6 +79,9 @@ jobs:
           php-version: '8.3'
           extensions: pdo, pdo_pgsql, redis, curl, mbstring, xml, zip, bcmath, intl, gd
           coverage: xdebug
+
+      - name: Create bootstrap/cache (required before composer install)
+        run: mkdir -p bootstrap/cache && chmod 775 bootstrap/cache
 
       - name: Get Composer cache directory
         id: composer-cache
@@ -162,7 +165,7 @@ jobs:
           php-version: '8.3'
 
       - name: Composer audit
-        run: composer audit
+        run: composer audit --locked
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
