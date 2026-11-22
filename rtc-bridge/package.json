@@ -1,0 +1,16 @@
+{
+  "name": "nexvary-cx-rtc-bridge",
+  "version": "1.0.0",
+  "description": "NEXVARY CX Cloud WebRTC signaling bridge",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18"
+  }
+}

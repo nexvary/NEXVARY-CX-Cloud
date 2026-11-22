@@ -1,0 +1,42 @@
+/node_modules
+/public/hot
+/public/storage
+/public/build
+/storage/*.key
+/vendor
+.env
+.env.backup
+.env.production
+*.lock
+.phpunit.result.cache
+.phpunit.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+
+# Nexvary-specific
+/storage/app/recordings
+/storage/app/voicemail
+/storage/app/backups
+/rtc-bridge/node_modules
+*.pem
+*.key
+*.crt
+secrets.json
+db-password.txt
+install-token.txt
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+/tests/.pest
+coverage/
+.coverage
