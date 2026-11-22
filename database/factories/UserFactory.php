@@ -22,7 +22,7 @@ class UserFactory extends Factory
             'locale'            => 'en',
             'timezone'          => 'UTC',
             'mfa_enabled'       => false,
-            'is_active'         => true,
+            'active'            => true,
         ];
     }
 }

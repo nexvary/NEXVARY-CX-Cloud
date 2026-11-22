@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    // Mark as installed so EnsureInstalled middleware passes through
+    // Override default (not installed) so dashboard routes pass EnsureInstalled
     config(['nexvary.installed' => true]);
 });
 
@@ -18,9 +18,9 @@ it('shows dashboard for authenticated admin', function () {
     $user = User::factory()->create();
     $user->assignRole('superadmin');
 
-    // Send as Inertia request to get JSON instead of full HTML (skips Vite manifest)
+    // Send as Inertia request — no X-Inertia-Version to avoid 409 version mismatch
     $this->actingAs($user)
-         ->withHeaders(['X-Inertia' => 'true', 'X-Inertia-Version' => '1'])
+         ->withHeaders(['X-Inertia' => 'true'])
          ->get('/dashboard')
          ->assertOk();
 });

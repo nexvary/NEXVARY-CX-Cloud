@@ -5,15 +5,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 it('redirects to setup when not installed', function () {
-    // Ensure config treats app as not installed (overrides any env value)
-    config(['nexvary.installed' => false]);
-
+    // nexvary.installed=false is set by default in TestCase::setUp()
     $this->get('/')->assertRedirect('/setup');
 });
 
 it('renders setup wizard page', function () {
-    // X-Inertia header gets JSON response instead of full HTML (no Vite manifest needed)
-    $response = $this->withHeaders(['X-Inertia' => 'true', 'X-Inertia-Version' => '1'])
+    // X-Inertia header gets JSON response — do NOT send X-Inertia-Version
+    // because withoutVite() means server version=null and any value causes 409
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
                      ->get('/setup');
     $response->assertOk();
 });
