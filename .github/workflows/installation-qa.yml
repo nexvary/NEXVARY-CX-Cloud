@@ -59,3 +59,23 @@ jobs:
           path: visual-evidence/
           if-no-files-found: error
           retention-days: 30
+
+  freeswitch:
+    name: Real FreeSWITCH ESL and local SIP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, curl, mbstring, xml, zip, bcmath, intl, sockets
+          coverage: none
+      - name: Install Laravel dependencies
+        run: |
+          mkdir -p bootstrap/cache storage/logs storage/framework/{cache/data,sessions,views}
+          composer install --no-interaction --prefer-dist --no-progress
+      - name: Probe isolated FreeSWITCH
+        run: bash scripts/qa-freeswitch.sh
