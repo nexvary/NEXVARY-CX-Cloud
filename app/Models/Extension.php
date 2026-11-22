@@ -14,7 +14,7 @@ class Extension extends Model
     protected $fillable = [
         'number', 'name', 'sip_password', 'voicemail_pin',
         'dnd_enabled', 'call_forward_enabled', 'call_forward_number',
-        'timeout', 'is_active', 'context',
+        'timeout', 'enabled', 'context',
     ];
 
     protected function casts(): array
@@ -22,7 +22,7 @@ class Extension extends Model
         return [
             'dnd_enabled'          => 'boolean',
             'call_forward_enabled' => 'boolean',
-            'is_active'            => 'boolean',
+            'enabled'            => 'boolean',
             'timeout'              => 'integer',
         ];
     }

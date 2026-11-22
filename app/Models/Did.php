@@ -12,12 +12,12 @@ class Did extends Model
 
     protected $fillable = [
         'number', 'description', 'trunk_id', 'destination_type',
-        'destination_id', 'is_active',
+        'destination_id', 'enabled',
     ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['enabled' => 'boolean'];
     }
 
     public function trunk(): \Illuminate\Database\Eloquent\Relations\BelongsTo

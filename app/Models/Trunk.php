@@ -13,14 +13,14 @@ class Trunk extends Model
     protected $fillable = [
         'name', 'provider', 'username', 'sip_server', 'sip_port',
         'register', 'codec_prefs', 'concurrent_calls_limit',
-        'outbound_caller_id', 'is_active', 'status',
+        'outbound_caller_id', 'enabled', 'status',
     ];
 
     protected function casts(): array
     {
         return [
             'register'   => 'boolean',
-            'is_active'  => 'boolean',
+            'enabled'  => 'boolean',
             'sip_port'   => 'integer',
             'concurrent_calls_limit' => 'integer',
             'codec_prefs' => 'array',

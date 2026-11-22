@@ -12,7 +12,7 @@ class Rate extends Model
 
     protected $fillable = [
         'rate_table_id', 'prefix', 'destination_name',
-        'rate_per_minute', 'billing_increment', 'minimum_duration', 'is_active',
+        'rate_per_minute', 'billing_increment', 'minimum_duration', 'enabled',
     ];
 
     protected function casts(): array
@@ -21,7 +21,7 @@ class Rate extends Model
             'rate_per_minute'  => 'decimal:6',
             'billing_increment'=> 'integer',
             'minimum_duration' => 'integer',
-            'is_active'        => 'boolean',
+            'enabled'        => 'boolean',
         ];
     }
 

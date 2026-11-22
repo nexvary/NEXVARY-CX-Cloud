@@ -12,7 +12,7 @@ class BillingAccount extends Model
 
     protected $fillable = [
         'name', 'type', 'balance', 'credit_limit',
-        'currency', 'rate_table_id', 'is_active',
+        'currency', 'rate_table_id', 'enabled',
     ];
 
     protected function casts(): array
@@ -20,7 +20,7 @@ class BillingAccount extends Model
         return [
             'balance'      => 'decimal:6',
             'credit_limit' => 'decimal:6',
-            'is_active'    => 'boolean',
+            'enabled'    => 'boolean',
         ];
     }
 

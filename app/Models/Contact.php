@@ -12,13 +12,13 @@ class Contact extends Model
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'name', 'email', 'phone', 'company', 'notes', 'tags', 'is_active',
+        'name', 'email', 'phone', 'company', 'notes', 'tags', 'enabled',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'enabled' => 'boolean',
             'tags'      => 'array',
         ];
     }

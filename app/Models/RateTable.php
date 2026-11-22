@@ -10,11 +10,11 @@ class RateTable extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $fillable = ['name', 'currency', 'description', 'is_active'];
+    protected $fillable = ['name', 'currency', 'description', 'enabled'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['enabled' => 'boolean'];
     }
 
     public function rates(): \Illuminate\Database\Eloquent\Relations\HasMany

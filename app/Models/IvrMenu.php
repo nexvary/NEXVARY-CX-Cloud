@@ -12,13 +12,13 @@ class IvrMenu extends Model
 
     protected $fillable = [
         'name', 'description', 'greeting_tts', 'greeting_file',
-        'timeout', 'max_failures', 'is_active',
+        'timeout', 'max_failures', 'enabled',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active'    => 'boolean',
+            'enabled'    => 'boolean',
             'timeout'      => 'integer',
             'max_failures' => 'integer',
         ];

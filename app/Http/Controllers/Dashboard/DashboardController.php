@@ -23,7 +23,7 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard/Index', [
             'stats' => [
                 'extensions'    => Extension::count(),
-                'trunks'        => Trunk::where('is_active', true)->count(),
+                'trunks'        => Trunk::where('enabled', true)->count(),
                 'calls_today'   => CallRecord::whereDate('started_at', today())->count(),
                 'open_tickets'  => Ticket::where('status', 'open')->count(),
             ],

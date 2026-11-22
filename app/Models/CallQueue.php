@@ -13,13 +13,13 @@ class CallQueue extends Model
 
     protected $fillable = [
         'name', 'strategy', 'moh_sound', 'timeout', 'max_waiters',
-        'announce_holdtime', 'is_active',
+        'announce_holdtime', 'enabled',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active'        => 'boolean',
+            'enabled'        => 'boolean',
             'announce_holdtime'=> 'boolean',
             'timeout'          => 'integer',
             'max_waiters'      => 'integer',
