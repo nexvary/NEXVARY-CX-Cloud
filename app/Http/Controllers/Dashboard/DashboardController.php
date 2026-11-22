@@ -46,16 +46,19 @@ class DashboardController extends Controller
             ->get(['id', 'caller_id_number', 'caller_id_name', 'destination_number',
                    'duration_seconds', 'hangup_cause', 'started_at', 'answered_at'])
             ->map(fn($c) => [
-                'id'          => $c->id,
-                'caller'      => $c->caller_id_number ?? '—',
-                'destination' => $c->destination_number ?? '—',
-                'duration'    => $c->duration_seconds
-                                   ? gmdate('H:i:s', $c->duration_seconds)
-                                   : '00:00:00',
-                'status'      => $c->hangup_cause === 'NORMAL_CLEARING' && $c->answered_at
-                                   ? 'answered'
-                                   : ($c->answered_at ? 'answered' : 'missed'),
-                'started_at'  => $c->started_at?->format('Y-m-d H:i'),
+                'id'                 => $c->id,
+                'caller'             => $c->caller_id_number ?? '—',
+                'caller_id_number'   => $c->caller_id_number ?? '',
+                'destination'        => $c->destination_number ?? '—',
+                'destination_number' => $c->destination_number ?? '',
+                'duration'           => $c->duration_seconds
+                                          ? gmdate('H:i:s', $c->duration_seconds)
+                                          : '00:00:00',
+                'duration_seconds'   => (int) ($c->duration_seconds ?? 0),
+                'status'             => $c->hangup_cause === 'NORMAL_CLEARING' && $c->answered_at
+                                          ? 'answered'
+                                          : ($c->answered_at ? 'answered' : 'missed'),
+                'started_at'         => $c->started_at?->format('Y-m-d H:i'),
             ]);
 
         // Basic server metrics via sys calls (graceful fallback)
@@ -95,6 +98,7 @@ class DashboardController extends Controller
                 'open_tickets'           => $openTickets,
                 'today_call_cost'        => '0.00',
                 'today_call_count'       => $callsToday,
+                'calls_today'            => $callsToday,
                 'today_call_minutes'     => $minutesToday,
             ],
             'pbx' => [

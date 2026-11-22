@@ -9,6 +9,27 @@ import {
   Bot, FileText, Package, Hash, HelpCircle, Info, Code2
 } from 'lucide-react';
 
+interface PageProps {
+  auth: {
+    user: { id?: string; name: string; email?: string; role?: string };
+    roles?: string[];
+  };
+  pbxStatus?: {
+    connected: boolean;
+    active_calls: number;
+    version?: string;
+  };
+  unread?: {
+    sms: number;
+    email: number;
+    tickets: number;
+  };
+  flash?: {
+    success?: string;
+    error?: string;
+  };
+  [key: string]: unknown;
+}
 
 interface NavItem {
   label: string;
@@ -219,7 +240,10 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const { t, i18n } = useTranslation();
-  const { auth, pbxStatus, unread, flash } = usePage().props as unknown as PageProps;
+  const rawProps = usePage().props as unknown as PageProps;
+  const { auth, flash } = rawProps;
+  const pbxStatus = rawProps.pbxStatus ?? { connected: false, active_calls: 0 };
+  const unread = rawProps.unread ?? { sms: 0, email: 0, tickets: 0 };
   const navItems = useNavItems(unread);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -326,7 +350,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
             </div>
             <div className="hidden md:block text-start">
               <div className="text-xs font-medium text-nx-primary leading-tight">{auth.user.name}</div>
-              <div className="text-xs text-nx-muted capitalize">{auth.user.role}</div>
+              <div className="text-xs text-nx-muted capitalize">{auth.roles?.[0] ?? auth.user.role ?? ''}</div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-nx-muted hidden md:block" />
           </button>

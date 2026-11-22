@@ -23,7 +23,7 @@ const LiveCalls: React.FC<Props> = ({ active_calls }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       router.reload({ only: ['active_calls'], onSuccess: (page) => {
-        const props = page.props as Props;
+        const props = page.props as unknown as Props;
         setCalls(props.active_calls);
         setLastRefresh(new Date());
       }});

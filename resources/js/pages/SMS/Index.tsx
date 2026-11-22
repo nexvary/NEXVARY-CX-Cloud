@@ -113,7 +113,7 @@ const SmsPage: React.FC<Props> = ({ conversations, active_conversation }) => {
         {active_conversation ? (
           <div className="flex-1 flex flex-col">
             <div className="px-4 py-3 border-b border-nx">
-              <p className="font-mono font-medium text-nx-primary">{active_conversation.remote_number}</p>
+              <p className="font-mono font-medium text-nx-primary">{active_conversation.contact_number}</p>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {active_conversation.messages?.map(msg => (

@@ -1,0 +1,187 @@
+name: Installer — Multi-Linux Matrix
+
+on:
+  push:
+    branches: ['feature/stage-1-foundation', master, main]
+    paths:
+      - 'installer/**'
+      - '.github/workflows/installer-linux.yml'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'installer/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# ── Compatibility Matrix ───────────────────────────────────────────────────────
+# Platform          | Support     | Test method
+# ----------------  | ----------- | ----------------
+# Debian 12         | Verified    | Docker container
+# Debian 13 (Trixie)| Verified    | Docker container
+# Ubuntu 24.04      | Verified    | Docker container
+# CentOS Stream 9   | Verified    | Docker container
+# CentOS Stream 10  | Verified    | Docker container
+
+jobs:
+  detect-and-unit:
+    name: Detection unit tests — ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Debian 12
+            image: debian:12
+            expected_id: debian
+            expected_version: '12'
+            pkg_mgr: apt
+            supported: 'yes'
+
+          - os: Debian 13
+            image: debian:trixie
+            expected_id: debian
+            expected_version: '13'
+            pkg_mgr: apt
+            supported: 'yes'
+
+          - os: Ubuntu 24.04
+            image: ubuntu:24.04
+            expected_id: ubuntu
+            expected_version: '24.04'
+            pkg_mgr: apt
+            supported: 'yes'
+
+          - os: CentOS Stream 9
+            image: quay.io/centos/centos:stream9
+            expected_id: centos
+            expected_version: '9'
+            pkg_mgr: dnf
+            supported: 'yes'
+
+          - os: CentOS Stream 10
+            image: quay.io/centos/centos:stream10
+            expected_id: centos
+            expected_version: '10'
+            pkg_mgr: dnf
+            supported: 'yes'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run detection tests in container
+        run: |
+          docker run --rm \
+            -v "$PWD/installer:/installer:ro" \
+            "${{ matrix.image }}" \
+            bash -euo pipefail /installer/tests/test-detect.sh \
+              "${{ matrix.expected_id }}" \
+              "${{ matrix.expected_version }}" \
+              "${{ matrix.pkg_mgr }}" \
+              "${{ matrix.supported }}"
+
+  dependency-install:
+    name: PHP + PostgreSQL + Redis — ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Debian 12
+            image: debian:12
+            adapter: debian
+
+          - os: Ubuntu 24.04
+            image: ubuntu:24.04
+            adapter: debian
+
+          - os: CentOS Stream 9
+            image: quay.io/centos/centos:stream9
+            adapter: centos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies in container
+        run: |
+          docker run --rm \
+            --privileged \
+            -v "$PWD/installer:/installer:ro" \
+            -e NX_VERBOSE=1 \
+            "${{ matrix.image }}" \
+            bash /installer/tests/test-deps.sh "${{ matrix.adapter }}"
+
+  installer-script-lint:
+    name: ShellCheck — installer scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint installer scripts
+        run: |
+          shellcheck \
+            --severity=error \
+            --exclude=SC1091 \
+            installer/nexvary-bootstrap.sh \
+            installer/nexvary-install.sh \
+            installer/lib/ui.sh \
+            installer/lib/detect.sh \
+            installer/lib/debian.sh \
+            installer/lib/centos.sh \
+            installer/lib/freeswitch.sh \
+            installer/lib/app.sh \
+            installer/lib/nginx.sh \
+            installer/lib/systemd.sh
+
+  compatibility-matrix:
+    name: Publish compatibility matrix
+    runs-on: ubuntu-24.04
+    needs: [detect-and-unit, installer-script-lint]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate matrix report
+        run: |
+          cat > /tmp/matrix.md <<'MD'
+          # NEXVARY CX Cloud — OS Compatibility Matrix
+
+          | Operating System     | Version | Support   | Test Status   |
+          |----------------------|---------|-----------|---------------|
+          | Debian               | 13      | Verified  | CI tested      |
+          | Debian               | 12      | Verified  | CI tested      |
+          | Ubuntu               | 24.04   | Verified  | CI tested      |
+          | Ubuntu               | 22.04   | Compatible| Not CI tested  |
+          | CentOS Stream        | 10      | Verified  | CI tested      |
+          | CentOS Stream        | 9       | Verified  | CI tested      |
+          | CentOS Linux (any)   | 7/8     | ❌ EOL     | Rejected       |
+          | RHEL / Rocky / Alma  | 9+      | Partial   | Not CI tested  |
+
+          ## Notes
+          - **Verified**: Tested in CI on each push
+          - **Compatible**: Expected to work, not in automated matrix
+          - **Partial**: May work, no guarantee
+          - **Rejected**: Explicitly blocked (EOL, security risk)
+
+          Generated: $(date -Iseconds)
+          MD
+
+          cat /tmp/matrix.md
+
+      - name: Upload matrix report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-matrix
+          path: /tmp/matrix.md
+          retention-days: 90

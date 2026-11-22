@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
-import { Github, Globe, Code2, Package, ExternalLink, Terminal, BookOpen } from 'lucide-react';
+import { GitBranch, Globe, Code2, Package, ExternalLink, Terminal, BookOpen } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
 const links = [
@@ -12,7 +12,7 @@ const links = [
     color: 'var(--nx-green)',
   },
   {
-    icon: Github,
+    icon: GitBranch,
     label: 'GitHub Repository',
     href: 'https://github.com/nexvary/NEXVARY-CX-Cloud',
     display: 'github.com/nexvary/NEXVARY-CX-Cloud',
