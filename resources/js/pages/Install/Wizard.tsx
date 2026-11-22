@@ -192,7 +192,16 @@ const StepServer: React.FC<{ onNext: (d: any) => void; onBack: () => void; portC
 
 const StepProvider: React.FC<{ onNext: (d: any) => void; onBack: () => void }> = ({ onNext, onBack }) => {
   const { t } = useTranslation();
-  const { register, handleSubmit, watch } = useForm({ defaultValues: { provider: 'telnyx' } });
+  type ProviderFormData = {
+    provider: string;
+    telnyx_api_key?: string;
+    telnyx_connection_id?: string;
+    sip_host?: string;
+    sip_port?: string;
+    sip_username?: string;
+    sip_password?: string;
+  };
+  const { register, handleSubmit, watch } = useForm<ProviderFormData>({ defaultValues: { provider: 'telnyx' } });
   const provider = watch('provider');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<null | { ok: boolean; message: string }>(null);

@@ -164,8 +164,14 @@ jobs:
         with:
           php-version: '8.3'
 
+      - name: Create bootstrap/cache
+        run: mkdir -p bootstrap/cache
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --no-scripts
+
       - name: Composer audit
-        run: composer audit --locked
+        run: composer audit
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main

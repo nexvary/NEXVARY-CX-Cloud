@@ -241,7 +241,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const { t, i18n } = useTranslation();
-  const { auth, pbxStatus, unread, flash } = usePage<PageProps>().props;
+  const { auth, pbxStatus, unread, flash } = usePage().props as unknown as PageProps;
   const navItems = useNavItems(unread);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);

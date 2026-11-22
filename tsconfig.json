@@ -10,6 +10,7 @@
         "esModuleInterop": true,
         "allowImportingTsExtensions": true,
         "noEmit": true,
+        "types": ["vite/client"],
         "paths": {
             "@/*": ["./resources/js/*"]
         }

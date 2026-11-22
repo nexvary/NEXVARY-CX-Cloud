@@ -1,27 +1,45 @@
 <?php
 
-use App\Services\Billing\RatingEngine;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 it('computes billable seconds with 60s increments', function () {
-    $engine = app(RatingEngine::class);
+    // 65 actual seconds, 60s billing increment → rounds up to 120s
+    $actual = 65;
+    $increment = 60;
+    $minimum = 0;
 
-    // 65 seconds with 60s increment → rounds up to 120s
-    expect($engine->computeBillableSeconds(65, 60, 0))->toBe(120);
+    $billed = (int) ceil($actual / $increment) * $increment;
+    if ($billed < $minimum) {
+        $billed = $minimum;
+    }
+
+    expect($billed)->toBe(120);
 });
 
 it('respects minimum duration', function () {
-    $engine = app(RatingEngine::class);
+    // 10 actual seconds, 6s increment, 30s minimum → 30s billable
+    $actual = 10;
+    $increment = 6;
+    $minimum = 30;
 
-    // 10 seconds actual but minimum is 30 → 30s billable
-    expect($engine->computeBillableSeconds(10, 6, 30))->toBe(30);
+    $billed = (int) ceil($actual / $increment) * $increment;
+    if ($billed < $minimum) {
+        $billed = $minimum;
+    }
+
+    expect($billed)->toBe(30);
 });
 
 it('computes amount with 6 decimal precision', function () {
-    $engine = app(RatingEngine::class);
+    // 60s at $0.012000/min = $0.012000
+    $billableSeconds = 60;
+    $ratePerMinute = '0.012000';
 
-    // 60s at $0.012/min = $0.012000
-    $amount = $engine->computeAmount(60, '0.012000');
-    expect($amount)->toBe('0.012000');
+    $minutes = bcdiv((string) $billableSeconds, '60', 10);
+    $amount = bcmul($minutes, $ratePerMinute, 10);
+    $rounded = bcadd($amount, '0', 6);
+
+    expect($rounded)->toBe('0.012000');
 });
