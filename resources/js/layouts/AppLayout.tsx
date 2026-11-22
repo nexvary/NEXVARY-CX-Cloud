@@ -42,7 +42,7 @@ interface NavItem {
 
 // ── Navigation Config ─────────────────────────────────────────────────────
 
-const useNavItems = (unread: PageProps['unread']): NavItem[] => {
+const useNavItems = (unread: { sms: number; email: number; tickets: number }): NavItem[] => {
   const { t } = useTranslation();
   return [
     {
@@ -205,7 +205,7 @@ const NavItemComp: React.FC<{ item: NavItem; depth?: number }> = ({ item, depth 
 
 // ── PBX Status Chip ───────────────────────────────────────────────────────
 
-const PbxStatusChip: React.FC<{ status: PageProps['pbxStatus'] }> = ({ status }) => {
+const PbxStatusChip: React.FC<{ status: NonNullable<PageProps['pbxStatus']> }> = ({ status }) => {
   const { t } = useTranslation();
   if (!status.connected) {
     return (
