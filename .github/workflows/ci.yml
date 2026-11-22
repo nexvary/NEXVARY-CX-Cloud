@@ -2,9 +2,10 @@ name: NEXVARY CX Cloud — CI
 
 on:
   push:
-    branches: [main, develop, "feature/**"]
+    branches: [main, master, develop, "feature/**"]
   pull_request:
-    branches: [main, develop]
+    branches: [main, master, develop]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
