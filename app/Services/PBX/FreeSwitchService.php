@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  */
 class FreeSwitchService
 {
-    private ?mixed $socket = null;
+    private mixed $socket = null;
     private bool $authenticated = false;
 
     public function __construct(
