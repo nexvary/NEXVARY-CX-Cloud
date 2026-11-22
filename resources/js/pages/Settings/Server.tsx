@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import {
   Server, Cpu, HardDrive, Database, Activity, RefreshCw,
-  CheckCircle, XCircle, AlertCircle
+  CheckCircle, XCircle
 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 

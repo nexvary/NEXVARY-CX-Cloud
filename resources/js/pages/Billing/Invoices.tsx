@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
-import { FileText, Download } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
 const Invoices: React.FC = () => (

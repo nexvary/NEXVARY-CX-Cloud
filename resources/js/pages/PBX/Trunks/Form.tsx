@@ -1,6 +1,5 @@
 import React from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
-import { useTranslation } from 'react-i18next';
 import { Save, ArrowLeft, Server } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
@@ -21,7 +20,6 @@ interface Props {
 
 const TrunkForm: React.FC<Props> = ({ trunk }) => {
   const isEdit = Boolean(trunk?.id);
-  const { t } = useTranslation();
 
   const { data, setData, post, patch, processing, errors } = useForm({
     name:         trunk?.name ?? '',

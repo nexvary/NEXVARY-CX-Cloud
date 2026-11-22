@@ -1,8 +1,8 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
 import {
-  Phone, Server, Shield, Globe, Zap, Users, MessageSquare,
-  CreditCard, Bot, Database, Code2, CheckCircle
+  Phone, Shield, Globe, Zap, Users, MessageSquare,
+  CreditCard, Bot, Database, Code2
 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 

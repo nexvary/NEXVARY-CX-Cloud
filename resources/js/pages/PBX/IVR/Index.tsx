@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Layers, Edit, Trash2, Phone } from 'lucide-react';
+import { Plus, Layers, Edit, Trash2 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
 interface IvrMenu {

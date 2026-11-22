@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import { Phone, Search, Filter, Download, ArrowUpRight, ArrowDownLeft, MinusCircle } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';

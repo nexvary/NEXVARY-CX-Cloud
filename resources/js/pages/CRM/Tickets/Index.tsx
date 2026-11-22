@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Ticket, Edit, AlertCircle, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Ticket, Edit } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
 interface TicketItem {

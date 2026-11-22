@@ -150,7 +150,7 @@ const HelpFAQ: React.FC = () => {
                 {cat}
               </h2>
               <div className="space-y-2">
-                {catFaqs.map((faq, i) => {
+                {catFaqs.map((faq, _i) => {
                   const idx = faqs.indexOf(faq);
                   const isOpen = openIdx === idx;
                   const q = lang === 'ar' ? faq.q_ar : faq.q_en;

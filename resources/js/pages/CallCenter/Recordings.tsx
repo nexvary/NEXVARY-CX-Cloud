@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { Mic, Play, Download } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 

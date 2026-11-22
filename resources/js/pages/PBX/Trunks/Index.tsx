@@ -1,7 +1,6 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Server, RefreshCw, Trash2, Edit, Activity } from 'lucide-react';
+import { Plus, Server, RefreshCw, Trash2, Edit } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
 interface Trunk {
@@ -26,8 +25,6 @@ interface Props {
 }
 
 const TrunksIndex: React.FC<Props> = ({ trunks }) => {
-  const { t } = useTranslation();
-
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete trunk "${name}"?`)) return;
     router.delete(`/pbx/trunks/${id}`);
