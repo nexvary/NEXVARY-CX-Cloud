@@ -17,7 +17,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'password', 'locale', 'timezone',
         'mfa_enabled', 'mfa_secret', 'extension_id',
-        'is_active', 'last_login_at',
+        'active', 'last_login_at',
     ];
 
     protected $hidden = ['password', 'remember_token', 'mfa_secret'];
@@ -29,7 +29,7 @@ class User extends Authenticatable
             'last_login_at'     => 'datetime',
             'password'          => 'hashed',
             'mfa_enabled'       => 'boolean',
-            'is_active'         => 'boolean',
+            'active'            => 'boolean',
         ];
     }
 

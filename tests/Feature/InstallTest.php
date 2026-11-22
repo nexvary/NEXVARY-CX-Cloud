@@ -5,8 +5,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 it('redirects to setup when not installed', function () {
-    // nexvary.installed=false is set by default in TestCase::setUp()
-    $this->get('/')->assertRedirect('/setup');
+    // Test via /login which only carries the 'installed' middleware (no 'auth'),
+    // avoiding Laravel's default middleware priority that runs Authenticate before
+    // custom route middlewares, which would redirect to /login before EnsureInstalled runs.
+    $this->get('/login')->assertRedirect('/setup');
 });
 
 it('renders setup wizard page', function () {
