@@ -12,6 +12,9 @@ abstract class TestCase extends BaseTestCase
         $this->withoutVite();
         // Default all tests to "not installed" so EnsureInstalled redirects to /setup.
         // Individual tests that need installed=true override this themselves.
-        config(['nexvary.installed' => false]);
+        config([
+            'nexvary.installed' => false,
+            'inertia.testing.page_paths' => [resource_path('js/pages')],
+        ]);
     }
 }

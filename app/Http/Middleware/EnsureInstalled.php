@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Install\Installation;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,7 @@ class EnsureInstalled
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $installed = file_exists(storage_path('installed')) ||
-                     config('nexvary.installed', false);
+        $installed = Installation::finished();
 
         if (! $installed && ! $request->is('setup*')) {
             return redirect()->route('install.index');

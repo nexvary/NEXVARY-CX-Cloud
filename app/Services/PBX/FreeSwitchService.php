@@ -73,6 +73,13 @@ class FreeSwitchService
         }
     }
 
+    public function probe(): bool
+    {
+        $status = $this->api('status');
+
+        return is_string($status) && preg_match('/FreeSWITCH\s+\d/', $status) === 1;
+    }
+
     public function disconnect(): void
     {
         if ($this->socket) {

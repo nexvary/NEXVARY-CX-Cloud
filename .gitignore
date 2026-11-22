@@ -40,3 +40,15 @@ Thumbs.db
 /tests/.pest
 coverage/
 .coverage
+
+/storage/installed
+/storage/installation-settings
+/storage/installation.lock
+/storage/setup-*
+!/composer.lock
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+/visual-evidence/
+
+/storage/logs/
+/storage/framework/

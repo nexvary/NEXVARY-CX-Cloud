@@ -127,7 +127,7 @@ jobs:
           DB_PASSWORD: nexvary_test_pass
 
       - name: Run tests
-        run: php artisan test --coverage-clover=coverage.xml
+        run: php artisan test --coverage-clover=coverage.xml --log-junit=test-results.xml
         env:
           DB_CONNECTION: pgsql
           DB_HOST: 127.0.0.1
@@ -136,6 +136,14 @@ jobs:
           DB_PASSWORD: nexvary_test_pass
           REDIS_HOST: 127.0.0.1
           FREESWITCH_HOST: ""
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-test-results
+          path: test-results.xml
+          if-no-files-found: warn
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

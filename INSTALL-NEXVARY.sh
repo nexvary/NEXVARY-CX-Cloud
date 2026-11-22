@@ -271,9 +271,6 @@ setup_database() {
   sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" 2>&1 | tee -a "$LOG_FILE" || true
   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" 2>&1 | tee -a "$LOG_FILE" || true
 
-  echo "${DB_PASSWORD}" > /tmp/nexvary-db-password
-  chmod 600 /tmp/nexvary-db-password
-
   ok "Database '${DB_NAME}' created"
   export NEXVARY_DB_PASSWORD="$DB_PASSWORD"
   export NEXVARY_DB_NAME="$DB_NAME"
@@ -445,7 +442,7 @@ install_application() {
   # Install to /opt/nexvary-cx
   if [[ -d "$NEXVARY_INSTALL_DIR/.git" ]]; then
     cd "$NEXVARY_INSTALL_DIR"
-    git pull origin main 2>&1 | tee -a "$LOG_FILE"
+    git pull --ff-only 2>&1 | tee -a "$LOG_FILE"
   else
     if [[ -d "$NEXVARY_INSTALL_DIR" ]]; then
       mv "$NEXVARY_INSTALL_DIR" "${NEXVARY_INSTALL_DIR}-backup-$(date +%Y%m%d)"
@@ -453,6 +450,8 @@ install_application() {
     git clone "$NEXVARY_REPO" "$NEXVARY_INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"
     cd "$NEXVARY_INSTALL_DIR"
   fi
+
+  mkdir -p bootstrap/cache storage/app storage/logs storage/framework/{cache/data,sessions,views}
 
   # Install PHP dependencies
   composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev \
@@ -465,7 +464,7 @@ install_application() {
   # Install WebRTC bridge
   if [[ -d rtc-bridge ]]; then
     cd rtc-bridge
-    npm ci --production 2>&1 | tee -a "$LOG_FILE"
+    npm ci --omit=dev 2>&1 | tee -a "$LOG_FILE"
     cd ..
   fi
 
@@ -484,30 +483,27 @@ configure_application() {
   info "Configuring NEXVARY CX Cloud..."
   cd "$NEXVARY_INSTALL_DIR"
 
-  # Generate .env from template
-  cp .env.example .env
+  if [[ -f .env ]]; then
+    die "Existing application configuration found. Use the update procedure for an initialized installation."
+  fi
 
-  # Set values
-  APP_KEY=$(php artisan key:generate --show 2>/dev/null || openssl rand -base64 32)
-  APP_SECRET=$(openssl rand -hex 32)
+  install -m 600 -o "$NEXVARY_WEB_USER" .env.example .env
+  local app_secret setup_key
+  app_secret=$(openssl rand -hex 32)
+  setup_key=$(openssl rand -hex 32)
 
-  sed -i "s|APP_KEY=.*|APP_KEY=base64:${APP_KEY}|" .env
-  sed -i "s|REVERB_APP_SECRET=.*|REVERB_APP_SECRET=${APP_SECRET}|" .env
+  sed -i "s|REVERB_APP_SECRET=.*|REVERB_APP_SECRET=${app_secret}|" .env
+  sed -i "s|NEXVARY_INSTALL_SECRET=.*|NEXVARY_INSTALL_SECRET=${setup_key}|" .env
   sed -i "s|DB_DATABASE=.*|DB_DATABASE=${NEXVARY_DB_NAME}|" .env
   sed -i "s|DB_USERNAME=.*|DB_USERNAME=${NEXVARY_DB_USER}|" .env
   sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${NEXVARY_DB_PASSWORD}|" .env
-  sed -i "s|APP_URL=.*|APP_URL=http://$(hostname -I | awk '{print $1}')|" .env
+  chown "$NEXVARY_WEB_USER" .env
+  chmod 600 .env
+  sudo -u "$NEXVARY_WEB_USER" php artisan key:generate --force
 
-  # Run migrations
-  php artisan migrate --force 2>&1 | tee -a "$LOG_FILE"
-
-  # Cache config
-  php artisan config:cache 2>&1 | tee -a "$LOG_FILE"
-  php artisan route:cache 2>&1 | tee -a "$LOG_FILE"
-  php artisan view:cache 2>&1 | tee -a "$LOG_FILE"
-
-  # Mark installation pending wizard
-  php artisan nexvary:set-install-pending 2>&1 | tee -a "$LOG_FILE" || true
+  install -m 600 /dev/null "${NEXVARY_CONFIG_DIR}/setup-credentials"
+  printf 'Setup key: %s\nPostgreSQL password: %s\n' "$setup_key" "$NEXVARY_DB_PASSWORD" \
+    > "${NEXVARY_CONFIG_DIR}/setup-credentials"
 
   ok "Application configured"
 }
@@ -651,16 +647,13 @@ setup_ssl() {
 
 # ── Completion Summary ────────────────────────────────────────────────────────
 print_completion() {
-  local server_ip
-  server_ip=$(hostname -I | awk '{print $1}')
-
   echo ""
   echo -e "${BOLD}${WHITE}╔══════════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${BOLD}${WHITE}║           ${GREEN}✓ NEXVARY CX Cloud Installation Complete${WHITE}             ║${NC}"
+  echo -e "${BOLD}${WHITE}║           ${GREEN}✓ NEXVARY CX Cloud Server Provisioned  ${WHITE}             ║${NC}"
   echo -e "${BOLD}${WHITE}╠══════════════════════════════════════════════════════════════╣${NC}"
   echo -e "${BOLD}${WHITE}║                                                              ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${CYAN}Setup Wizard URL:${WHITE}                                            ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GREEN}  http://${server_ip}/setup${WHITE}                                  ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${CYAN}Setup Wizard (after HTTPS is configured):${WHITE}                                            ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GREEN}  https://<your-domain>/setup${WHITE}                                  ║${NC}"
   echo -e "${BOLD}${WHITE}║                                                              ║${NC}"
   echo -e "${BOLD}${WHITE}║  ${CYAN}Services Running:${WHITE}                                            ║${NC}"
   echo -e "${BOLD}${WHITE}║  ${GREEN}  ✓ Nginx (web server)${WHITE}                                       ║${NC}"
@@ -672,18 +665,16 @@ print_completion() {
   echo -e "${BOLD}${WHITE}║  ${GREEN}  ✓ NEXVARY WebRTC Bridge${WHITE}                                    ║${NC}"
   echo -e "${BOLD}${WHITE}║                                                              ║${NC}"
   echo -e "${BOLD}${WHITE}║  ${YELLOW}Next Steps:${WHITE}                                                 ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GRAY}  1. Open the Setup Wizard URL above${WHITE}                         ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GRAY}  2. Create administrator account${WHITE}                             ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GRAY}  3. Configure organization settings${WHITE}                          ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GRAY}  4. Connect your SIP provider${WHITE}                               ║${NC}"
-  echo -e "${BOLD}${WHITE}║  ${GRAY}  5. Set up SSL for your domain${WHITE}                              ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GRAY}  1. Configure HTTPS and open /setup${WHITE}                         ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GRAY}  2. Enter the setup key and test services${WHITE}                             ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GRAY}  3. Create the first administrator${WHITE}                          ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GRAY}  4. Confirm the installation and sign in${WHITE}                               ║${NC}"
+  echo -e "${BOLD}${WHITE}║  ${GRAY}  5. Review services in Administration${WHITE}                              ║${NC}"
   echo -e "${BOLD}${WHITE}║                                                              ║${NC}"
   echo -e "${BOLD}${WHITE}║  ${GRAY}Log file: ${LOG_FILE}${WHITE}                       ║${NC}"
   echo -e "${BOLD}${WHITE}╚══════════════════════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${RED}SECURITY REMINDER:${NC} Change default passwords immediately!"
-  echo -e "  ${GRAY}Database password stored in: /tmp/nexvary-db-password${NC}"
-  echo -e "  ${GRAY}Move it to a secure location and delete the temp file.${NC}"
+  echo -e "  ${GRAY}Setup key and database password: ${NEXVARY_CONFIG_DIR}/setup-credentials (root only).${NC}"
   echo ""
 }
 
@@ -698,6 +689,10 @@ main() {
   check_arch
   check_resources
   check_ports
+
+  if [[ -f "${NEXVARY_INSTALL_DIR}/.env" ]]; then
+    die "Existing installation detected. Use the update procedure."
+  fi
 
   # System preparation
   update_system

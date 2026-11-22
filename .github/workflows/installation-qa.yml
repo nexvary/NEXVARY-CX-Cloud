@@ -1,0 +1,61 @@
+name: Installation and visual QA
+on:
+  push:
+    branches: ['feature/stage-1-foundation']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cx
+          POSTGRES_PASSWORD: cx-ci-local-only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: --health-cmd 'pg_isready -U cx' --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd 'redis-cli ping' --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, curl, mbstring, xml, zip, bcmath, intl, sockets
+          coverage: none
+      - name: Install and build
+        run: |
+          mkdir -p bootstrap/cache storage/framework/{sessions,cache/data,views}
+          composer install --no-interaction --prefer-dist --no-progress
+          npm ci
+          npm run build
+          npx --no-install playwright-core install --with-deps chromium --only-shell
+      - name: Exercise browser installation
+        env:
+          QA_DB_PASSWORD: cx-ci-local-only
+          QA_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/qa-installation.sh
+      - name: Upload installation screenshots and index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexvary-cx-installation-visual-evidence
+          path: visual-evidence/
+          if-no-files-found: error
+          retention-days: 30

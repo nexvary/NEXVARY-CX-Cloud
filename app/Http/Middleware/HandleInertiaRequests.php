@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
-use Tighten\Ziggy\Ziggy;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -17,6 +16,9 @@ class HandleInertiaRequests extends Middleware
 
     public function share(Request $request): array
     {
+        $locale = $request->user()?->locale ?? config('app.locale', 'en');
+        app()->setLocale(in_array($locale, ['ar', 'en'], true) ? $locale : 'en');
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -29,7 +31,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error'   => fn () => $request->session()->get('error'),
             ],
-            'locale' => $request->user()?->locale ?? config('app.locale', 'en'),
+            'locale' => app()->getLocale(),
         ];
     }
 }

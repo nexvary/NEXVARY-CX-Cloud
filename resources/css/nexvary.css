@@ -363,3 +363,49 @@
 }
 .nx-animate-in       { animation: nx-fade-in 200ms ease both; }
 .nx-animate-slide-in { animation: nx-slide-in-start 200ms ease both; }
+
+.nx-setup-shell {
+  min-height: 100dvh;
+  padding: clamp(1rem, 4vw, 3.5rem) 1rem;
+  background: radial-gradient(ellipse at top, #1b202b 0%, #0b0b10 56%, #08080c 100%);
+}
+
+.nx-setup-card { border-color: #505664; }
+.nx-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: none;
+  color: #e8edf5;
+  font-weight: 800;
+  background: linear-gradient(145deg, #424956, #141821 72%);
+  border: 1px solid #697285;
+  border-radius: .7rem;
+  box-shadow: 0 3px 20px #cad4ed22;
+}
+
+.nx-quiet { color: #aeb7ca; }
+.nx-progress-pending, .nx-progress-done { height: .25rem; border-radius: 999px; }
+.nx-progress-pending { background: #3f4654; }
+.nx-progress-done { background: #7dd3fc; }
+
+.nx-notice {
+  border: 1px solid #565c6c;
+  border-radius: .625rem;
+  padding: .75rem;
+  background: #1d2330;
+}
+.nx-notice-success { color: #a7f3d0; border-color: #34785e; }
+.nx-notice-error { color: #fecaca; border-color: #ae545c; }
+:is(a, button, input, select):focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
+
+.nx-setup-shell .nx-btn-primary,
+#app-navigation ~ main .nx-btn-primary {
+  color: #f3f7ff;
+  background: linear-gradient(150deg, #245a85, #203d64);
+  border: 1px solid #527999;
+  box-shadow: 0 2px 10px #21487455;
+}
+
+.nx-setup-shell select { color-scheme: dark; }
