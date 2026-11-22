@@ -11,16 +11,16 @@ class CallRecord extends Model
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'uuid', 'caller_id', 'destination', 'direction',
-        'duration', 'billable_seconds', 'status', 'hangup_cause',
-        'recording_path', 'extension_id', 'trunk_id', 'agent_id',
+        'uuid', 'caller_id_number', 'caller_id_name', 'destination_number', 'direction',
+        'duration_seconds', 'billable_seconds', 'hangup_cause',
+        'recording_path', 'extension_id', 'trunk_id', 'billing_account_id',
         'started_at', 'answered_at', 'ended_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'duration'         => 'integer',
+            'duration_seconds' => 'integer',
             'billable_seconds' => 'integer',
             'started_at'       => 'datetime',
             'answered_at'      => 'datetime',

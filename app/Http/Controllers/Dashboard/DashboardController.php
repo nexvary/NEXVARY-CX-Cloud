@@ -31,7 +31,7 @@ class DashboardController extends Controller
             'recent_calls' => CallRecord::with('extension')
                 ->latest('started_at')
                 ->limit(10)
-                ->get(['id', 'caller_id', 'destination', 'direction', 'duration', 'status', 'started_at', 'extension_id']),
+                ->get(['id', 'caller_id_number', 'caller_id_name', 'destination_number', 'direction', 'duration_seconds', 'hangup_cause', 'started_at', 'extension_id']),
         ]);
     }
 
