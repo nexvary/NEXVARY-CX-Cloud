@@ -16,6 +16,7 @@ it('redirects unauthenticated users to login', function () {
 
 it('shows dashboard for authenticated admin', function () {
     $user = User::factory()->create();
+    \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'superadmin', 'guard_name' => 'web']);
     $user->assignRole('superadmin');
 
     // Send as Inertia request — no X-Inertia-Version to avoid 409 version mismatch
