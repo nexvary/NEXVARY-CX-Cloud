@@ -39,7 +39,7 @@ for scenario in ${QA_SCENARIOS:-en-desktop en-mobile ar-desktop ar-mobile}; do
   mkdir -p "$LARAVEL_STORAGE_PATH"/{app,logs,framework/{sessions,cache/data,views}}
   (
     cd public
-    exec php -S "127.0.0.1:${QA_HTTP_PORT:-18081}" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
+    exec php -d variables_order=EGPCS -S "127.0.0.1:${QA_HTTP_PORT:-18081}" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
   ) > "$qa_root/http.log" 2>&1 &
   app_pid=$!
   curl --noproxy '*' --silent --show-error --fail --retry 10 --retry-connrefused "$QA_BASE_URL/up" > /dev/null
@@ -52,8 +52,17 @@ for scenario in ${QA_SCENARIOS:-en-desktop en-mobile ar-desktop ar-mobile}; do
   fi
   PGPASSWORD="$QA_DB_PASSWORD" psql -X -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -At \
     -c "select count(*) from users join model_has_roles on users.id::text = model_has_roles.model_id join roles on roles.id = model_has_roles.role_id where roles.name = 'superadmin';" | grep -x 1
-  test -s "$LARAVEL_STORAGE_PATH/installation-settings"
+  if [[ ! -s "$LARAVEL_STORAGE_PATH/installation-settings" ]]; then
+    echo "The encrypted installation settings are missing from the scenario storage directory." >&2
+    exit 1
+  fi
   kill "$app_pid"
-  wait "$app_pid" 2>/dev/null || [[ "$?" -eq 143 ]]
+  # A dev server may report either graceful shutdown or SIGTERM.
+  status=0
+  wait "$app_pid" 2>/dev/null || status=$?
+  if [[ "$status" -ne 0 && "$status" -ne 143 ]]; then
+    echo "The PHP development server exited with status $status after $scenario." >&2
+    exit "$status"
+  fi
   app_pid=''
 done

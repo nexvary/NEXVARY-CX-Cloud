@@ -10,6 +10,8 @@ cleanup() {
   rm -rf -- "$config_dir"
 }
 trap cleanup EXIT
+gateway="$(docker network inspect --format '{{ (index .IPAM.Config 0).Gateway }}' bridge)"
+[[ "$gateway" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 export FREESWITCH_HOST=127.0.0.1 FREESWITCH_ESL_PORT=18021
 export FREESWITCH_ESL_PASSWORD
 FREESWITCH_ESL_PASSWORD="$(openssl rand -hex 32)"
@@ -21,17 +23,22 @@ cat > "$config_dir/event_socket.conf.xml" <<XML
     <param name="listen-ip" value="0.0.0.0"/>
     <param name="listen-port" value="8021"/>
     <param name="password" value="$FREESWITCH_ESL_PASSWORD"/>
+    <param name="apply-inbound-acl" value="nexvary-qa"/>
   </settings>
 </configuration>
 XML
 
 docker run -d --name "$container" --no-healthcheck \
+  --network bridge -e "QA_BRIDGE_GATEWAY=$gateway" \
   --publish 127.0.0.1:18021:8021 --publish 127.0.0.1:15060:5060/udp \
   --mount "type=bind,src=$config_dir/event_socket.conf.xml,dst=/qa-event_socket.conf.xml,readonly" \
   --entrypoint /bin/sh "$image" -ec '
     mkdir -p /etc/freeswitch
     cp -R /usr/share/freeswitch/conf/vanilla/. /etc/freeswitch/
     cp /qa-event_socket.conf.xml /etc/freeswitch/autoload_configs/event_socket.conf.xml
+    config=/etc/freeswitch/autoload_configs
+    sed -i "s|</network-lists>|<list name=\"nexvary-qa\" default=\"deny\"><node type=\"allow\" cidr=\"$QA_BRIDGE_GATEWAY/32\"/></list></network-lists>|" "$config/acl.conf.xml"
+    sed -i "/load module=\"mod_signalwire\"/d" "$config/modules.conf.xml"
     exec /usr/bin/freeswitch -nc -nf -nonat
   '
 
