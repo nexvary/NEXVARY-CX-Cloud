@@ -2,9 +2,9 @@ import React from 'react';
 import { Head } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import {
-  Phone, PhoneCall, Users, MessageSquare, Mail, Ticket,
+  Phone, PhoneCall, Users, MessageSquare, Ticket,
   CreditCard, Server, AlertTriangle, TrendingUp, TrendingDown,
-  Activity, Wifi, WifiOff, Clock, BarChart3
+  Activity, Clock, BarChart3
 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';

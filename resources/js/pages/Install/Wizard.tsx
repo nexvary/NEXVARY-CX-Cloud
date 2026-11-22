@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { router } from '@inertiajs/react';
 import {
-  User, Building2, Globe, Phone, Hash, Users, Settings, CheckCircle,
+  User, Building2, Phone, Hash, Users, Settings, CheckCircle,
   ChevronRight, ChevronLeft, Eye, EyeOff, Loader2, AlertCircle,
   Check, Server
 } from 'lucide-react';

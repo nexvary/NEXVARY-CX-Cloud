@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Phone, Users, MessageSquare, Mail, Ticket,
   CreditCard, BarChart3, Settings, Shield, Server, ChevronDown,
-  Bell, Search, Globe, LogOut, User, Mic, PhoneCall, PhoneOff,
+  Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
   Bot, FileText, Package
 } from 'lucide-react';
@@ -149,7 +149,6 @@ const useNavItems = (unread: PageProps['unread']): NavItem[] => {
 // ── Sidebar NavItem Component ─────────────────────────────────────────────
 
 const NavItemComp: React.FC<{ item: NavItem; depth?: number }> = ({ item, depth = 0 }) => {
-  const { t } = useTranslation();
   const { url } = usePage();
   const [expanded, setExpanded] = useState(() =>
     item.children?.some(c => url.startsWith(c.href)) ?? false
@@ -245,7 +244,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const navItems = useNavItems(unread);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   // Set document direction from locale
   useEffect(() => {
@@ -253,10 +251,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
     document.documentElement.dir = rtlLocales.includes(i18n.language) ? 'rtl' : 'ltr';
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
-
-  const switchLanguage = (locale: string) => {
-    i18n.changeLanguage(locale);
-  };
 
   const languages = [
     { code: 'ar', label: 'العربية' },
@@ -271,6 +265,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
   return (
     <div className="min-h-screen bg-nx-base">
+      {title && <Head title={title} />}
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className="nx-app-header flex items-center px-4 gap-4">
         {/* Logo + Toggle */}
@@ -304,7 +299,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
         {/* Search */}
         <button
-          onClick={() => setSearchOpen(true)}
           className="nx-btn-ghost gap-2 text-sm hidden md:flex"
         >
           <Search className="w-4 h-4" />
@@ -327,13 +321,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
         {/* Language */}
         <div className="relative">
-          <button
-            className="nx-btn-ghost gap-1.5 text-sm"
-            onClick={() => { /* toggle language dropdown */ }}
+          <select
+            className="nx-btn-ghost gap-1.5 text-sm text-xs bg-transparent border-0 cursor-pointer"
+            value={i18n.language}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            aria-label={t('common.language')}
           >
-            <Globe className="w-4 h-4" />
-            <span className="hidden md:inline text-xs">{i18n.language.toUpperCase()}</span>
-          </button>
+            {languages.map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* User Menu */}

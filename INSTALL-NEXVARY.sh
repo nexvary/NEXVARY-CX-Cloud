@@ -19,7 +19,6 @@ IFS=$'\n\t'
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 GRAY='\033[0;37m'
@@ -80,6 +79,7 @@ check_os() {
   if [[ ! -f /etc/os-release ]]; then
     die "Cannot detect OS. /etc/os-release not found."
   fi
+  # shellcheck source=/dev/null
   source /etc/os-release
   case "$ID" in
     debian)
@@ -147,12 +147,14 @@ check_ports() {
     ["8021"]="FreeSWITCH ESL (internal only)"
     ["16384-32767"]="RTP Media"
   )
-  for port in 80 443 5060 5061; do
+  for port in "${!PORTS[@]}"; do
+    # Skip range entries (e.g. 16384-32767) — cannot bind-test a range
+    [[ "$port" == *-* ]] && continue
     if ss -tlnp 2>/dev/null | grep -q ":${port} " || \
        netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
-      warn "Port $port is already in use. Existing service may conflict."
+      warn "Port $port (${PORTS[$port]}) is already in use. Existing service may conflict."
     else
-      ok "Port $port: available"
+      ok "Port $port (${PORTS[$port]}): available"
     fi
   done
 }
@@ -490,6 +492,7 @@ configure_application() {
   APP_SECRET=$(openssl rand -hex 32)
 
   sed -i "s|APP_KEY=.*|APP_KEY=base64:${APP_KEY}|" .env
+  sed -i "s|REVERB_APP_SECRET=.*|REVERB_APP_SECRET=${APP_SECRET}|" .env
   sed -i "s|DB_DATABASE=.*|DB_DATABASE=${NEXVARY_DB_NAME}|" .env
   sed -i "s|DB_USERNAME=.*|DB_USERNAME=${NEXVARY_DB_USER}|" .env
   sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${NEXVARY_DB_PASSWORD}|" .env
