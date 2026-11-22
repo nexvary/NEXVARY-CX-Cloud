@@ -4,17 +4,10 @@
     "type": "project",
     "license": "proprietary",
     "keywords": ["pbx", "voip", "freeswitch", "crm", "billing", "telecom"],
-    "authors": [
-        {
-            "name": "Nexvary Inc.",
-            "homepage": "https://nexvary.com"
-        }
-    ],
+    "authors": [{"name": "Nexvary Inc.", "homepage": "https://nexvary.com"}],
     "require": {
         "php": "^8.3",
         "ext-pdo": "*",
-        "ext-pgsql": "*",
-        "ext-redis": "*",
         "ext-curl": "*",
         "ext-mbstring": "*",
         "ext-xml": "*",
@@ -22,33 +15,24 @@
         "ext-bcmath": "*",
         "ext-intl": "*",
         "ext-sockets": "*",
-        "laravel/framework": "^11.0",
+        "laravel/framework": "^12.0",
         "laravel/tinker": "^2.9",
         "inertiajs/inertia-laravel": "^2.0",
         "predis/predis": "^2.3",
-        "league/flysystem-aws-s3-v3": "^3.0",
-        "php-imap/php-imap": "^5.4",
-        "clue/socket-raw": "^1.6",
-        "openai-php/client": "^0.10",
-        "twilio/sdk": "^8.3",
         "defuse/php-encryption": "^2.4",
         "bacon/bacon-qr-code": "^3.0",
         "pragmarx/google2fa": "^8.0",
         "laravel/sanctum": "^4.0",
-        "spatie/laravel-permission": "^6.7",
-        "spatie/laravel-activitylog": "^4.8",
-        "spatie/laravel-backup": "^9.0",
-        "barryvdh/laravel-dompdf": "^3.0",
-        "maatwebsite/excel": "^3.1"
+        "spatie/laravel-permission": "^6.10",
+        "spatie/laravel-activitylog": "^4.9",
+        "barryvdh/laravel-dompdf": "^3.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/pail": "^1.1",
-        "laravel/pint": "^1.13",
-        "laravel/sail": "^1.26",
+        "laravel/pint": "^1.18",
         "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.1",
-        "pestphp/pest": "^3.0",
+        "nunomaduro/collision": "^8.4",
+        "pestphp/pest": "^3.7",
         "pestphp/pest-plugin-laravel": "^3.0"
     },
     "autoload": {
@@ -83,9 +67,7 @@
         "pest": ["./vendor/bin/pest"]
     },
     "extra": {
-        "laravel": {
-            "dont-discover": []
-        }
+        "laravel": {"dont-discover": []}
     },
     "config": {
         "optimize-autoloader": true,

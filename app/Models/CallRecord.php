@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class CallRecord extends Model
+{
+    use HasFactory, HasUuids;
+
+    protected $fillable = [
+        'uuid', 'caller_id', 'destination', 'direction',
+        'duration', 'billable_seconds', 'status', 'hangup_cause',
+        'recording_path', 'extension_id', 'trunk_id', 'agent_id',
+        'started_at', 'answered_at', 'ended_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'duration'         => 'integer',
+            'billable_seconds' => 'integer',
+            'started_at'       => 'datetime',
+            'answered_at'      => 'datetime',
+            'ended_at'         => 'datetime',
+        ];
+    }
+
+    public function extension(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Extension::class);
+    }
+
+    public function trunk(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Trunk::class);
+    }
+
+    public function agent(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'agent_id');
+    }
+}

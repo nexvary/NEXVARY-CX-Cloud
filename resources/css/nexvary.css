@@ -3,9 +3,7 @@
    Premium black-metallic-crimson aesthetic
    ============================================================================= */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
@@ -76,7 +74,7 @@
     font-family: var(--nx-font-arabic), var(--nx-font-sans);
   }
 
-  body { @apply bg-nx-base text-nx-primary; }
+  body { background-color: var(--nx-bg-base); color: var(--nx-text-primary); }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--nx-bg-surface); }
@@ -129,7 +127,7 @@
   }
 
   .nx-stat-card {
-    @apply nx-card p-5;
+    @apply p-5;
     position: relative;
     overflow: hidden;
   }
@@ -142,17 +140,20 @@
   }
 
   /* ── Buttons ───────────────────────────────────────────────────── */
-  .nx-btn {
+  /* shared button base — applied via multi-selector */
+  .nx-btn,
+  .nx-btn-primary,
+  .nx-btn-secondary,
+  .nx-btn-ghost,
+  .nx-btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2;
     @apply text-sm font-medium transition-all duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
-    focus-visible-ring-color: var(--nx-crimson);
-    ring-offset-color: var(--nx-bg-base);
   }
 
   .nx-btn-primary {
-    @apply nx-btn text-white;
+    color: #fff;
     background: var(--nx-crimson);
     border: 1px solid var(--nx-crimson-dark);
     box-shadow: 0 1px 8px var(--nx-crimson-glow);
@@ -163,7 +164,6 @@
   }
 
   .nx-btn-secondary {
-    @apply nx-btn;
     background: var(--nx-bg-elevated);
     border: 1px solid var(--nx-border-active);
     color: var(--nx-text-primary);
@@ -174,7 +174,8 @@
   }
 
   .nx-btn-ghost {
-    @apply nx-btn bg-transparent border-transparent;
+    background: transparent;
+    border-color: transparent;
     color: var(--nx-text-secondary);
   }
   .nx-btn-ghost:hover:not(:disabled) {
@@ -183,7 +184,7 @@
   }
 
   .nx-btn-danger {
-    @apply nx-btn text-white;
+    color: #fff;
     background: var(--nx-error);
     border: 1px solid #dc2626;
   }
@@ -210,7 +211,11 @@
   }
 
   .nx-select {
-    @apply nx-input cursor-pointer;
+    @apply w-full rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer;
+    background-color: var(--nx-bg-input);
+    border: 1px solid var(--nx-border);
+    color: var(--nx-text-primary);
+    outline: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%239497b0' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 10px center;
@@ -296,13 +301,18 @@
 
   /* ── Live Call Indicator ───────────────────────────────────────── */
   .nx-call-active {
-    @apply nx-badge-green animate-pulse;
+    @apply animate-pulse;
+    background: rgba(34,197,94,0.15); color: #22c55e;
     animation-duration: 2s;
   }
 
   /* ── WebRTC Softphone ──────────────────────────────────────────── */
   .nx-softphone {
-    @apply nx-card-elevated p-4 w-72;
+    @apply p-4 w-72;
+    background: var(--nx-bg-elevated);
+    border: 1px solid var(--nx-border-active);
+    border-radius: 10px;
+    box-shadow: var(--nx-glow-silver);
     position: fixed;
     bottom: 1.5rem;
     inset-inline-end: 1.5rem;
@@ -310,10 +320,13 @@
   }
 
   .nx-dialpad-btn {
-    @apply nx-btn-secondary w-16 h-14 flex-col text-base font-semibold;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed w-16 h-14 flex-col text-base font-semibold;
+    background: var(--nx-bg-elevated);
+    border: 1px solid var(--nx-border-active);
+    color: var(--nx-text-primary);
     aspect-ratio: 1;
   }
-  .nx-dialpad-btn .sub { @apply text-xs text-muted mt-0.5; }
+  .nx-dialpad-btn .sub { @apply text-xs mt-0.5; color: var(--nx-text-muted); }
 }
 
 /* ── Utility Overrides ─────────────────────────────────────────────────────── */
