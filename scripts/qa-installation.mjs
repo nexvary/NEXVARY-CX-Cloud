@@ -23,6 +23,7 @@ page.on('pageerror', error => errors.push(error.message));
 
 const record = async (name, result = 'pass') => {
     await page.locator('h1').waitFor();
+    await page.locator('#nprogress').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('html').getAttribute('dir'), locale === 'ar' ? 'rtl' : 'ltr');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Horizontal overflow at ${name}`);
     const filename = `${name}.png`;
@@ -107,9 +108,8 @@ try {
 
     const complete = page.waitForResponse(response => new URL(response.url()).pathname === '/setup/complete');
     await submit();
-    if (await page.getByTestId('working').isVisible()) {
-        await record('14-installation-progress');
-    }
+    await page.getByTestId('working').waitFor({ timeout: 4000 });
+    await record('14-installation-progress');
     const installed = await complete;
     assert.equal(installed.status(), 200, 'Installation request failed');
     await page.locator('[role=progressbar][aria-valuenow="8"]').waitFor();
