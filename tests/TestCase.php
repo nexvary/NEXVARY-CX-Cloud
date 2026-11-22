@@ -3,14 +3,9 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use Illuminate\Support\Facades\Vite;
+use Illuminate\Foundation\Testing\WithoutVite;
 
 abstract class TestCase extends BaseTestCase
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // No Vite manifest in CI — return empty strings for all asset URLs
-        Vite::useFakeManifest();
-    }
+    use WithoutVite;
 }
