@@ -131,12 +131,30 @@ jobs:
             installer/lib/freeswitch.sh \
             installer/lib/app.sh \
             installer/lib/nginx.sh \
-            installer/lib/systemd.sh
+            installer/lib/systemd.sh \
+            installer/tests/test-pinned-sha.sh \
+            installer/tests/test-postgres-idempotency.sh
+
+  postgres-idempotency:
+    name: PostgreSQL — idempotency (Debian 13)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PostgreSQL idempotency test in Debian 13 container
+        run: |
+          docker run --rm \
+            --privileged \
+            -v "$PWD/installer:/installer:ro" \
+            debian:trixie \
+            bash /installer/tests/test-postgres-idempotency.sh
 
   compatibility-matrix:
     name: Publish compatibility matrix
     runs-on: ubuntu-24.04
-    needs: [detect-and-unit, installer-script-lint]
+    needs: [detect-and-unit, installer-script-lint, postgres-idempotency]
     if: always()
 
     steps:

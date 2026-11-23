@@ -318,31 +318,62 @@ nx_verify_freeswitch() {
 
   nx_ok "FreeSWITCH service is active"
 
+  # Wait for the ESL port to become bound — fatal if it does not open.
   local esl_port="${NX_FS_ESL_PORT}"
-  if ss -ltnp 2>/dev/null | grep -q ":${esl_port}\b"; then
-    nx_ok "FreeSWITCH ESL is listening on 127.0.0.1:${esl_port}"
-  else
-    nx_warn "FreeSWITCH ESL port ${esl_port} is not bound yet — service may still be loading."
+  local esl_wait=0
+  until ss -ltnp 2>/dev/null | grep -q ":${esl_port}\b"; do
+    esl_wait=$((esl_wait + 1))
+    if [[ $esl_wait -ge 20 ]]; then
+      nx_fatal "FreeSWITCH ESL port ${esl_port} did not open within 20 seconds. Check: journalctl -xe -u freeswitch"
+    fi
+    sleep 1
+  done
+  nx_ok "FreeSWITCH ESL is listening on 127.0.0.1:${esl_port} (after ${esl_wait}s)"
+
+  if ! command -v fs_cli &>/dev/null; then
+    nx_warn "fs_cli not found — skipping authenticated ESL and module checks"
+    return 0
   fi
 
-  # Verify required modules via fs_cli if available
-  if command -v fs_cli &>/dev/null; then
-    local sofia_ok esl_ok
-    sofia_ok="$(fs_cli -x 'module_exists mod_sofia' 2>/dev/null || echo 'unknown')"
-    esl_ok="$(fs_cli -x 'module_exists mod_event_socket' 2>/dev/null || echo 'unknown')"
-    if [[ "$sofia_ok" == *'true'* ]]; then
-      nx_ok "mod_sofia is loaded"
-    elif [[ "$sofia_ok" == 'unknown' ]]; then
-      nx_warn "mod_sofia status unknown — fs_cli did not respond"
-    else
-      nx_fatal "mod_sofia is not loaded. FreeSWITCH SIP stack is unavailable. Check: journalctl -xe -u freeswitch"
-    fi
-    if [[ "$esl_ok" == *'true'* ]]; then
-      nx_ok "mod_event_socket is loaded"
-    elif [[ "$esl_ok" == 'unknown' ]]; then
-      nx_warn "mod_event_socket status unknown — fs_cli did not respond"
-    else
-      nx_fatal "mod_event_socket is not loaded. ESL integration will not work. Check: journalctl -xe -u freeswitch"
-    fi
+  # Read the ESL password that nx_configure_freeswitch_esl stored.
+  local _esl_pass=''
+  if [[ -f /etc/nexvary/freeswitch.conf ]]; then
+    _esl_pass="$(grep '^FREESWITCH_ESL_PASSWORD=' /etc/nexvary/freeswitch.conf 2>/dev/null | cut -d'=' -f2- | tr -d '[:space:]' || echo '')"
+  fi
+
+  # Test authenticated ESL connection — fail closed.
+  local _esl_status=''
+  if [[ -n "$_esl_pass" ]]; then
+    _esl_status="$(fs_cli -p "$_esl_pass" -x 'show status' 2>/dev/null || echo '')"
+  else
+    _esl_status="$(fs_cli -x 'show status' 2>/dev/null || echo '')"
+  fi
+  if echo "$_esl_status" | grep -q 'UP'; then
+    nx_ok "FreeSWITCH ESL authenticated connection verified"
+  else
+    nx_fatal "FreeSWITCH ESL authentication failed. ESL is listening but fs_cli cannot connect. Check FREESWITCH_ESL_PASSWORD in /etc/nexvary/freeswitch.conf"
+  fi
+
+  # Module checks with the same authenticated session.
+  # 'unknown' is not acceptable here: ESL is proven to work, so the only
+  # valid responses are 'true' (loaded) or 'false' (not loaded).
+  local sofia_ok esl_ok
+  if [[ -n "$_esl_pass" ]]; then
+    sofia_ok="$(fs_cli -p "$_esl_pass" -x 'module_exists mod_sofia' 2>/dev/null || echo 'FAIL')"
+    esl_ok="$(fs_cli -p "$_esl_pass" -x 'module_exists mod_event_socket' 2>/dev/null || echo 'FAIL')"
+  else
+    sofia_ok="$(fs_cli -x 'module_exists mod_sofia' 2>/dev/null || echo 'FAIL')"
+    esl_ok="$(fs_cli -x 'module_exists mod_event_socket' 2>/dev/null || echo 'FAIL')"
+  fi
+
+  if [[ "$sofia_ok" == *'true'* ]]; then
+    nx_ok "mod_sofia is loaded"
+  else
+    nx_fatal "mod_sofia is not loaded (got: ${sofia_ok}). FreeSWITCH SIP stack unavailable. Check: journalctl -xe -u freeswitch"
+  fi
+  if [[ "$esl_ok" == *'true'* ]]; then
+    nx_ok "mod_event_socket is loaded"
+  else
+    nx_fatal "mod_event_socket is not loaded (got: ${esl_ok}). ESL integration unavailable. Check: journalctl -xe -u freeswitch"
   fi
 }

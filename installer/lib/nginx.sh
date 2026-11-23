@@ -138,21 +138,24 @@ nx_configure_php_fpm() {
     return
   fi
 
-  # Derive socket path from the installed PHP version so the pool config and
-  # all nginx upstream blocks always reference the same socket file.
-  local _php_ver
-  _php_ver="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo '8.3')"
-  export NX_FPM_SOCKET="/run/php/php${_php_ver}-fpm.sock"
+  # Use a dedicated, app-specific socket name to avoid colliding with the
+  # default www pool (which also lives in /run/php/).  The path is fixed and
+  # does not depend on the installed PHP version.
+  export NX_FPM_SOCKET='/run/php/nexvary-cx.sock'
+
+  # Detect the user nginx runs as so the socket permissions allow connection.
+  local nginx_user='www-data'
+  if getent passwd nginx &>/dev/null; then nginx_user='nginx'; fi
 
   cat > "${pool_dir}/nexvary-cx.conf" <<FPM
-; NEXVARY CX Cloud PHP-FPM pool
+; NEXVARY CX Cloud PHP-FPM pool — dedicated socket, does not replace www pool
 [nexvary-cx]
 user  = ${NX_APP_USER:-nexvary}
 group = ${NX_APP_USER:-nexvary}
 
 listen = ${NX_FPM_SOCKET}
-listen.owner = www-data
-listen.group = www-data
+listen.owner = ${nginx_user}
+listen.group = ${nginx_user}
 listen.mode  = 0660
 
 pm = dynamic
@@ -170,10 +173,8 @@ php_admin_flag[log_errors]  = on
 php_flag[display_errors]    = off
 FPM
 
-  # Remove default www pool to free resources
-  if [[ -f "${pool_dir}/www.conf" ]]; then
-    mv "${pool_dir}/www.conf" "${pool_dir}/www.conf.disabled" 2>/dev/null || true
-  fi
+  # Leave the default www pool intact so other services on the host are
+  # unaffected.  The nexvary-cx pool uses its own socket and pool name.
 
   # Start/restart PHP-FPM
   local fpm_svc; fpm_svc="$(systemctl list-units 'php*-fpm*' --no-legend 2>/dev/null | awk '{print $1}' | head -1)"
