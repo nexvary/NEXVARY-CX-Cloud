@@ -98,12 +98,14 @@ it('admin can update a call queue and dialplan reloads', function () {
 it('admin can delete a call queue', function () {
     [$tenant, $user] = pbxAdmin();
     $pbx = mockPbx();
-    $pbx->shouldReceive('reloadDialplan')->twice()->andReturn(true);
+    $pbx->shouldReceive('reloadDialplan')->once()->andReturn(true);
 
-    $this->actingAs($user)
-        ->post('/pbx/queues', ['name' => 'ToDelete', 'strategy' => 'ring-all']);
-
-    $queue = CallQueue::first();
+    // Create directly so the delete request is the only reloadDialplan trigger.
+    $queue = CallQueue::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'ToDelete',
+        'strategy'  => 'ring-all',
+    ]);
 
     $this->actingAs($user)
         ->delete("/pbx/queues/{$queue->id}")
