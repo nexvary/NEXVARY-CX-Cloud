@@ -174,6 +174,10 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
         Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
         // Mobile device pairing — generates a one-time QR pairing token (web session auth)
+        // GET renders the Inertia pairing page (generates token + server-side QR SVG)
+        Route::get('/devices/pair', [\App\Http\Controllers\API\MobileController::class, 'renderPairingPage'])
+             ->name('devices.pair.page');
+        // POST kept for direct AJAX callers
         Route::post('/devices/pair', [\App\Http\Controllers\API\MobileController::class, 'generatePairingToken'])
              ->name('devices.pair');
 

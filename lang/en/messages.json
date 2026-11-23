@@ -167,7 +167,8 @@
     "language": "Language",
     "administration": "Administration",
     "call_freeze": "Call Freeze",
-    "mfa_setup": "Two-Factor Auth"
+    "mfa_setup": "Two-Factor Auth",
+    "mobile_pairing": "Pair Mobile App"
   },
   "dashboard": {
     "title": "Dashboard",

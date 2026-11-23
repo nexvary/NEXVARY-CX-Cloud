@@ -6,7 +6,7 @@ import {
   CreditCard, BarChart3, Settings, Shield, Server, ChevronDown,
   Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
-  Bot, FileText, Package, Hash, HelpCircle, Info, Code2
+  Bot, FileText, Package, Hash, HelpCircle, Info, Code2, Smartphone
 } from 'lucide-react';
 
 interface PageProps {
@@ -142,6 +142,7 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
         { label: t('nav.security'), href: '/settings/security', icon: Shield },
         { label: t('nav.server'), href: '/settings/server', icon: Server },
         { label: t('nav.mfa_setup'), href: '/settings/mfa/enroll', icon: Shield },
+        { label: t('nav.mobile_pairing'), href: '/settings/devices/pair', icon: Smartphone },
         { label: t('nav.integrations'), href: '/settings/integrations', icon: Package },
         { label: t('nav.backup'), href: '/settings/backup', icon: FileText },
       ],

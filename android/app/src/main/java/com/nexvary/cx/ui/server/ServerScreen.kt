@@ -113,15 +113,18 @@ fun ServerScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Service status row
-        OutlinedButton(
-            onClick = { viewModel.refresh() },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = NxSilver),
-        ) {
-            Text("حالة الخدمات", modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, contentDescription = null)
+        // Service status row — hidden when no server is configured so we never
+        // attempt a request to the placeholder https://localhost:443 base URL.
+        if (credentials != null) {
+            OutlinedButton(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NxSilver),
+            ) {
+                Text("حالة الخدمات", modifier = Modifier.weight(1f))
+                Icon(Icons.Default.ChevronRight, contentDescription = null)
+            }
         }
 
         // Service statuses / storage recovery

@@ -167,7 +167,8 @@
     "language": "اللغة",
     "administration": "الإدارة",
     "call_freeze": "تجميد المكالمات",
-    "mfa_setup": "التحقق بخطوتين"
+    "mfa_setup": "التحقق بخطوتين",
+    "mobile_pairing": "ربط هاتف / Pair phone"
   },
   "dashboard": {
     "title": "لوحة التحكم",

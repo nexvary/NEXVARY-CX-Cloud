@@ -227,6 +227,57 @@ class MobileController extends Controller
     }
 
     /**
+     * Render the web pairing page (Inertia).
+     * Generates a fresh short-lived pairing token, encodes the QR payload as a
+     * server-side SVG (via bacon/bacon-qr-code) and passes the base64 image to
+     * the frontend so no external QR service ever receives the token.
+     */
+    public static function renderPairingPage(\Illuminate\Http\Request $request): \Illuminate\Http\Response|\Inertia\Response
+    {
+        $user = $request->user();
+
+        // Clean expired pairing tokens before issuing a new one
+        $user->tokens()
+            ->where('name', 'like', 'pairing-%')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '<', now()))
+            ->delete();
+
+        $token = $user->createToken(
+            name: 'pairing-' . now()->timestamp,
+            abilities: ['mobile.pair'],
+            expiresAt: now()->addMinutes(10),
+        );
+
+        $expiresAt = now()->addMinutes(10)->toIso8601String();
+        $payload   = json_encode([
+            'pairing_token' => $token->plainTextToken,
+            'server_url'    => config('app.url'),
+        ], JSON_UNESCAPED_SLASHES);
+
+        // Render QR as SVG using the already-required bacon/bacon-qr-code library.
+        // The SVG is base64-encoded and passed as a data URI so no external request
+        // is needed and the token never leaves the server boundary.
+        $qrDataUri = null;
+        try {
+            $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                new \BaconQrCode\Renderer\RendererStyle\RendererStyle(280),
+                new \BaconQrCode\Renderer\Image\SvgImageBackEnd(),
+            );
+            $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode(
+                (new \BaconQrCode\Writer($renderer))->writeString($payload)
+            );
+        } catch (\Throwable) {
+            // Graceful degradation: page renders without QR — user can copy the payload
+        }
+
+        return inertia('Settings/MobilePairing', [
+            'qr_data_uri'    => $qrDataUri,
+            'payload'        => $payload,
+            'expires_at'     => $expiresAt,
+        ]);
+    }
+
+    /**
      * Step 2 (Android app): exchange a one-time pairing token for a durable device token.
      * Requires a valid bearer token with 'mobile.pair' ability.
      * The pairing token is immediately revoked after exchange (single-use).
