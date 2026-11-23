@@ -7,6 +7,10 @@ readonly NX_APP_USER='nexvary'
 readonly NX_APP_DIR='/var/www/nexvary-cx'
 readonly NX_REPO_URL='https://github.com/nexvary/NEXVARY-CX-Cloud.git'
 
+# File written by the installer after every successful deploy to record
+# the exact commit SHA that is running on this host.
+readonly NX_INSTALLED_REVISION_FILE='/etc/nexvary/installed_revision'
+
 # ── Create application system user ───────────────────────────────────────────
 
 nx_create_app_user() {
@@ -21,31 +25,195 @@ nx_create_app_user() {
   nx_ok "User '$NX_APP_USER' created"
 }
 
+# ── Resolve the target commit SHA ─────────────────────────────────────────────
+#
+# Priority (highest to lowest):
+#   1. NX_RELEASE_COMMIT  — set by the installer from the bundle's RELEASE file;
+#                           this is the ONLY authoritative source when installing
+#                           from a versioned bundle.
+#   2. NX_INSTALL_REF     — a branch/tag passed via --ref= (unbundled installs).
+#
+# A branch name is accepted for --ref but only NX_RELEASE_COMMIT guarantees
+# that the installed source matches the tested bundle.
+
+_nx_resolve_target_sha() {
+  local commit_sha=''
+
+  if [[ -n "${NX_RELEASE_COMMIT:-}" ]]; then
+    # Validate it looks like a full 40-hex SHA
+    if [[ ! "${NX_RELEASE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+      nx_fatal "NX_RELEASE_COMMIT '${NX_RELEASE_COMMIT}' is not a valid 40-character hex SHA"
+    fi
+    commit_sha="${NX_RELEASE_COMMIT}"
+    nx_info "Bundle release commit: ${commit_sha}"
+    printf '%s' "${commit_sha}"
+    return
+  fi
+
+  if [[ -n "${NX_INSTALL_REF:-}" ]]; then
+    nx_warn "NX_INSTALL_REF='${NX_INSTALL_REF}' used (branch/tag, not a pinned SHA)."
+    nx_warn "Install from a versioned bundle to guarantee reproducibility."
+    printf '%s' "${NX_INSTALL_REF}"
+    return
+  fi
+
+  nx_fatal "No target revision specified. Install from a versioned bundle or pass --ref=."
+}
+
+# ── Version-mismatch guard ────────────────────────────────────────────────────
+#
+# On an existing installation, compare the previously installed SHA against the
+# target.  Refuse to proceed unless:
+#   a) Target and installed are identical (already up-to-date — no-op).
+#   b) The caller explicitly passes --upgrade-from=<installed-sha>, signalling
+#      that they understand the transition and accept it.
+#
+# This prevents silent silent rollbacks or cross-version migrations.
+
+nx_check_version_mismatch() {
+  local target_ref="$1"
+
+  [[ ! -f "${NX_INSTALLED_REVISION_FILE}" ]] && return   # fresh install
+
+  local installed_sha
+  installed_sha="$(cat "${NX_INSTALLED_REVISION_FILE}" | tr -d '[:space:]')"
+
+  if [[ -z "$installed_sha" ]]; then
+    nx_warn "Installed revision file is empty — treating as fresh install"
+    return
+  fi
+
+  # If we have a pinned target SHA, do an exact SHA comparison.
+  # If the target is a branch name, skip the guard (branch-based installs
+  # never guarantee reproducibility anyway).
+  if [[ ! "${target_ref}" =~ ^[0-9a-f]{40}$ ]]; then
+    nx_warn "Target ref '${target_ref}' is a branch name — version-mismatch guard skipped"
+    return
+  fi
+
+  if [[ "$installed_sha" == "$target_ref" ]]; then
+    nx_ok "Already at target revision ${target_ref:0:12} — skipping source deploy"
+    return 0
+  fi
+
+  # Mismatch: check whether the caller acknowledged this upgrade explicitly.
+  local upgrade_from="${NX_UPGRADE_FROM:-}"
+  if [[ -n "$upgrade_from" ]]; then
+    if [[ "$upgrade_from" == "$installed_sha" ]]; then
+      nx_info "Explicit upgrade: ${installed_sha:0:12} → ${target_ref:0:12}"
+      return
+    else
+      nx_fatal "Version mismatch: installed=${installed_sha:0:12} but --upgrade-from=${upgrade_from:0:12} (expected them to match)"
+    fi
+  fi
+
+  # No explicit upgrade flag — refuse.
+  nx_fatal "$(cat <<MSG
+Version mismatch detected.
+
+  Installed : ${installed_sha}
+  Target    : ${target_ref}
+
+To upgrade, re-run the installer with:
+  --upgrade-from=${installed_sha}
+
+This flag confirms you have read the upgrade notes and accept the transition.
+Only consecutive, documented upgrade paths are supported.
+MSG
+)"
+}
+
 # ── Deploy application code ───────────────────────────────────────────────────
 
 nx_deploy_app() {
   nx_step "Deploying NEXVARY CX Cloud application"
 
-  # Determine which Git ref to install
-  local ref="${NX_INSTALL_REF:-master}"
+  local target_ref
+  target_ref="$(_nx_resolve_target_sha)"
+
+  nx_check_version_mismatch "$target_ref"
 
   if [[ -d "${NX_APP_DIR}/.git" ]]; then
-    nx_info "Existing installation found — updating to ref $ref"
-    nx_spinner_start "Fetching latest code…"
-    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" fetch origin --quiet 2>&1 | nx_log_passthrough
-    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" checkout "$ref" --quiet 2>&1 | nx_log_passthrough
-    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" reset --hard "origin/$ref" --quiet 2>&1 | nx_log_passthrough
-    nx_spinner_stop
+    _nx_update_app "$target_ref"
   else
-    nx_info "Cloning from $NX_REPO_URL (ref: $ref)…"
-    nx_spinner_start "Downloading NEXVARY CX Cloud…"
-    mkdir -p "$NX_APP_DIR"
-    git clone --depth=1 --branch "$ref" "$NX_REPO_URL" "$NX_APP_DIR" --quiet 2>&1 | nx_log_passthrough
-    chown -R "${NX_APP_USER}:${NX_APP_USER}" "$NX_APP_DIR"
-    nx_spinner_stop
+    _nx_clone_app "$target_ref"
   fi
 
+  # Record the exact SHA that is now installed.
+  _nx_record_installed_sha
+
   nx_ok "Application code deployed to $NX_APP_DIR"
+}
+
+# ── Clone (fresh install) ─────────────────────────────────────────────────────
+
+_nx_clone_app() {
+  local target_ref="$1"
+  nx_info "Cloning from $NX_REPO_URL …"
+  nx_spinner_start "Downloading NEXVARY CX Cloud…"
+  mkdir -p "$NX_APP_DIR"
+
+  if [[ "${target_ref}" =~ ^[0-9a-f]{40}$ ]]; then
+    # Pin to exact commit: clone default branch (depth=1 to avoid full history),
+    # then fetch the exact object and checkout.
+    git clone --no-checkout --depth=1 "$NX_REPO_URL" "$NX_APP_DIR" --quiet \
+      2>&1 | nx_log_passthrough
+    git -C "$NX_APP_DIR" fetch --depth=1 origin "${target_ref}" --quiet \
+      2>&1 | nx_log_passthrough
+    git -C "$NX_APP_DIR" checkout FETCH_HEAD --quiet 2>&1 | nx_log_passthrough
+  else
+    # Branch/tag ref — depth clone by name.
+    git clone --depth=1 --branch "${target_ref}" "$NX_REPO_URL" "$NX_APP_DIR" --quiet \
+      2>&1 | nx_log_passthrough
+  fi
+
+  chown -R "${NX_APP_USER}:${NX_APP_USER}" "$NX_APP_DIR"
+  nx_spinner_stop
+}
+
+# ── Update (existing install) ─────────────────────────────────────────────────
+
+_nx_update_app() {
+  local target_ref="$1"
+  nx_info "Updating installation to ${target_ref:0:12}…"
+  nx_spinner_start "Fetching code…"
+
+  if [[ "${target_ref}" =~ ^[0-9a-f]{40}$ ]]; then
+    # Fetch only the target object — avoids pulling unrelated history.
+    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" fetch --depth=1 origin "${target_ref}" --quiet \
+      2>&1 | nx_log_passthrough
+    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" checkout FETCH_HEAD --detach --quiet \
+      2>&1 | nx_log_passthrough
+  else
+    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" fetch origin --quiet 2>&1 | nx_log_passthrough
+    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" checkout "${target_ref}" --quiet 2>&1 | nx_log_passthrough
+    sudo -u "$NX_APP_USER" git -C "$NX_APP_DIR" reset --hard "origin/${target_ref}" --quiet \
+      2>&1 | nx_log_passthrough
+  fi
+
+  nx_spinner_stop
+}
+
+# ── Record installed revision ─────────────────────────────────────────────────
+
+_nx_record_installed_sha() {
+  local actual_sha
+  actual_sha="$(git -C "$NX_APP_DIR" rev-parse HEAD 2>/dev/null || echo '')"
+
+  if [[ -z "$actual_sha" ]]; then
+    nx_warn "Could not determine installed SHA — /etc/nexvary/installed_revision not written"
+    return
+  fi
+
+  # Verify the installed SHA matches the target when a pinned commit was requested.
+  if [[ -n "${NX_RELEASE_COMMIT:-}" && "$actual_sha" != "${NX_RELEASE_COMMIT}" ]]; then
+    nx_fatal "Installed SHA ${actual_sha} does not match expected ${NX_RELEASE_COMMIT} — aborting"
+  fi
+
+  mkdir -p /etc/nexvary
+  printf '%s\n' "$actual_sha" > "${NX_INSTALLED_REVISION_FILE}"
+  chmod 644 "${NX_INSTALLED_REVISION_FILE}"
+  nx_ok "Installed revision recorded: ${actual_sha}"
 }
 
 # ── Install PHP dependencies ──────────────────────────────────────────────────

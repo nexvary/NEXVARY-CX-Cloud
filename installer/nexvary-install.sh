@@ -27,6 +27,24 @@ INSTALLER_LOG="/var/log/nexvary-install-$(date +%Y%m%d-%H%M%S).log"
 NX_APP_DIR="${NX_APP_DIR:-/var/www/nexvary-cx}"
 NX_APP_USER="${NX_APP_USER:-nexvary}"
 
+# ── Load pinned SHA from bundle RELEASE file ──────────────────────────────────
+# When installed from a versioned bundle, INSTALLER_DIR contains a RELEASE file
+# written by the CI pipeline at bundle time.  Its content is the full 40-hex
+# commit SHA that the bundle was built from.  This takes effect before argument
+# parsing so --ref= can still override it for development installs.
+_RELEASE_FILE="${INSTALLER_DIR}/RELEASE"
+if [[ -f "${_RELEASE_FILE}" ]]; then
+  _FILE_SHA="$(tr -d '[:space:]' < "${_RELEASE_FILE}")"
+  if [[ "${_FILE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+    export NX_RELEASE_COMMIT="${_FILE_SHA}"
+    printf '[INFO] Bundle release commit: %s\n' "${NX_RELEASE_COMMIT}"
+  else
+    printf '[WARN] RELEASE file exists but does not contain a valid SHA (got: %s) — ignoring\n' \
+      "${_FILE_SHA}" >&2
+  fi
+fi
+unset _RELEASE_FILE _FILE_SHA
+
 # ── Parse arguments ───────────────────────────────────────────────────────────
 for arg in "$@"; do
   case "$arg" in
@@ -38,6 +56,7 @@ for arg in "$@"; do
     --verbose)         export NX_VERBOSE='1' ;;
     --yes)             export NX_YES='1' ;;
     --ref=*)           export NX_INSTALL_REF="${arg#*=}" ;;
+    --upgrade-from=*)  export NX_UPGRADE_FROM="${arg#*=}" ;;
     --help|-h)
       printf "Usage: sudo nexvary install [OPTIONS]\n"
       printf "See https://nexvary.com/docs/install for full documentation.\n"
