@@ -68,13 +68,25 @@ function buildWebhookRequest(array $payload, string $secretKey, ?int $timestamp 
 /**
  * Post a signed Telnyx webhook request with the correct JSON content type.
  *
- * We must use $this->call() with a raw body string so that
- * $request->getContent() returns the same JSON that was signed.
+ * Headers must be placed in the server array with the HTTP_ prefix so that
+ * $request->getContent() returns exactly the signed JSON string and
+ * $request->header() can find the signature and timestamp.
  */
 function postWebhook(\Tests\TestCase $test, array $req): \Illuminate\Testing\TestResponse
 {
-    return $test->withHeaders($req['headers'])
-        ->call('POST', '/webhooks/telnyx', [], [], [], ['CONTENT_TYPE' => 'application/json'], $req['rawBody']);
+    return $test->call(
+        'POST',
+        '/webhooks/telnyx',
+        [],   // parameters (not used — body is in $content)
+        [],   // cookies
+        [],   // files
+        [
+            'CONTENT_TYPE'                     => 'application/json',
+            'HTTP_TELNYX_SIGNATURE_ED25519'    => $req['headers']['telnyx-signature-ed25519'],
+            'HTTP_TELNYX_TIMESTAMP'            => $req['headers']['telnyx-timestamp'],
+        ],
+        $req['rawBody']
+    );
 }
 
 function inboundPayload(string $to, string $from, string $text = 'Hello'): array
@@ -118,11 +130,11 @@ it('rejects webhook with an invalid Ed25519 signature', function () {
     config(['nexvary.telnyx.webhook_public_key' => $publicKey]);
 
     $rawBody = json_encode(inboundPayload('+10000000001', '+15550000001'));
-    $this->withHeaders([
-        'telnyx-signature-ed25519' => base64_encode(str_repeat("\x00", SODIUM_CRYPTO_SIGN_BYTES)),
-        'telnyx-timestamp'         => (string) now()->timestamp,
-    ])->call('POST', '/webhooks/telnyx', [], [], [], ['CONTENT_TYPE' => 'application/json'], $rawBody)
-      ->assertForbidden();
+    $this->call('POST', '/webhooks/telnyx', [], [], [], [
+        'CONTENT_TYPE'                     => 'application/json',
+        'HTTP_TELNYX_SIGNATURE_ED25519'    => base64_encode(str_repeat("\x00", SODIUM_CRYPTO_SIGN_BYTES)),
+        'HTTP_TELNYX_TIMESTAMP'            => (string) now()->timestamp,
+    ], $rawBody)->assertForbidden();
 });
 
 it('rejects webhook with a timestamp older than 5 minutes (replay protection)', function () {
