@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEXVARY CX</string>
+    <string name="channel_name">NEXVARY Calls</string>
+    <string name="channel_description">Active SIP call notification</string>
+    <string name="notification_title">NEXVARY — Active Call</string>
+    <string name="action_hangup">End Call</string>
+</resources>
