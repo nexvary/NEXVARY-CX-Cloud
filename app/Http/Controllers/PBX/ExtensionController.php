@@ -7,6 +7,7 @@ use App\Models\Extension;
 use App\Services\PBX\ExtensionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,8 +31,16 @@ class ExtensionController extends Controller
 
     public function store(Request $request): \Illuminate\Http\RedirectResponse
     {
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'number'       => ['required', 'string', 'unique:extensions,number'],
+            'number' => [
+                'required', 'string', 'max:20',
+                // Unique within the tenant, allowing two tenants to both have ext 1001
+                Rule::unique('extensions', 'number')
+                    ->where('tenant_id', $tenantId)
+                    ->withoutTrashed(),
+            ],
             'description'  => ['nullable', 'string', 'max:255'],
             'call_timeout' => ['integer', 'min:10', 'max:120'],
             'sip_password' => ['nullable', 'string', 'min:8'],

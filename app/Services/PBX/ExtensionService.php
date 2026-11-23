@@ -3,6 +3,7 @@
 namespace App\Services\PBX;
 
 use App\Models\Extension;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,23 @@ class ExtensionService
         private readonly FusionPbxConfigService $config,
         private readonly FreeSwitchService $fs,
     ) {}
+
+    /**
+     * Resolve the FreeSWITCH SIP domain for an extension's tenant.
+     * This domain is used as both the directory path and the user_context.
+     */
+    private function resolveDomain(Extension $extension): string
+    {
+        if ($extension->tenant_id) {
+            $tenant = $extension->relationLoaded('tenant')
+                ? $extension->tenant
+                : Tenant::find($extension->tenant_id);
+            if ($tenant) {
+                return $tenant->sipDomain();
+            }
+        }
+        return 'default';
+    }
 
     public function list(array $filters = []): Collection
     {
@@ -46,7 +64,9 @@ class ExtensionService
                 'user_id'         => $data['user_id'] ?? null,
             ]);
 
-            $this->config->writeExtensionConfig($extension, $sipPassword);
+            $domain = $this->resolveDomain($extension);
+            $this->config->ensureDomainDialplanDir($domain);
+            $this->config->writeExtensionConfig($extension, $sipPassword, $domain);
             $this->fs->reloadDialplan();
 
             return $extension->fresh();
@@ -67,7 +87,8 @@ class ExtensionService
             $extension->update($data);
 
             if ($sipPassword !== null) {
-                $this->config->writeExtensionConfig($extension, $sipPassword);
+                $domain = $this->resolveDomain($extension);
+                $this->config->writeExtensionConfig($extension, $sipPassword, $domain);
                 $this->fs->reloadDialplan();
             }
 
@@ -78,7 +99,8 @@ class ExtensionService
     public function delete(Extension $extension): void
     {
         DB::transaction(function () use ($extension) {
-            $this->config->deleteExtensionConfig($extension);
+            $domain = $this->resolveDomain($extension);
+            $this->config->deleteExtensionConfig($extension, $domain);
             $extension->delete();
             $this->fs->reloadDialplan();
         });
@@ -86,25 +108,24 @@ class ExtensionService
 
     public function setDnd(Extension $extension, bool $enabled): void
     {
+        $domain = $this->resolveDomain($extension);
         $extension->update(['dnd_enabled' => $enabled]);
-        $this->config->updateExtensionVariable($extension, 'do_not_disturb', $enabled ? 'true' : 'false');
+        $this->config->updateExtensionVariable($extension, 'do_not_disturb', $enabled ? 'true' : 'false', $domain);
     }
 
     public function setForward(Extension $extension, ?string $destination): void
     {
+        $domain = $this->resolveDomain($extension);
         $extension->update([
             'forward_enabled'     => $destination !== null,
             'forward_destination' => $destination,
         ]);
-        $this->config->updateExtensionVariable(
-            $extension,
-            'call_forward_all',
-            $destination ?? ''
-        );
+        $this->config->updateExtensionVariable($extension, 'call_forward_all', $destination ?? '', $domain);
         $this->config->updateExtensionVariable(
             $extension,
             'call_forward_all_enabled',
-            $destination !== null ? 'true' : 'false'
+            $destination !== null ? 'true' : 'false',
+            $domain
         );
     }
 
@@ -114,7 +135,8 @@ class ExtensionService
      */
     public function disableInFreeSWITCH(Extension $extension): void
     {
-        $this->config->deleteExtensionConfig($extension);
+        $domain = $this->resolveDomain($extension);
+        $this->config->deleteExtensionConfig($extension, $domain);
         $this->fs->reloadDialplan();
     }
 
@@ -127,10 +149,26 @@ class ExtensionService
         $registrations = $this->fs->getRegistrations();
         $this->fs->disconnect();
 
+        $domain = $this->resolveDomain($extension);
+
         foreach ($registrations as $reg) {
-            if (($reg['user'] ?? '') === $extension->number) {
+            // FreeSWITCH show registrations reports user as "ext@domain"
+            $regUser   = $reg['user'] ?? '';
+            $regDomain = $reg['realm'] ?? ($reg['domain_name'] ?? '');
+            if ($regUser === $extension->number && $regDomain === $domain) {
                 return [
                     'registered' => true,
+                    'domain'     => $domain,
+                    'ip'         => $reg['network_ip'] ?? null,
+                    'agent'      => $reg['user_agent'] ?? null,
+                    'expires'    => $reg['expires'] ?? null,
+                ];
+            }
+            // Also match "user@domain" combined format
+            if ($regUser === "{$extension->number}@{$domain}") {
+                return [
+                    'registered' => true,
+                    'domain'     => $domain,
                     'ip'         => $reg['network_ip'] ?? null,
                     'agent'      => $reg['user_agent'] ?? null,
                     'expires'    => $reg['expires'] ?? null,
@@ -138,7 +176,7 @@ class ExtensionService
             }
         }
 
-        return ['registered' => false, 'status' => 'not_registered'];
+        return ['registered' => false, 'status' => 'not_registered', 'domain' => $domain];
     }
 
     private function hashPassword(string $password): string

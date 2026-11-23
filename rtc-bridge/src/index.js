@@ -100,8 +100,17 @@ const wss = new WebSocket.Server({ server, path: '/ws' });
 const sessions = new Map();
 
 const authenticateToken = (token) => {
-  if (!config.token) return true; // No auth if token not configured
-  return crypto.timingSafeEqual(Buffer.from(token ?? ''), Buffer.from(config.token));
+  // Fail closed: if no token is configured, reject all connections.
+  // An empty RTC_BRIDGE_TOKEN is a misconfiguration, not "open access".
+  if (!config.token) {
+    log('error', 'RTC_BRIDGE_TOKEN is not set — all connections rejected');
+    return false;
+  }
+  const provided = Buffer.from(token ?? '', 'utf8');
+  const expected = Buffer.from(config.token, 'utf8');
+  // timingSafeEqual requires equal-length buffers; mismatched length is instant reject.
+  if (provided.length !== expected.length) return false;
+  return crypto.timingSafeEqual(provided, expected);
 };
 
 wss.on('connection', (browserWs, req) => {

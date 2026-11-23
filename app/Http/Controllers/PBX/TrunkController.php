@@ -9,6 +9,7 @@ use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\FusionPbxConfigService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,8 +36,13 @@ class TrunkController extends Controller
 
     public function store(Request $request): \Illuminate\Http\RedirectResponse
     {
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'name'              => ['required', 'string', 'unique:trunks,name'],
+            'name' => [
+                'required', 'string',
+                Rule::unique('trunks', 'name')->where('tenant_id', $tenantId),
+            ],
             'preset_key'        => ['nullable', 'string', 'in:' . implode(',', SipProviderPresets::keys())],
             'auth_mode'         => ['required', 'string', 'in:credential,ip_acl'],
             // SignalWire supplies space_name instead of sip_host — the host is derived below

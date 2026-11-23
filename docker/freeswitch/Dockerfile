@@ -1,4 +1,21 @@
-# ── Stage 1: Build FreeSWITCH 1.10.11 from source ─────────────────────────────
+# ── Stage 1: Build prerequisites ──────────────────────────────────────────────
+# spandsp3 is not in Debian bookworm (only 0.0.6 is available); FreeSWITCH
+# 1.10.11 requires >= 3.0. Build from the FreeSWITCH project fork.
+FROM debian:bookworm-slim AS spandsp-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool libtool-bin pkg-config git ca-certificates \
+    libssl-dev libtiff-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth=1 https://github.com/freeswitch/spandsp.git /usr/src/spandsp \
+    && cd /usr/src/spandsp \
+    && ./bootstrap.sh \
+    && ./configure --prefix=/usr/local \
+    && make -j$(nproc) \
+    && make install
+
+# ── Stage 2: Build FreeSWITCH 1.10.11 from source ─────────────────────────────
 FROM debian:bookworm-slim AS builder
 
 ARG FS_VERSION=1.10.11
@@ -6,14 +23,37 @@ ARG FS_VERSION=1.10.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential autoconf automake libtool libtool-bin pkg-config \
     git curl ca-certificates \
-    libssl-dev libcurl4-openssl-dev libpcre3-dev libsqlite3-dev \
+    # TLS and SSL
+    libssl-dev \
+    # Curl (mod_curl, core HTTP)
+    libcurl4-openssl-dev \
+    # Regex
+    libpcre3-dev \
+    # SQLite (FreeSWITCH internal DB)
+    libsqlite3-dev \
+    # PostgreSQL (mod_pgsql, mod_cdr_pg)
     libpq-dev libpq5 \
+    # Audio codecs
     libopus-dev libvpx-dev libspeex-dev libspeexdsp-dev \
+    # Command-line editing
     libedit-dev libncurses5-dev \
+    # DNS (mod_lcr)
     libldns-dev \
+    # Lua scripting
     liblua5.4-dev \
+    # sofia-sip for mod_sofia (Debian bookworm satisfies >= 1.12.11 requirement)
+    libsofia-sip-ua-dev \
+    # libtiff needed by spandsp3 at link time
+    libtiff-dev \
+    # nasm/yasm for codec assembly optimisations
     yasm nasm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install spandsp3 from the builder stage
+COPY --from=spandsp-builder /usr/local/include/spandsp* /usr/local/include/
+COPY --from=spandsp-builder /usr/local/lib/libspandsp*  /usr/local/lib/
+COPY --from=spandsp-builder /usr/local/lib/pkgconfig/spandsp.pc /usr/local/lib/pkgconfig/
+RUN ldconfig
 
 WORKDIR /usr/src
 RUN git clone --depth=1 --branch v${FS_VERSION} \
@@ -21,7 +61,6 @@ RUN git clone --depth=1 --branch v${FS_VERSION} \
 
 WORKDIR /usr/src/freeswitch
 
-# Enable the modules we need; disable heavy/unused ones to reduce build time
 COPY modules.conf /usr/src/freeswitch/modules.conf
 
 RUN ./bootstrap.sh -j \
@@ -36,7 +75,7 @@ RUN ./bootstrap.sh -j \
     && make install \
     && make sounds-install moh-install
 
-# ── Stage 2: Minimal runtime image ────────────────────────────────────────────
+# ── Stage 3: Minimal runtime image ────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="NEXVARY CX FreeSWITCH"
@@ -50,6 +89,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libedit2 libncurses6 \
     libldns3 \
     liblua5.4-0 \
+    libsofia-sip-ua0 \
+    libtiff6 \
     curl netcat-openbsd ca-certificates gettext-base \
     && rm -rf /var/lib/apt/lists/*
 
@@ -58,6 +99,9 @@ COPY --from=builder /usr/local/bin/freeswitch    /usr/local/bin/freeswitch
 COPY --from=builder /usr/local/bin/fs_cli        /usr/local/bin/fs_cli
 COPY --from=builder /usr/local/lib/freeswitch    /usr/local/lib/freeswitch
 COPY --from=builder /usr/local/share/freeswitch  /usr/local/share/freeswitch
+
+# spandsp3 runtime library (built from source, not in Debian)
+COPY --from=spandsp-builder /usr/local/lib/libspandsp* /usr/local/lib/
 
 # Default configuration shipped with the image; entrypoint copies to volume on first run
 COPY --from=builder /usr/local/etc/freeswitch    /usr/share/nexvary/freeswitch-defaults
@@ -83,7 +127,8 @@ EXPOSE 16384-16484/udp
 
 COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD fs_cli -p "${FREESWITCH_ESL_PASSWORD:-}" -x 'status' 2>/dev/null | grep -q 'UP' || exit 1
+# ESL is on 127.0.0.1 (host loopback) with host networking — verify via pid file
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD fs_cli -H 127.0.0.1 -P 8021 -p "${FREESWITCH_ESL_PASSWORD:-}" -x 'status' 2>/dev/null | grep -q 'UP' || exit 1
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 APP_DIR='/var/www/nexvary-cx'
+PUBLIC_VOL='/var/www/nexvary-cx-public'
 
 # ── Wait for PostgreSQL ───────────────────────────────────────────────────────
 DB_HOST="${DB_HOST:-postgres}"
@@ -24,11 +25,9 @@ done
 if [[ ! -f "${APP_DIR}/storage/.nexvary-initialized" ]]; then
   printf '[APP] First-run initialization...\n'
 
-  # Run database migrations
   php "${APP_DIR}/artisan" migrate --force --no-interaction
   printf '[APP] Migrations complete\n'
 
-  # Warm caches
   php "${APP_DIR}/artisan" config:cache
   php "${APP_DIR}/artisan" route:cache
   php "${APP_DIR}/artisan" view:cache
@@ -36,10 +35,23 @@ if [[ ! -f "${APP_DIR}/storage/.nexvary-initialized" ]]; then
 
   touch "${APP_DIR}/storage/.nexvary-initialized"
 else
-  # Idempotent: run pending migrations on restart/upgrade
   php "${APP_DIR}/artisan" migrate --force --no-interaction
   php "${APP_DIR}/artisan" config:cache
 fi
+
+# ── Create storage symlink before publishing assets ───────────────────────────
+# This creates public/storage -> ../storage/app/public so nginx can follow
+# the symlink through the app_storage volume it also mounts.
+php "${APP_DIR}/artisan" storage:link --force 2>/dev/null || true
+
+# ── Publish static assets to shared volume ───────────────────────────────────
+# nginx reads from this volume (mounted read-only on the nginx service).
+# Always refresh so the volume matches this exact image build.
+# Remove old files first to avoid stale Vite-hashed chunks accumulating.
+printf '[APP] Publishing static assets to %s...\n' "$PUBLIC_VOL"
+find "${PUBLIC_VOL}" -mindepth 1 -delete 2>/dev/null || true
+cp -a "${APP_DIR}/public/." "${PUBLIC_VOL}/"
+printf '[APP] Static assets published\n'
 
 printf '[APP] Starting PHP-FPM...\n'
 exec "$@"

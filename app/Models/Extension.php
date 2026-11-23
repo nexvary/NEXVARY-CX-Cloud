@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,11 @@ class Extension extends Model
             'enabled'          => 'boolean',
             'call_timeout'     => 'integer',
         ];
+    }
+
+    public function tenant(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function user(): \Illuminate\Database\Eloquent\Relations\HasOne

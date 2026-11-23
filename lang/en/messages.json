@@ -318,6 +318,9 @@
     "trunk_created": "SIP gateway created. The gateway is disabled until you enable it.",
     "trunk_updated": "SIP gateway updated.",
     "trunk_deleted": "SIP gateway removed.",
+    "route_created": "Route created.",
+    "route_updated": "Route updated.",
+    "route_deleted": "Route removed.",
     "freeze_activated": "Emergency freeze activated. Outbound calls are now blocked.",
     "freeze_deactivated": "Freeze lifted. Outbound calls have resumed."
   }

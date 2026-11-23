@@ -4,7 +4,7 @@ FROM php:8.3-fpm-bookworm AS composer-deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git unzip curl libpq-dev libzip-dev libpng-dev libjpeg-dev \
     libfreetype6-dev libwebp-dev libicu-dev libonig-dev libxml2-dev \
-    libssl-dev \
+    libssl-dev libcurl4-openssl-dev pkg-config \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) \
         pdo pdo_pgsql pgsql opcache \
@@ -49,8 +49,8 @@ LABEL org.opencontainers.image.vendor="NEXVARY"
 # and are copied below. No -dev headers needed here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libwebp7 \
-    libicu72 libonig5 libxml2 libssl3 \
-    curl gettext-base \
+    libicu72 libonig5 libxml2 libssl3 libcurl4 \
+    curl gettext-base netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled PHP extensions from the builder stage
@@ -80,15 +80,15 @@ RUN mkdir -p storage/app/public storage/framework/{cache,sessions,views} \
     && chown -R nexvary:nexvary storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# PHP-FPM listens on this socket; Nginx reads it from the same named volume
-RUN mkdir -p /run/nexvary && chown nexvary:nexvary /run/nexvary
+# Shared public assets volume mount point (nginx reads from here via named volume)
+RUN mkdir -p /var/www/nexvary-cx-public && chown nexvary:nexvary /var/www/nexvary-cx-public
 
 COPY --chmod=755 docker/app/entrypoint.sh /entrypoint.sh
 
 USER nexvary
 EXPOSE 9000
-HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
-    CMD php-fpm -t 2>&1 | grep -q "configuration file.*OK" || exit 1
+HEALTHCHECK --interval=20s --timeout=5s --start-period=60s --retries=3 \
+    CMD nc -z 127.0.0.1 9000 || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["php-fpm", "--nodaemonize"]

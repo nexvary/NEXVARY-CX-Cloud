@@ -3,13 +3,32 @@
 namespace App\Services\PBX;
 
 use App\Models\Extension;
+use App\Models\InboundRoute;
+use App\Models\OutboundRoute;
 use App\Models\Trunk;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Writes FreeSWITCH configuration files in the FusionPBX directory layout.
- * All changes are reflected immediately after reloadxml / sofia reload.
+ *
+ * Key design (following the FusionPBX multi-tenancy model):
+ *
+ *   Extensions:  directory/{sip_domain}/{number}.xml
+ *                user_context = {sip_domain}   (not "default")
+ *
+ *   Inbound:     dialplan/public/nexvary-inbound-{id}.xml
+ *                transfer target:  {dest} XML {sip_domain}
+ *
+ *   Outbound:    dialplan/{sip_domain}/nexvary-outbound-{id}.xml
+ *
+ *   Gateways:    sip_profiles/external/nexvary-trunk-{id}.xml
+ *
+ * This isolates each tenant into its own FreeSWITCH context so two tenants
+ * can share the same extension number without conflicts.
+ *
+ * FusionPBX reference implementation studied at commit referenced in
+ * docs/OPEN_SOURCE_COMPONENTS.md. Configuration patterns adapted, not copied.
  */
 class FusionPbxConfigService
 {
@@ -26,35 +45,48 @@ class FusionPbxConfigService
 
     // ── Extensions ────────────────────────────────────────────────────────────
 
-    public function writeExtensionConfig(Extension $extension, string $sipPassword): void
+    /**
+     * Write the FreeSWITCH directory entry for an extension.
+     *
+     * @param string $domain     The tenant's SIP domain (e.g. company.nexvary.cloud)
+     *                           Used as both the directory path and user_context value.
+     * @param string $sipPassword  Plaintext SIP credential — stored in the FS config file only.
+     */
+    public function writeExtensionConfig(Extension $extension, string $sipPassword, string $domain = 'default'): void
     {
-        $dir = "{$this->confDir}/directory/default";
+        $dir = "{$this->confDir}/directory/{$domain}";
         $this->ensureDir($dir);
 
-        $xml = $this->renderExtensionXml($extension, $sipPassword);
+        $xml  = $this->renderExtensionXml($extension, $sipPassword, $domain);
         $path = "{$dir}/{$extension->number}.xml";
 
         File::put($path, $xml);
-        Log::info("FreeSWITCH extension config written: {$path}");
+        Log::info("FreeSWITCH extension config written: {$path}", ['domain' => $domain]);
     }
 
-    public function deleteExtensionConfig(Extension $extension): void
+    public function deleteExtensionConfig(Extension $extension, string $domain = 'default'): void
     {
-        $path = "{$this->confDir}/directory/default/{$extension->number}.xml";
+        $path = "{$this->confDir}/directory/{$domain}/{$extension->number}.xml";
         if (File::exists($path)) {
             File::delete($path);
+            Log::info("FreeSWITCH extension config removed: {$path}");
+        }
+
+        // Also remove from legacy default path if it exists (migration safety)
+        $legacy = "{$this->confDir}/directory/default/{$extension->number}.xml";
+        if (File::exists($legacy)) {
+            File::delete($legacy);
         }
     }
 
-    public function updateExtensionVariable(Extension $extension, string $key, string $value): void
+    public function updateExtensionVariable(Extension $extension, string $key, string $value, string $domain = 'default'): void
     {
-        $path = "{$this->confDir}/directory/default/{$extension->number}.xml";
+        $path = "{$this->confDir}/directory/{$domain}/{$extension->number}.xml";
         if (!File::exists($path)) {
             return;
         }
 
         $xml = File::get($path);
-        // Update or insert variable
         if (preg_match('/<variable name="' . preg_quote($key, '/') . '"/', $xml)) {
             $xml = preg_replace(
                 '/<variable name="' . preg_quote($key, '/') . '" value="[^"]*"/',
@@ -72,6 +104,18 @@ class FusionPbxConfigService
         File::put($path, $xml);
     }
 
+    // ── Domain dialplan context ───────────────────────────────────────────────
+
+    /**
+     * Write the per-tenant dialplan context directory.
+     * FreeSWITCH loads dialplan/{domain}/*.xml as the domain's context.
+     * This ensures the directory exists so outbound routes land in the right context.
+     */
+    public function ensureDomainDialplanDir(string $domain): void
+    {
+        $this->ensureDir("{$this->confDir}/dialplan/{$domain}");
+    }
+
     // ── Trunks / Gateways ─────────────────────────────────────────────────────
 
     /**
@@ -83,7 +127,7 @@ class FusionPbxConfigService
         $dir = "{$this->confDir}/sip_profiles/external";
         $this->ensureDir($dir);
 
-        $xml = $this->renderGatewayXml($trunk, $password);
+        $xml  = $this->renderGatewayXml($trunk, $password);
         $path = "{$dir}/nexvary-trunk-{$trunk->id}.xml";
 
         File::put($path, $xml);
@@ -104,16 +148,23 @@ class FusionPbxConfigService
         $this->deleteTrunkConfig($trunk);
     }
 
-    // ── Dialplan ──────────────────────────────────────────────────────────────
+    // ── Dialplan — Inbound Routes ─────────────────────────────────────────────
 
+    /**
+     * Write an inbound (public context) dialplan extension.
+     *
+     * @param array $route  Must contain: id, did, destination, domain
+     *                      'domain' is the tenant SIP domain used as transfer context.
+     */
     public function writeInboundRoute(array $route): void
     {
         $dir = "{$this->confDir}/dialplan/public";
         $this->ensureDir($dir);
 
-        $xml = $this->renderInboundRouteXml($route);
+        $xml  = $this->renderInboundRouteXml($route);
         $path = "{$dir}/nexvary-inbound-{$route['id']}.xml";
         File::put($path, $xml);
+        Log::info("FreeSWITCH inbound route written: {$path}", ['domain' => $route['domain'] ?? 'default']);
     }
 
     public function deleteInboundRoute(array $route): void
@@ -124,14 +175,38 @@ class FusionPbxConfigService
         }
     }
 
+    // ── Dialplan — Outbound Routes ────────────────────────────────────────────
+
+    /**
+     * Write an outbound route into the tenant's domain dialplan context.
+     *
+     * @param array $route  Must contain: id, pattern, gateway, domain
+     */
     public function writeOutboundRoute(array $route): void
     {
-        $dir = "{$this->confDir}/dialplan/default";
+        $domain = $route['domain'] ?? 'default';
+        $dir    = "{$this->confDir}/dialplan/{$domain}";
         $this->ensureDir($dir);
 
-        $xml = $this->renderOutboundRouteXml($route);
+        $xml  = $this->renderOutboundRouteXml($route);
         $path = "{$dir}/nexvary-outbound-{$route['id']}.xml";
         File::put($path, $xml);
+        Log::info("FreeSWITCH outbound route written: {$path}", ['domain' => $domain]);
+    }
+
+    public function deleteOutboundRoute(array $route): void
+    {
+        $domain = $route['domain'] ?? 'default';
+        $path   = "{$this->confDir}/dialplan/{$domain}/nexvary-outbound-{$route['id']}.xml";
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+
+        // Also check default path (migration safety)
+        $legacy = "{$this->confDir}/dialplan/default/nexvary-outbound-{$route['id']}.xml";
+        if (File::exists($legacy)) {
+            File::delete($legacy);
+        }
     }
 
     // ── CDR webhook ──────────────────────────────────────────────────────────
@@ -144,8 +219,8 @@ class FusionPbxConfigService
      */
     public function writeCdrConfig(string $appUrl, string $secret): void
     {
-        $url      = rtrim($appUrl, '/') . '/webhooks/freeswitch/cdr';
-        $encoded  = base64_encode('nexvary:' . $secret);
+        $url     = rtrim($appUrl, '/') . '/webhooks/freeswitch/cdr';
+        $encoded = base64_encode('nexvary:' . $secret);
 
         $xml = <<<XML
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -175,8 +250,8 @@ XML;
 
     public function writeIvrMenu(array $menu): void
     {
-        $dir = "{$this->confDir}/autoload_configs";
-        $xml = $this->renderIvrMenuXml($menu);
+        $dir  = "{$this->confDir}/autoload_configs";
+        $xml  = $this->renderIvrMenuXml($menu);
         $path = "{$dir}/ivr.conf.d/nexvary-ivr-{$menu['id']}.xml";
         $this->ensureDir(dirname($path));
         File::put($path, $xml);
@@ -184,20 +259,20 @@ XML;
 
     // ── Templates ─────────────────────────────────────────────────────────────
 
-    private function renderExtensionXml(Extension $extension, string $password): string
+    private function renderExtensionXml(Extension $extension, string $password, string $domain): string
     {
-        $number = htmlspecialchars($extension->number, ENT_XML1);
-        $vmPin  = htmlspecialchars((string) $extension->voicemail_pin, ENT_XML1);
-        $dnd    = $extension->dnd_enabled ? 'true' : 'false';
-        $fwd    = htmlspecialchars($extension->forward_destination ?? '', ENT_XML1);
+        $number  = htmlspecialchars($extension->number, ENT_XML1);
+        $dom     = htmlspecialchars($domain, ENT_XML1);
+        $vmPin   = htmlspecialchars((string) $extension->voicemail_pin, ENT_XML1);
+        $dnd     = $extension->dnd_enabled ? 'true' : 'false';
+        $fwd     = htmlspecialchars($extension->forward_destination ?? '', ENT_XML1);
         $fwdEnabled = $extension->forward_enabled ? 'true' : 'false';
         $timeout = $extension->call_timeout ?? 30;
-        $desc   = htmlspecialchars($extension->description ?? '', ENT_XML1);
-        $pwdHash = htmlspecialchars(hash('md5', ":{$extension->number}:{$password}"), ENT_XML1);
+        $desc    = htmlspecialchars($extension->description ?? '', ENT_XML1);
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- NEXVARY CX Cloud — Extension {$number} | Generated: {$this->timestamp()} -->
+<!-- NEXVARY CX Cloud — Extension {$number} @ {$dom} | Generated: {$this->timestamp()} -->
 <include>
   <user id="{$number}">
     <params>
@@ -207,7 +282,8 @@ XML;
     <variables>
       <variable name="toll_allow" value="domestic,international,local"/>
       <variable name="accountcode" value="{$number}"/>
-      <variable name="user_context" value="default"/>
+      <variable name="user_context" value="{$dom}"/>
+      <variable name="domain_name" value="{$dom}"/>
       <variable name="effective_caller_id_name" value="{$desc}"/>
       <variable name="effective_caller_id_number" value="{$number}"/>
       <variable name="outbound_caller_id_name" value="{$desc}"/>
@@ -231,15 +307,13 @@ XML;
 
     private function renderGatewayXml(Trunk $trunk, string $password = ''): string
     {
-        $name = htmlspecialchars("nexvary-{$trunk->id}", ENT_XML1);
-        $host = htmlspecialchars($trunk->sip_host, ENT_XML1);
-        $user = htmlspecialchars($trunk->username ?? '', ENT_XML1);
-        // Use the explicitly passed plaintext password; fall back to model value as a last resort
-        // (the model hides the password from JSON/toArray but it is readable from PHP)
-        $pass = htmlspecialchars($password ?: ($trunk->getRawOriginal('password') ?? ''), ENT_XML1);
-        $realm = htmlspecialchars($trunk->realm ?? $trunk->sip_host, ENT_XML1);
-        $transport = $trunk->transport ?? 'udp';
-        $register = $trunk->register ? 'true' : 'false';
+        $name         = htmlspecialchars("nexvary-{$trunk->id}", ENT_XML1);
+        $host         = htmlspecialchars($trunk->sip_host, ENT_XML1);
+        $user         = htmlspecialchars($trunk->username ?? '', ENT_XML1);
+        $pass         = htmlspecialchars($password ?: ($trunk->getRawOriginal('password') ?? ''), ENT_XML1);
+        $realm        = htmlspecialchars($trunk->realm ?? $trunk->sip_host, ENT_XML1);
+        $transport    = $trunk->transport ?? 'udp';
+        $register     = $trunk->register ? 'true' : 'false';
         $callerIdName = htmlspecialchars($trunk->caller_id_name ?? 'NEXVARY CX', ENT_XML1);
         $callerIdNum  = htmlspecialchars($trunk->caller_id_number ?? '', ENT_XML1);
 
@@ -271,17 +345,22 @@ XML;
 
     private function renderInboundRouteXml(array $route): string
     {
-        $did = htmlspecialchars($route['did'] ?? '', ENT_XML1);
-        $dest = htmlspecialchars($route['destination'] ?? '', ENT_XML1);
+        $did    = htmlspecialchars($route['did'] ?? '', ENT_XML1);
+        $dest   = htmlspecialchars($route['destination'] ?? '', ENT_XML1);
+        $domain = htmlspecialchars($route['domain'] ?? 'default', ENT_XML1);
+        $id     = $route['id'];
 
+        // Transfer into the tenant's domain context, not the global "default".
+        // This is the key FusionPBX pattern for multi-tenant inbound routing.
         return <<<XML
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- NEXVARY CX Cloud — Inbound Route {$route['id']} | Generated: {$this->timestamp()} -->
+<!-- NEXVARY CX Cloud — Inbound Route {$id} → {$domain} | Generated: {$this->timestamp()} -->
 <include>
-  <extension name="nexvary-inbound-{$route['id']}">
+  <extension name="nexvary-inbound-{$id}">
     <condition field="destination_number" expression="^{$did}$">
-      <action application="set" data="domain_name=\$\${domain}"/>
-      <action application="transfer" data="{$dest} XML default"/>
+      <action application="set" data="domain_name={$domain}"/>
+      <action application="set" data="tenant_domain={$domain}"/>
+      <action application="transfer" data="{$dest} XML {$domain}"/>
     </condition>
   </extension>
 </include>
@@ -292,15 +371,20 @@ XML;
     {
         $pattern = htmlspecialchars($route['pattern'] ?? '.*', ENT_XML1);
         $gateway = htmlspecialchars($route['gateway'] ?? '', ENT_XML1);
+        $prefix  = htmlspecialchars($route['prefix'] ?? '', ENT_XML1);
+        $id      = $route['id'];
+        $domain  = htmlspecialchars($route['domain'] ?? 'default', ENT_XML1);
 
+        // The outbound route lives in dialplan/{domain}/ so it is only reachable
+        // from extensions authenticated in the same domain context.
         return <<<XML
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- NEXVARY CX Cloud — Outbound Route {$route['id']} | Generated: {$this->timestamp()} -->
+<!-- NEXVARY CX Cloud — Outbound Route {$id} @ {$domain} | Generated: {$this->timestamp()} -->
 <include>
-  <extension name="nexvary-outbound-{$route['id']}">
+  <extension name="nexvary-outbound-{$id}">
     <condition field="destination_number" expression="^{$pattern}$">
-      <action application="set" data="effective_caller_id_number=\$\${outbound_caller_id}"/>
-      <action application="bridge" data="sofia/gateway/{$gateway}/\$1"/>
+      <action application="set" data="effective_caller_id_number=\${caller_id_number}"/>
+      <action application="bridge" data="sofia/gateway/{$gateway}/{$prefix}\$1"/>
     </condition>
   </extension>
 </include>
@@ -309,16 +393,16 @@ XML;
 
     private function renderIvrMenuXml(array $menu): string
     {
-        $name = htmlspecialchars("nexvary-ivr-{$menu['id']}", ENT_XML1);
-        $greeting = htmlspecialchars($menu['greeting_file'] ?? 'ivr/ivr-enter_ext.wav', ENT_XML1);
-        $timeout = $menu['timeout'] ?? 10000;
+        $name       = htmlspecialchars("nexvary-ivr-{$menu['id']}", ENT_XML1);
+        $greeting   = htmlspecialchars($menu['greeting_file'] ?? 'ivr/ivr-enter_ext.wav', ENT_XML1);
+        $timeout    = $menu['timeout'] ?? 10000;
         $maxRetries = $menu['max_retries'] ?? 3;
 
         $entries = '';
         foreach ($menu['entries'] ?? [] as $entry) {
-            $digit = htmlspecialchars($entry['digit'], ENT_XML1);
+            $digit  = htmlspecialchars($entry['digit'], ENT_XML1);
             $action = htmlspecialchars($entry['action'], ENT_XML1);
-            $param = htmlspecialchars($entry['param'] ?? '', ENT_XML1);
+            $param  = htmlspecialchars($entry['param'] ?? '', ENT_XML1);
             $entries .= "    <entry action=\"{$action}\" digits=\"{$digit}\" param=\"{$param}\"/>\n";
         }
 

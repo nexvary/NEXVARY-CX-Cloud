@@ -318,6 +318,9 @@
     "trunk_created": "تم إنشاء بوابة SIP. البوابة معطّلة حتى تقوم بتفعيلها.",
     "trunk_updated": "تم تحديث بوابة SIP.",
     "trunk_deleted": "تم حذف بوابة SIP.",
+    "route_created": "تم إنشاء المسار.",
+    "route_updated": "تم تحديث المسار.",
+    "route_deleted": "تم حذف المسار.",
     "freeze_activated": "تم تفعيل التجميد الطارئ. تم حظر المكالمات الصادرة.",
     "freeze_deactivated": "تم رفع التجميد. استُؤنفت المكالمات الصادرة."
   }

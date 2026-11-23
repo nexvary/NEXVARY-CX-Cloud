@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PBX;
 
 use App\Http\Controllers\Controller;
 use App\Models\Did;
+use App\Models\Tenant;
 use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\FusionPbxConfigService;
 use Illuminate\Http\Request;
@@ -90,10 +91,21 @@ class DidController extends Controller
             // No active route to write; remove any stale config
             $this->config->deleteInboundRoute(['id' => $did->id]);
         } else {
+            // Resolve the tenant's SIP domain so the inbound transfer lands in
+            // the correct per-tenant dialplan context (not the global "default").
+            $domain = 'default';
+            if ($did->tenant_id) {
+                $tenant = Tenant::find($did->tenant_id);
+                if ($tenant) {
+                    $domain = $tenant->sipDomain();
+                }
+            }
+
             $this->config->writeInboundRoute([
                 'id'          => $did->id,
                 'did'         => preg_replace('/\D/', '', $did->number),
                 'destination' => $did->destination_id ?? $did->number,
+                'domain'      => $domain,
             ]);
         }
         $this->pbx->reloadDialplan();

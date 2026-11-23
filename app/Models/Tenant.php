@@ -70,4 +70,31 @@ class Tenant extends Model
     {
         return $this->status === 'suspended';
     }
+
+    /**
+     * Return the FreeSWITCH SIP domain context for this tenant.
+     *
+     * FreeSWITCH uses per-domain directory paths: directory/{sipDomain()}/{ext}.xml
+     * and per-domain dialplan contexts named after the domain.
+     * Falls back to {slug}.pbx if no SIP domain is configured.
+     */
+    public function sipDomain(): string
+    {
+        // Load primary domain if relation not already loaded
+        if ($this->primary_domain_id) {
+            $primary = $this->domains()->where('id', $this->primary_domain_id)->first();
+            if ($primary && in_array($primary->type, ['sip', 'both'])) {
+                return $primary->name;
+            }
+        }
+
+        // Fall back to any enabled SIP/both domain
+        $domain = $this->domains()
+            ->whereIn('type', ['sip', 'both'])
+            ->where('enabled', true)
+            ->orderBy('created_at')
+            ->first();
+
+        return $domain?->name ?? $this->slug . '.pbx';
+    }
 }
