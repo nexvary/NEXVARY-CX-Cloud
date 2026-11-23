@@ -216,7 +216,8 @@ it('1B: deletes extension config from per-domain path', function () {
     $this->actingAs($user)->delete("/pbx/extensions/{$ext->id}")
         ->assertRedirect('/pbx/extensions');
 
-    $this->assertSoftDeleted('extensions', ['id' => $ext->id]);
+    // Extension uses hard delete (no SoftDeletes trait)
+    $this->assertDatabaseMissing('extensions', ['id' => $ext->id]);
 });
 
 it('1B: disabling an extension removes its FreeSWITCH directory entry', function () {
