@@ -241,19 +241,20 @@ it('admin can update a ring group and members are replaced', function () {
 });
 
 it('admin can delete a ring group and its members are removed', function () {
-    [, $user] = pbxAdmin();
+    [$tenant, $user] = pbxAdmin();
     $pbx = mockPbx();
-    $pbx->shouldReceive('reloadDialplan')->twice()->andReturn(true);
+    $pbx->shouldReceive('reloadDialplan')->once()->andReturn(true);
 
-    $this->actingAs($user)
-        ->post('/pbx/ring-groups', [
-            'name'      => 'ToDelete',
-            'extension' => '2099',
-            'strategy'  => 'simultaneous',
-            'members'   => ['1001'],
-        ]);
-
-    $rg = RingGroup::first();
+    // Create the ring group directly so the delete request is the only
+    // one that triggers reloadDialplan (avoids a twice() race with mocks).
+    $rg = RingGroup::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'ToDelete',
+        'extension' => '2099',
+        'strategy'  => 'simultaneous',
+        'timeout'   => 30,
+    ]);
+    $rg->members()->create(['number' => '1001']);
 
     $this->actingAs($user)
         ->delete("/pbx/ring-groups/{$rg->id}")
