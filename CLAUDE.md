@@ -44,12 +44,12 @@ You are acting as a Senior Laravel/PHP engineer, FreeSWITCH integration speciali
 | Cache/Queue | Redis |
 | PBX | FreeSWITCH (ESL on port 8021) |
 | VoIP provider | Telnyx (SIP trunks + SMS) |
-| OS targets | Debian 12, CentOS Stream 9 |
+| OS targets | Debian 12, Debian 13, Ubuntu 24.04 LTS (CentOS/RHEL not supported — owner decision) |
 | CI | GitHub Actions |
 
 ### Key Models
 
-- `Tenant` — UUID PK, `HasUuids`, `SoftDeletes`, no `HasFactory`; use `Tenant::factory()` with `TenantFactory`
+- `Tenant` — UUID PK, `HasFactory`, `HasUuids`, `SoftDeletes`; `TenantFactory` exists in `database/factories/`
 - `User` — `tenant_id` (nullable for superadmin), `HasFactory`
 - `Extension` — unique per tenant (not globally), `tenant_id`, SIP credentials stored encrypted
 - `Did` — belongs to `tenant_id`, can be assigned to `Extension` or `RingGroup`

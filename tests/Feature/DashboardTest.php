@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -23,14 +24,19 @@ it('shows dashboard for authenticated admin', function () {
 });
 
 it('includes call records from the migrated schema', function () {
-    $user = User::factory()->create();
-    $call = \App\Models\CallRecord::create([
-        'uuid' => (string) \Illuminate\Support\Str::uuid(),
-        'caller_id_number' => '1001',
+    // User and CallRecord must share a tenant so TenantScope returns the record.
+    $tenant = Tenant::factory()->create();
+    $user   = User::factory()->create(['tenant_id' => $tenant->id]);
+
+    // Create the CallRecord with the same tenant so TenantScope sees it.
+    $call = \App\Models\CallRecord::withoutGlobalScopes()->create([
+        'uuid'               => (string) \Illuminate\Support\Str::uuid(),
+        'tenant_id'          => $tenant->id,
+        'caller_id_number'   => '1001',
         'destination_number' => '1002',
-        'direction' => 'internal',
-        'duration_seconds' => 25,
-        'started_at' => now(),
+        'direction'          => 'internal',
+        'duration_seconds'   => 25,
+        'started_at'         => now(),
     ]);
 
     $this->actingAs($user)->get('/dashboard')->assertInertia(fn ($page) => $page
