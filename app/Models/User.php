@@ -16,20 +16,22 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'name', 'email', 'password', 'locale', 'timezone',
-        'mfa_enabled', 'mfa_secret', 'extension_id',
-        'active', 'last_login_at',
+        'mfa_enabled', 'mfa_secret', 'mfa_recovery_codes', 'mfa_enrolled_at',
+        'extension_id', 'active', 'last_login_at',
     ];
 
-    protected $hidden = ['password', 'remember_token', 'mfa_secret'];
+    protected $hidden = ['password', 'remember_token', 'mfa_secret', 'mfa_recovery_codes'];
 
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'last_login_at'     => 'datetime',
-            'password'          => 'hashed',
-            'mfa_enabled'       => 'boolean',
-            'active'            => 'boolean',
+            'email_verified_at'  => 'datetime',
+            'last_login_at'      => 'datetime',
+            'mfa_enrolled_at'    => 'datetime',
+            'password'           => 'hashed',
+            'mfa_enabled'        => 'boolean',
+            'active'             => 'boolean',
+            'mfa_recovery_codes' => 'array',
         ];
     }
 

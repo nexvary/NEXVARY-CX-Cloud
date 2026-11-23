@@ -14,8 +14,12 @@ export default function Mfa() {
             <h1 className="text-2xl font-semibold">{t('auth.mfa_code')}</h1>
             <label className="grid gap-1.5 text-sm">
                 {t('auth.mfa_code')}
-                <input className="nx-input" dir="ltr" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}"
-                    required value={form.data.code} onChange={event => form.setData('code', event.target.value)} />
+                <input className="nx-input" dir="ltr" name="code" autoComplete="one-time-code"
+                    required value={form.data.code} onChange={event => form.setData('code', event.target.value)}
+                    placeholder="000000 or XXXX-XXXX-XXXX" />
+                <span className="text-xs" style={{ color: 'var(--nx-text-muted)' }}>
+                    Enter your 6-digit authenticator code, or a recovery code.
+                </span>
             </label>
             {form.errors.code && <p role="alert" className="nx-notice nx-notice-error">{form.errors.code}</p>}
             <button className="nx-btn-primary" disabled={form.processing}>{t('auth.login_button')}</button>

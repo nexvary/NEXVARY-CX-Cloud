@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class MfaController extends Controller
@@ -19,15 +21,34 @@ class MfaController extends Controller
     public function verify(Request $request): \Illuminate\Http\RedirectResponse
     {
         abort_unless($request->session()->get('mfa_pending'), 404);
-        $request->validate(['code' => ['required', 'digits:6']]);
+        $request->validate(['code' => ['required', 'string', 'max:30']]);
 
-        $user = Auth::user();
+        $user  = Auth::user();
+        $input = trim($request->input('code'));
+        $valid = false;
 
-        // Google Authenticator TOTP verification
-        $valid = filled($user->mfa_secret) && (new \PragmaRX\Google2FA\Google2FA)->verifyKey(
-            $user->mfa_secret,
-            $request->code,
-        );
+        if (filled($user->mfa_secret)) {
+            $secret = Crypt::decryptString($user->mfa_secret);
+
+            // Try TOTP (6-digit code)
+            if (preg_match('/^\d{6}$/', $input)) {
+                $valid = (new \PragmaRX\Google2FA\Google2FA)->verifyKey($secret, $input);
+            }
+
+            // Try recovery code (format XXXX-XXXX-XXXX) — single-use
+            if (! $valid && is_array($user->mfa_recovery_codes)) {
+                foreach ($user->mfa_recovery_codes as $index => $hashed) {
+                    if (Hash::check(strtoupper($input), $hashed)) {
+                        // Consume the code immediately
+                        $remaining = $user->mfa_recovery_codes;
+                        unset($remaining[$index]);
+                        $user->update(['mfa_recovery_codes' => array_values($remaining)]);
+                        $valid = true;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (! $valid) {
             return back()->withErrors(['code' => __('auth.mfa_invalid')]);

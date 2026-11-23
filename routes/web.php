@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\CallFreezeController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaController;
+use App\Http\Controllers\Auth\MfaSetupController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Billing\BillingAccountController;
 use App\Http\Controllers\Billing\RateTableController;
 use App\Http\Controllers\CRM\ContactController;
@@ -39,6 +42,12 @@ Route::middleware(['installed'])->group(function () {
     // MFA
     Route::get('/mfa',  [MfaController::class, 'show'])->middleware('auth')->name('mfa');
     Route::post('/mfa', [MfaController::class, 'verify'])->middleware(['auth', 'throttle:6,1'])->name('mfa.verify');
+
+    // Password reset
+    Route::get('/forgot-password',         [PasswordResetController::class, 'showForgotForm'])->name('password.request');
+    Route::post('/forgot-password',        [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}',  [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/reset-password',         [PasswordResetController::class, 'reset'])->middleware('throttle:5,1')->name('password.update');
 });
 
 // ── Authenticated application ─────────────────────────────────────────────
@@ -55,6 +64,12 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::post('/contacts', [\App\Http\Controllers\Admin\GuideController::class, 'storeContact'])->name('contacts.store');
         Route::post('/select-tenant', [\App\Http\Controllers\Admin\GuideController::class, 'selectTenant'])->name('select_tenant');
         Route::post('/{module}/draft', [\App\Http\Controllers\Admin\ConfigurationController::class, 'store'])->name('draft.store');
+
+        // Emergency Call Freeze
+        Route::get('/call-freeze',                           [CallFreezeController::class, 'index'])->name('call_freeze');
+        Route::post('/call-freeze/tenant',                   [CallFreezeController::class, 'activateTenant'])->name('call_freeze.tenant');
+        Route::post('/call-freeze/gateway',                  [CallFreezeController::class, 'activateGateway'])->name('call_freeze.gateway');
+        Route::post('/call-freeze/{freeze}/deactivate',      [CallFreezeController::class, 'deactivate'])->name('call_freeze.deactivate');
     });
 
     // ── PBX ───────────────────────────────────────────────────────────────
@@ -70,6 +85,7 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::resource('trunks', TrunkController::class);
         Route::post('trunks/{trunk}/reload', [TrunkController::class, 'reload'])->name('trunks.reload');
         Route::get('trunks/{trunk}/health',  [TrunkController::class, 'health'])->name('trunks.health');
+        Route::get('trunks/presets/all',     [TrunkController::class, 'presets'])->name('trunks.presets');
 
         // DIDs
         Route::resource('dids', DidController::class);
@@ -159,6 +175,13 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         // Mobile device pairing — generates a one-time QR pairing token (web session auth)
         Route::post('/devices/pair', [\App\Http\Controllers\API\MobileController::class, 'generatePairingToken'])
              ->name('devices.pair');
+
+        // MFA setup
+        Route::get('/mfa/enroll',                    [MfaSetupController::class, 'showEnroll'])->name('settings.mfa.enroll');
+        Route::post('/mfa/enroll',                   [MfaSetupController::class, 'enable'])->name('settings.mfa.enable');
+        Route::get('/mfa/recovery',                  [MfaSetupController::class, 'showRecoveryCodes'])->name('settings.mfa.recovery');
+        Route::post('/mfa/recovery/regenerate',      [MfaSetupController::class, 'regenerateCodes'])->name('settings.mfa.regenerate');
+        Route::post('/mfa/disable',                  [MfaSetupController::class, 'disable'])->name('settings.mfa.disable');
     });
 
     // ── Info Pages ────────────────────────────────────────────────────────

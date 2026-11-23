@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, Link } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
 export default function Login() {
@@ -37,6 +37,9 @@ export default function Login() {
                 </label>
                 {(errors.email || errors.password) && <p role="alert" className="nx-notice nx-notice-error">{errors.email ?? errors.password}</p>}
                 <button type="submit" disabled={processing} className="nx-btn-primary">{t('auth.login_button')}</button>
+                <Link href="/forgot-password" className="text-center text-xs" style={{ color: 'var(--nx-blue)' }}>
+                    {t('auth.forgot_password')}
+                </Link>
             </form>
         </div>
     </main>;

@@ -52,8 +52,12 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
     },
     {
       label: t('nav.administration'),
-      href: '/admin',
+      href: '#admin',
       icon: Shield,
+      children: [
+        { label: t('nav.administration'), href: '/admin', icon: Shield },
+        { label: t('nav.call_freeze'), href: '/admin/call-freeze', icon: Phone },
+      ],
     },
     {
       label: t('nav.pbx'),
@@ -136,6 +140,7 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
         { label: t('nav.users'), href: '/settings/users', icon: Users },
         { label: t('nav.security'), href: '/settings/security', icon: Shield },
         { label: t('nav.server'), href: '/settings/server', icon: Server },
+        { label: t('nav.mfa_setup'), href: '/settings/mfa/enroll', icon: Shield },
         { label: t('nav.integrations'), href: '/settings/integrations', icon: Package },
         { label: t('nav.backup'), href: '/settings/backup', icon: FileText },
       ],

@@ -165,7 +165,9 @@
     "help_faq": "المساعدة والأسئلة الشائعة",
     "about_developer": "عن المطور",
     "language": "اللغة",
-    "administration": "الإدارة"
+    "administration": "الإدارة",
+    "call_freeze": "تجميد المكالمات",
+    "mfa_setup": "التحقق بخطوتين"
   },
   "dashboard": {
     "title": "لوحة التحكم",
@@ -215,7 +217,8 @@
     "remember_me": "تذكرني",
     "forgot_password": "نسيت كلمة المرور؟",
     "mfa_code": "رمز التحقق",
-    "login_button": "دخول"
+    "login_button": "دخول",
+    "mfa_disabled": "تم تعطيل التحقق بخطوتين."
   },
   "status": {
     "pbx_up": "PBX يعمل",
@@ -309,5 +312,12 @@
     "success": "تمت العملية بنجاح",
     "confirm": "تأكيد",
     "close": "إغلاق"
+  },
+  "messages": {
+    "trunk_created": "تم إنشاء بوابة SIP. البوابة معطّلة حتى تقوم بتفعيلها.",
+    "trunk_updated": "تم تحديث بوابة SIP.",
+    "trunk_deleted": "تم حذف بوابة SIP.",
+    "freeze_activated": "تم تفعيل التجميد الطارئ. تم حظر المكالمات الصادرة.",
+    "freeze_deactivated": "تم رفع التجميد. استُؤنفت المكالمات الصادرة."
   }
 }

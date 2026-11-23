@@ -165,7 +165,9 @@
     "help_faq": "Help & FAQ",
     "about_developer": "About Developer",
     "language": "Language",
-    "administration": "Administration"
+    "administration": "Administration",
+    "call_freeze": "Call Freeze",
+    "mfa_setup": "Two-Factor Auth"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -215,7 +217,8 @@
     "remember_me": "Remember me",
     "forgot_password": "Forgot password?",
     "mfa_code": "Verification code",
-    "login_button": "Sign In"
+    "login_button": "Sign In",
+    "mfa_disabled": "Two-factor authentication has been disabled."
   },
   "status": {
     "pbx_up": "PBX Online",
@@ -309,5 +312,12 @@
     "success": "Success",
     "confirm": "Confirm",
     "close": "Close"
+  },
+  "messages": {
+    "trunk_created": "SIP gateway created. The gateway is disabled until you enable it.",
+    "trunk_updated": "SIP gateway updated.",
+    "trunk_deleted": "SIP gateway removed.",
+    "freeze_activated": "Emergency freeze activated. Outbound calls are now blocked.",
+    "freeze_deactivated": "Freeze lifted. Outbound calls have resumed."
   }
 }
