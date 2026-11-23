@@ -116,6 +116,14 @@ class FusionPbxConfigService
         File::put($path, $xml);
     }
 
+    public function deleteInboundRoute(array $route): void
+    {
+        $path = "{$this->confDir}/dialplan/public/nexvary-inbound-{$route['id']}.xml";
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+    }
+
     public function writeOutboundRoute(array $route): void
     {
         $dir = "{$this->confDir}/dialplan/default";
@@ -124,6 +132,43 @@ class FusionPbxConfigService
         $xml = $this->renderOutboundRouteXml($route);
         $path = "{$dir}/nexvary-outbound-{$route['id']}.xml";
         File::put($path, $xml);
+    }
+
+    // ── CDR webhook ──────────────────────────────────────────────────────────
+
+    /**
+     * Write the xml_cdr.conf.xml that makes FreeSWITCH POST call records to Laravel.
+     *
+     * @param string $appUrl   The public base URL of the NEXVARY app (e.g. https://cx.example.com)
+     * @param string $secret   The NEXVARY_CDR_SECRET value (never logged)
+     */
+    public function writeCdrConfig(string $appUrl, string $secret): void
+    {
+        $url      = rtrim($appUrl, '/') . '/webhooks/freeswitch/cdr';
+        $encoded  = base64_encode('nexvary:' . $secret);
+
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- NEXVARY CX Cloud — CDR webhook | Generated: {$this->timestamp()} -->
+<configuration name="xml_cdr.conf" description="XML CDR Config">
+  <settings>
+    <param name="url" value="{$url}"/>
+    <param name="retries" value="3"/>
+    <param name="delay" value="5"/>
+    <param name="log-http-and-xml" value="false"/>
+    <param name="auth-scheme" value="basic"/>
+    <param name="credentials" value="{$encoded}"/>
+    <param name="encode" value="true"/>
+    <param name="log-errors" value="true"/>
+    <param name="prefix-a-leg" value="true"/>
+    <param name="log-b-leg" value="false"/>
+  </settings>
+</configuration>
+XML;
+
+        $path = "{$this->confDir}/autoload_configs/xml_cdr.conf.xml";
+        File::put($path, $xml);
+        Log::info("FreeSWITCH CDR config written: {$path}");
     }
 
     // ── IVR ───────────────────────────────────────────────────────────────────

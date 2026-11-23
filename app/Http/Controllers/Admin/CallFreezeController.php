@@ -68,13 +68,16 @@ class CallFreezeController extends Controller
 
     public function deactivate(Request $request, CallFreeze $freeze): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'code' => ['required', 'digits:6'],
-        ]);
+        $user = $request->user();
 
-        // Require fresh MFA verification to resume outbound calls
-        if ($request->user()->mfa_enabled) {
-            $secret = \Illuminate\Support\Facades\Crypt::decryptString($request->user()->mfa_secret);
+        // MFA users must supply a fresh TOTP code to lift a freeze.
+        // Users without MFA enrolled proceed without a code.
+        if ($user->mfa_enabled) {
+            $request->validate([
+                'code' => ['required', 'digits:6'],
+            ]);
+
+            $secret = \Illuminate\Support\Facades\Crypt::decryptString($user->mfa_secret);
             $valid  = (new \PragmaRX\Google2FA\Google2FA)->verifyKey($secret, $request->input('code'));
 
             if (! $valid) {

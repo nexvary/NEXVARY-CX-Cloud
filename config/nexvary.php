@@ -16,6 +16,8 @@ return [
         'tls_port'     => (int) env('FREESWITCH_TLS_PORT', 5061),
         'conf_dir'     => env('FREESWITCH_CONF_DIR', '/etc/freeswitch'),
         'log_dir'      => env('FREESWITCH_LOG_DIR', '/var/log/freeswitch'),
+        // Shared secret for the CDR webhook (mod_xml_cdr → POST /webhooks/freeswitch/cdr)
+        'cdr_secret'   => env('NEXVARY_CDR_SECRET'),
     ],
 
     // ── WebRTC Bridge ─────────────────────────────────────────────────────

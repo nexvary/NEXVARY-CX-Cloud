@@ -198,4 +198,6 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 // ── Webhooks (no auth, signature-verified) ────────────────────────────────
 Route::prefix('webhooks')->name('webhooks.')->group(function () {
     Route::post('/telnyx', [SmsController::class, 'webhook'])->name('telnyx');
+    Route::post('/freeswitch/cdr', [\App\Http\Controllers\Webhooks\FreeSwitchCdrController::class, 'store'])
+        ->name('freeswitch.cdr');
 });

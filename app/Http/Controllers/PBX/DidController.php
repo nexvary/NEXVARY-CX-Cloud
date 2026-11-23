@@ -4,16 +4,23 @@ namespace App\Http\Controllers\PBX;
 
 use App\Http\Controllers\Controller;
 use App\Models\Did;
+use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\FusionPbxConfigService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DidController extends Controller
 {
+    public function __construct(
+        private readonly FusionPbxConfigService $config,
+        private readonly FreeSwitchService $pbx,
+    ) {}
+
     public function index(): Response
     {
         return Inertia::render('PBX/DIDs/Index', [
-            'dids' => Did::latest()->paginate(25),
+            'dids' => Did::with('trunk')->latest()->paginate(25),
         ]);
     }
 
@@ -28,11 +35,13 @@ class DidController extends Controller
             'number'           => ['required', 'string', 'unique:dids,number'],
             'description'      => ['nullable', 'string'],
             'trunk_id'         => ['nullable', 'uuid'],
-            'destination_type' => ['nullable', 'string'],
+            'destination_type' => ['nullable', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination_id'   => ['nullable', 'uuid'],
+            'enabled'          => ['boolean'],
         ]);
 
-        Did::create($validated);
+        $did = Did::create($validated);
+        $this->applyDialplan($did);
 
         return redirect()->route('pbx.dids.index')
                          ->with('success', __('messages.did_created'));
@@ -40,12 +49,12 @@ class DidController extends Controller
 
     public function show(Did $did): Response
     {
-        return Inertia::render('PBX/DIDs/Form', ['did' => $did, 'readonly' => true]);
+        return Inertia::render('PBX/DIDs/Form', ['did' => $did->load('trunk'), 'readonly' => true]);
     }
 
     public function edit(Did $did): Response
     {
-        return Inertia::render('PBX/DIDs/Form', ['did' => $did]);
+        return Inertia::render('PBX/DIDs/Form', ['did' => $did->load('trunk')]);
     }
 
     public function update(Request $request, Did $did): \Illuminate\Http\RedirectResponse
@@ -54,10 +63,12 @@ class DidController extends Controller
             'number'           => ['required', 'string'],
             'description'      => ['nullable', 'string'],
             'trunk_id'         => ['nullable', 'uuid'],
-            'destination_type' => ['nullable', 'string'],
+            'destination_type' => ['nullable', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination_id'   => ['nullable', 'uuid'],
             'enabled'          => ['boolean'],
         ]));
+
+        $this->applyDialplan($did->fresh());
 
         return redirect()->route('pbx.dids.index')
                          ->with('success', __('messages.did_updated'));
@@ -65,9 +76,26 @@ class DidController extends Controller
 
     public function destroy(Did $did): \Illuminate\Http\RedirectResponse
     {
+        $this->config->deleteInboundRoute(['id' => $did->id]);
+        $this->pbx->reloadDialplan();
         $did->delete();
 
         return redirect()->route('pbx.dids.index')
                          ->with('success', __('messages.did_deleted'));
+    }
+
+    private function applyDialplan(Did $did): void
+    {
+        if (!$did->enabled || !$did->destination_type) {
+            // No active route to write; remove any stale config
+            $this->config->deleteInboundRoute(['id' => $did->id]);
+        } else {
+            $this->config->writeInboundRoute([
+                'id'          => $did->id,
+                'did'         => preg_replace('/\D/', '', $did->number),
+                'destination' => $did->destination_id ?? $did->number,
+            ]);
+        }
+        $this->pbx->reloadDialplan();
     }
 }

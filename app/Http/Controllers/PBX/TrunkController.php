@@ -122,7 +122,8 @@ class TrunkController extends Controller
 
     public function reload(Trunk $trunk): JsonResponse
     {
-        $this->pbx->reloadGateway($trunk->name);
+        // FS gateway name matches the one written in renderGatewayXml: "nexvary-{id}"
+        $this->pbx->reloadGateway("nexvary-{$trunk->id}");
 
         return response()->json(['ok' => true]);
     }
