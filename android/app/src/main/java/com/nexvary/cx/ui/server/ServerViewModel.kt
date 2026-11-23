@@ -65,18 +65,16 @@ class ServerViewModel @Inject constructor(
      * Initiates QR pairing using a dedicated HTTP client that bypasses the
      * global OkHttp interceptor.
      *
-     * SIP credentials (extension + password) are server-specific and are only
-     * carried forward when re-pairing with the **same server URL**. A different
-     * server URL always starts with empty SIP credentials — the user must supply
-     * SIP settings for the new account separately.
+     * The pairing contract provides no account identifier, so a matching server
+     * URL is not a trusted binding. Every successful exchange clears existing SIP
+     * credentials and resets the Linphone engine. The user must configure SIP
+     * settings separately after any pairing.
      *
      * On failure the existing credentials and SIP configuration are left untouched.
      */
     fun pair(qrPayload: String) {
         viewModelScope.launch {
             _serverState.value = ServerUiState.Loading
-            val existing = credentialStore.credentials.value
-
             try {
                 // ── Validate QR payload before any network request ────────────────
                 val parsed = try {
@@ -94,23 +92,18 @@ class ServerViewModel @Inject constructor(
                 val response = pairingClient.exchange(serverUrl, pairingToken, deviceId)
 
                 // ── SIP credential isolation ──────────────────────────────────────
-                // Carry SIP credentials only when pairing the same server. A
-                // matching hostname alone is not enough — the SIP account may differ.
-                val isSameServer = existing?.serverUrl != null &&
-                    normalizeUrl(existing.serverUrl) == normalizeUrl(serverUrl)
+                // The pairing contract (QR + exchange response) contains no account
+                // identifier, so URL equality cannot bind the exchange to a specific
+                // SIP account. Always clear SIP credentials and reset the engine so a
+                // stale registration is never carried into a new pairing session.
                 val newCreds = SipCredentials(
-                    serverUrl = serverUrl,
-                    extension  = if (isSameServer) existing?.extension  ?: "" else "",
-                    sipPassword = if (isSameServer) existing?.sipPassword ?: "" else "",
+                    serverUrl   = serverUrl,
+                    extension   = "",
+                    sipPassword = "",
                     deviceToken = response.token,
                 )
                 credentialStore.save(newCreds)
-
-                // ── SIP state reset ───────────────────────────────────────────────
-                // When switching to a different server, explicitly clear the stale
-                // Linphone account so the UI shows unregistered immediately — the
-                // old registration is no longer valid.
-                if (!isSameServer) sipEngine.reset()
+                sipEngine.reset()
 
                 // ── SIP registration ──────────────────────────────────────────────
                 // Only configure Linphone when we actually have SIP credentials for
@@ -148,5 +141,4 @@ class ServerViewModel @Inject constructor(
         }
     }
 
-    private fun normalizeUrl(url: String): String = url.trimEnd('/').lowercase()
 }

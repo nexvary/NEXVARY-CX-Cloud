@@ -31,6 +31,7 @@ class FakeSipEngine : SipEngine {
     var configured = false
 
     override fun configure(config: SipConfig) { configured = true }
+    override fun reset() {}
     override fun makeCall(number: String, hideNumber: Boolean) {
         lastCalledNumber = number
         lastHideNumber = hideNumber

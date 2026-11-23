@@ -338,7 +338,9 @@ class ServerViewModelTest {
     }
 
     @Test
-    fun `re-pairing the same server preserves SIP credentials`() = runTest {
+    fun `re-pairing the same server clears SIP credentials`() = runTest {
+        // The pairing contract contains no account identifier — URL equality is not
+        // a trusted binding. SIP credentials are always cleared on any successful exchange.
         val store = FakeCredentialRepository(
             SipCredentials(
                 serverUrl   = "https://same.example.com",
@@ -353,13 +355,15 @@ class ServerViewModelTest {
         advanceUntilIdle()
 
         val saved = store.credentials.value
-        assertTrue("Extension must be preserved on same-server re-pair",    saved?.extension   == "1002")
-        assertTrue("sipPassword must be preserved on same-server re-pair",  saved?.sipPassword == "sipPw")
-        assertTrue("deviceToken must come from the new exchange response",   saved?.deviceToken == "new-device-tok-from-server")
+        assertTrue("extension must be cleared even on same-server re-pair",   saved?.extension   == "")
+        assertTrue("sipPassword must be cleared even on same-server re-pair", saved?.sipPassword == "")
+        assertTrue("deviceToken must come from the new exchange response",     saved?.deviceToken == "new-device-tok-from-server")
     }
 
     @Test
-    fun `re-pairing same server with SIP credentials configures the SIP engine`() = runTest {
+    fun `re-pairing the same server does not configure the SIP engine`() = runTest {
+        // SIP credentials are always cleared on exchange — configure() must never be
+        // called from pair() regardless of URL match.
         val recording = RecordingSipEngine()
         val vm = makeVm(
             credentialStore = FakeCredentialRepository(
@@ -377,9 +381,8 @@ class ServerViewModelTest {
         vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
         advanceUntilIdle()
 
-        assertTrue("SIP engine must be configured on same-server re-pair",   recording.configureCallCount == 1)
-        assertTrue("SIP config extension must match stored extension",        recording.lastConfig?.extension == "1002")
-        assertTrue("SIP config server must be the paired server",            recording.lastConfig?.serverUrl == "https://same.example.com")
+        assertTrue("configure() must NOT be called after any pairing", recording.configureCallCount == 0)
+        assertTrue("reset() must be called after same-server re-pair", recording.resetCallCount == 1)
     }
 
     @Test
@@ -424,7 +427,9 @@ class ServerViewModelTest {
     }
 
     @Test
-    fun `same-server re-pairing does not reset the SIP engine`() = runTest {
+    fun `any pairing always resets the SIP engine`() = runTest {
+        // reset() must be called unconditionally on any successful exchange — there is
+        // no trusted account binding that would allow preserving a Linphone registration.
         val recording = RecordingSipEngine()
         val vm = makeVm(
             credentialStore = FakeCredentialRepository(
@@ -442,16 +447,15 @@ class ServerViewModelTest {
         vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
         advanceUntilIdle()
 
-        assertTrue("reset() must NOT be called on same-server re-pair", recording.resetCallCount == 0)
-        assertTrue("configure() must be called once (SIP creds carried over)", recording.configureCallCount == 1)
+        assertTrue("reset() must be called on every successful pairing",  recording.resetCallCount == 1)
+        assertTrue("configure() must NOT be called after any pairing",    recording.configureCallCount == 0)
     }
 
     @Test
-    fun `same-URL pairing where account may differ preserves SIP credentials`() = runTest {
-        // When the URL is identical, the ViewModel cannot determine whether the SIP
-        // account changed. It carries the credentials forward (documented limitation).
-        // The SIP engine will re-register and fail if the account changed, surfacing
-        // the error naturally without destroying the existing configuration.
+    fun `same-URL re-pairing clears SIP credentials because account identity is unverifiable`() = runTest {
+        // The pairing contract provides no account identifier. URL equality is not proof
+        // of account identity — a different user may have scanned a QR for the same host.
+        // SIP credentials must always be cleared so stale auth is never silently reused.
         val store = FakeCredentialRepository(
             SipCredentials(
                 serverUrl   = "https://shared.example.com",
@@ -466,10 +470,9 @@ class ServerViewModelTest {
         advanceUntilIdle()
 
         val saved = store.credentials.value
-        // SIP credentials preserved — account verification is left to SIP re-registration
-        assertTrue("Extension preserved when URL matches", saved?.extension   == "5001")
-        assertTrue("Password preserved when URL matches",  saved?.sipPassword == "acct1pw")
-        assertTrue("New device token stored",              saved?.deviceToken == "new-device-tok-from-server")
+        assertTrue("extension must be cleared — account identity unverifiable", saved?.extension   == "")
+        assertTrue("sipPassword must be cleared — account identity unverifiable", saved?.sipPassword == "")
+        assertTrue("New device token stored",                                   saved?.deviceToken == "new-device-tok-from-server")
     }
 
     @Test

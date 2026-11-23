@@ -1,15 +1,13 @@
 package com.nexvary.cx
 
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.nexvary.cx.data.CredentialRepository
 import com.nexvary.cx.data.MobileApiService
 import com.nexvary.cx.data.PairingClient
 import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
+import com.nexvary.cx.di.NetworkModule
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -18,9 +16,9 @@ import okhttp3.tls.HeldCertificate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import retrofit2.Retrofit
 
 /**
  * Integration tests for the full pairing → authenticated API request pipeline.
@@ -86,42 +84,22 @@ class PairingIntegrationTest {
     }
 
     /**
-     * Builds an authenticated API client using the same interceptor logic as
-     * [AppModule.provideOkHttp]. Reads [CredentialRepository.credentials] on
-     * every request and rewrites the destination host/port to the saved server.
+     * Builds an authenticated API client using the **production** [NetworkModule.provideOkHttp]
+     * interceptor so that any regression in the real credential-rewriting or token-attachment
+     * logic immediately breaks this test.
+     *
+     * The only test-specific addition is an SSL socket factory that trusts the local
+     * MockWebServer certificate; it does not alter the interceptor chain.
      */
     private fun buildApiClient(credStore: CredentialRepository): MobileApiService {
-        val okhttp = OkHttpClient.Builder()
+        // Production client — same interceptor that runs in the real app.
+        val productionClient: OkHttpClient = NetworkModule.provideOkHttp(credStore)
+        // Overlay test SSL trust without touching any interceptor.
+        val testClient = productionClient.newBuilder()
             .sslSocketFactory(clientHandshake.sslSocketFactory(), clientHandshake.trustManager)
-            .addInterceptor { chain ->
-                val creds = credStore.credentials.value
-                var request = chain.request()
-
-                val serverUrl = creds?.serverUrl?.trimEnd('/')
-                if (!serverUrl.isNullOrBlank()) {
-                    val parsed = serverUrl.toHttpUrlOrNull()
-                    if (parsed != null) {
-                        val newUrl = request.url.newBuilder()
-                            .scheme(parsed.scheme).host(parsed.host).port(parsed.port).build()
-                        request = request.newBuilder().url(newUrl).build()
-                    }
-                }
-                if (creds?.deviceToken != null) {
-                    request = request.newBuilder()
-                        .addHeader("Authorization", "Bearer ${creds.deviceToken}")
-                        .addHeader("Accept", "application/json")
-                        .build()
-                }
-                chain.proceed(request)
-            }
             .build()
-
-        return Retrofit.Builder()
-            .baseUrl("https://localhost/")
-            .client(okhttp)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(MobileApiService::class.java)
+        val retrofit = NetworkModule.provideRetrofit(testClient, json)
+        return NetworkModule.provideMobileApiService(retrofit)
     }
 
     private fun exchangeBody(token: String): String = """
