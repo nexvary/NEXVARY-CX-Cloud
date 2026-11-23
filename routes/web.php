@@ -77,6 +77,7 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
     Route::prefix('pbx')->name('pbx.')->middleware('nexvary.admin')->group(function () {
         // Extensions
         Route::resource('extensions', ExtensionController::class);
+        Route::post('extensions/{extension}/enabled', [ExtensionController::class, 'setEnabled'])->name('extensions.enabled');
         Route::post('extensions/{extension}/dnd',     [ExtensionController::class, 'setDnd'])->name('extensions.dnd');
         Route::post('extensions/{extension}/forward', [ExtensionController::class, 'setForward'])->name('extensions.forward');
         Route::get('extensions/{extension}/status',   [ExtensionController::class, 'status'])->name('extensions.status');

@@ -13,18 +13,21 @@ class Extension extends Model
     use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'number', 'name', 'sip_password', 'voicemail_pin',
-        'dnd_enabled', 'call_forward_enabled', 'call_forward_number',
-        'timeout', 'enabled', 'context',
+        'tenant_id', 'number', 'description', 'sip_password', 'voicemail_pin',
+        'call_timeout', 'forward_enabled', 'forward_destination',
+        'dnd_enabled', 'voicemail_enabled', 'call_waiting', 'enabled',
+        'mac_address', 'device_type', 'user_id',
     ];
 
     protected function casts(): array
     {
         return [
-            'dnd_enabled'          => 'boolean',
-            'call_forward_enabled' => 'boolean',
-            'enabled'            => 'boolean',
-            'timeout'              => 'integer',
+            'dnd_enabled'      => 'boolean',
+            'forward_enabled'  => 'boolean',
+            'voicemail_enabled'=> 'boolean',
+            'call_waiting'     => 'boolean',
+            'enabled'          => 'boolean',
+            'call_timeout'     => 'integer',
         ];
     }
 

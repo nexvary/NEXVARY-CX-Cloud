@@ -4,19 +4,16 @@ namespace App\Http\Controllers\PBX;
 
 use App\Http\Controllers\Controller;
 use App\Models\Extension;
-use App\Services\PBX\FreeSwitchService;
-use App\Services\PBX\FusionPbxConfigService;
+use App\Services\PBX\ExtensionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ExtensionController extends Controller
 {
     public function __construct(
-        private readonly FreeSwitchService $pbx,
-        private readonly FusionPbxConfigService $config,
+        private readonly ExtensionService $extensions,
     ) {}
 
     public function index(): Response
@@ -34,19 +31,13 @@ class ExtensionController extends Controller
     public function store(Request $request): \Illuminate\Http\RedirectResponse
     {
         $validated = $request->validate([
-            'number'   => ['required', 'string', 'unique:extensions,number'],
-            'name'     => ['required', 'string', 'max:255'],
-            'timeout'  => ['integer', 'min:10', 'max:120'],
-            'context'  => ['string', 'max:64'],
+            'number'       => ['required', 'string', 'unique:extensions,number'],
+            'description'  => ['nullable', 'string', 'max:255'],
+            'call_timeout' => ['integer', 'min:10', 'max:120'],
+            'sip_password' => ['nullable', 'string', 'min:8'],
         ]);
 
-        $extension = Extension::create(array_merge($validated, [
-            'sip_password'  => Str::random(20),
-            'voicemail_pin' => random_int(1000, 9999),
-        ]));
-
-        $this->config->writeExtension($extension);
-        $this->pbx->reloadDialplan();
+        $this->extensions->create($validated);
 
         return redirect()->route('pbx.extensions.index')
                          ->with('success', __('messages.extension_created'));
@@ -65,14 +56,12 @@ class ExtensionController extends Controller
     public function update(Request $request, Extension $extension): \Illuminate\Http\RedirectResponse
     {
         $validated = $request->validate([
-            'name'    => ['required', 'string', 'max:255'],
-            'timeout' => ['integer', 'min:10', 'max:120'],
-            'context' => ['string', 'max:64'],
+            'description'  => ['nullable', 'string', 'max:255'],
+            'call_timeout' => ['integer', 'min:10', 'max:120'],
+            'sip_password' => ['nullable', 'string', 'min:8'],
         ]);
 
-        $extension->update($validated);
-        $this->config->writeExtension($extension->fresh());
-        $this->pbx->reloadDialplan();
+        $this->extensions->update($extension, $validated);
 
         return redirect()->route('pbx.extensions.index')
                          ->with('success', __('messages.extension_updated'));
@@ -80,38 +69,55 @@ class ExtensionController extends Controller
 
     public function destroy(Extension $extension): \Illuminate\Http\RedirectResponse
     {
-        $this->config->deleteExtension($extension);
-        $extension->delete();
-        $this->pbx->reloadDialplan();
+        $this->extensions->delete($extension);
 
         return redirect()->route('pbx.extensions.index')
                          ->with('success', __('messages.extension_deleted'));
     }
 
+    public function setEnabled(Request $request, Extension $extension): JsonResponse
+    {
+        $enabled = $request->boolean('enabled');
+        $extension->update(['enabled' => $enabled]);
+
+        // Write or remove the FreeSWITCH directory entry based on enabled state
+        if ($enabled) {
+            // Re-derive the plaintext password is not possible after hashing; rewrite
+            // only if a new password is provided, otherwise leave the existing config file
+            if ($request->filled('sip_password')) {
+                $this->extensions->update($extension, ['sip_password' => $request->input('sip_password')]);
+            }
+        } else {
+            // Remove the config file — FreeSWITCH will reject SIP REGISTER with 403
+            $this->extensions->disableInFreeSWITCH($extension);
+        }
+
+        return response()->json(['ok' => true, 'enabled' => $enabled]);
+    }
+
     public function setDnd(Request $request, Extension $extension): JsonResponse
     {
-        $extension->update(['dnd_enabled' => $request->boolean('enabled')]);
-        $this->config->writeExtension($extension->fresh());
-
+        $this->extensions->setDnd($extension, $request->boolean('enabled'));
         return response()->json(['ok' => true]);
     }
 
     public function setForward(Request $request, Extension $extension): JsonResponse
     {
-        $request->validate(['number' => ['nullable', 'string'], 'enabled' => ['boolean']]);
-        $extension->update([
-            'call_forward_enabled' => $request->boolean('enabled'),
-            'call_forward_number'  => $request->input('number'),
+        $request->validate([
+            'number'  => ['nullable', 'string'],
+            'enabled' => ['boolean'],
         ]);
-        $this->config->writeExtension($extension->fresh());
+
+        $destination = $request->boolean('enabled') ? $request->input('number') : null;
+        $this->extensions->setForward($extension, $destination);
 
         return response()->json(['ok' => true]);
     }
 
     public function status(Extension $extension): JsonResponse
     {
-        $sofia = $this->pbx->api("sofia status profile internal reg {$extension->number}");
-
-        return response()->json(['raw' => $sofia]);
+        return response()->json(
+            $this->extensions->getRegistrationStatus($extension)
+        );
     }
 }

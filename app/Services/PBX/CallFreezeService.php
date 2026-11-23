@@ -224,7 +224,8 @@ class CallFreezeService
     {
         try {
             $esl = app(\App\Services\PBX\FreeSwitchService::class);
-            $esl->sendApi('reloadxml');
+            $esl->api('reloadxml');
+            $esl->disconnect();
         } catch (\Throwable) {
             // Non-fatal: the dialplan change will be picked up on the next reload
         }

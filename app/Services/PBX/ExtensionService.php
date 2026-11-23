@@ -93,7 +93,7 @@ class ExtensionService
     public function setForward(Extension $extension, ?string $destination): void
     {
         $extension->update([
-            'forward_enabled' => $destination !== null,
+            'forward_enabled'     => $destination !== null,
             'forward_destination' => $destination,
         ]);
         $this->config->updateExtensionVariable(
@@ -101,6 +101,21 @@ class ExtensionService
             'call_forward_all',
             $destination ?? ''
         );
+        $this->config->updateExtensionVariable(
+            $extension,
+            'call_forward_all_enabled',
+            $destination !== null ? 'true' : 'false'
+        );
+    }
+
+    /**
+     * Removes the FreeSWITCH directory config for a disabled extension.
+     * Without a directory entry, FreeSWITCH will return 403 to SIP REGISTER.
+     */
+    public function disableInFreeSWITCH(Extension $extension): void
+    {
+        $this->config->deleteExtensionConfig($extension);
+        $this->fs->reloadDialplan();
     }
 
     public function getRegistrationStatus(Extension $extension): array

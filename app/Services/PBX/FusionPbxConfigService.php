@@ -74,12 +74,16 @@ class FusionPbxConfigService
 
     // ── Trunks / Gateways ─────────────────────────────────────────────────────
 
-    public function writeTrunkConfig(Trunk $trunk): void
+    /**
+     * @param string $password  Plaintext SIP credential — stored in the FS config file only,
+     *                          never persisted to the database.
+     */
+    public function writeTrunkConfig(Trunk $trunk, string $password = ''): void
     {
         $dir = "{$this->confDir}/sip_profiles/external";
         $this->ensureDir($dir);
 
-        $xml = $this->renderGatewayXml($trunk);
+        $xml = $this->renderGatewayXml($trunk, $password);
         $path = "{$dir}/nexvary-trunk-{$trunk->id}.xml";
 
         File::put($path, $xml);
@@ -92,6 +96,12 @@ class FusionPbxConfigService
         if (File::exists($path)) {
             File::delete($path);
         }
+    }
+
+    /** Alias used by TrunkController. */
+    public function deleteTrunk(Trunk $trunk): void
+    {
+        $this->deleteTrunkConfig($trunk);
     }
 
     // ── Dialplan ──────────────────────────────────────────────────────────────
@@ -174,12 +184,14 @@ class FusionPbxConfigService
 XML;
     }
 
-    private function renderGatewayXml(Trunk $trunk): string
+    private function renderGatewayXml(Trunk $trunk, string $password = ''): string
     {
         $name = htmlspecialchars("nexvary-{$trunk->id}", ENT_XML1);
         $host = htmlspecialchars($trunk->sip_host, ENT_XML1);
         $user = htmlspecialchars($trunk->username ?? '', ENT_XML1);
-        $pass = htmlspecialchars($trunk->password ?? '', ENT_XML1);
+        // Use the explicitly passed plaintext password; fall back to model value as a last resort
+        // (the model hides the password from JSON/toArray but it is readable from PHP)
+        $pass = htmlspecialchars($password ?: ($trunk->getRawOriginal('password') ?? ''), ENT_XML1);
         $realm = htmlspecialchars($trunk->realm ?? $trunk->sip_host, ENT_XML1);
         $transport = $trunk->transport ?? 'udp';
         $register = $trunk->register ? 'true' : 'false';

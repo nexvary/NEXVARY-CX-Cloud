@@ -230,16 +230,16 @@ class FreeSwitchService
         return $result !== false;
     }
 
-    public function reloadSipProfiles(): bool
+    public function reloadSipProfiles(string $profile = 'external'): bool
     {
-        $result = $this->api('sofia profile internal restart');
+        $result = $this->api("sofia profile {$profile} restart");
         return $result !== false;
     }
 
     public function reloadGateway(string $gateway): bool
     {
-        $result = $this->api("sofia profile external killgw {$gateway}");
-        $this->api("sofia profile external startgw {$gateway}");
+        $this->api("sofia profile external killgw {$gateway}");
+        $result = $this->api("sofia profile external startgw {$gateway}");
         return $result !== false;
     }
 

@@ -78,3 +78,18 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
         raise SystemExit(f"Unexpected local SIP OPTIONS response: {status!r}")
     print("FreeSWITCH returned SIP 200 OK to loopback OPTIONS.")
 PY
+
+# ── Phase 3: Originate a loopback call and prove two-way audio connectivity ──
+#
+# FreeSWITCH's loopback/ channel creates two bridged legs in the same dialplan
+# context.  We originate to 9196 (the built-in echo extension in the vanilla
+# config) which connects the legs and echoes audio between them.  After
+# verifying ACTIVE state we hang up and confirm zero active calls.  This proves:
+#   • FreeSWITCH can process calls end-to-end via its dialplan
+#   • Both legs connect (bridged = two-way audio path exists)
+#   • Hangup completes cleanly
+#
+# Note: media content is not inspected; confirming BRIDGED state on both legs
+# is the standard CI-level proof of two-way audio capability.
+# Physical-device SRTP/TLS audio verification is documented separately.
+php scripts/qa-freeswitch-call.php
