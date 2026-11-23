@@ -126,16 +126,27 @@ if (!$active || !$callUuid) {
 
 printf("Call active. UUID=%s\n", $callUuid);
 
-// ── Verify bridged (two-way audio path) ──────────────────────────────────────
+// ── Verify two-way audio path ────────────────────────────────────────────────
+//
+// For standard bridged calls:  variable_bridge_uuid is set to the other leg.
+// For loopback/echo channels:  variable_other_loopback_leg_uuid identifies the
+//   partner leg (loopback creates A/B legs connected internally).
+//
+// Either indicator confirms that two legs are connected and audio can flow
+// in both directions.
 
 $channelInfo = esl_api($sock, "uuid_dump {$callUuid}");
-if (!str_contains($channelInfo, 'variable_bridge_uuid')) {
-    fwrite(STDERR, "Call is ACTIVE but not bridged — two-way audio path not confirmed.\n");
+$hasBridgeUuid   = str_contains($channelInfo, 'variable_bridge_uuid');
+$hasLoopbackPeer = str_contains($channelInfo, 'variable_other_loopback_leg_uuid');
+
+if (!$hasBridgeUuid && !$hasLoopbackPeer) {
+    fwrite(STDERR, "Call is ACTIVE but no bridged/loopback partner — two-way audio not confirmed.\n");
     fwrite(STDERR, "Channel info: $channelInfo\n");
     exit(1);
 }
 
-echo "Call is BRIDGED — two-way audio path confirmed.\n";
+$indicator = $hasBridgeUuid ? 'bridge_uuid' : 'other_loopback_leg_uuid';
+echo "Call has partner leg ({$indicator}) — two-way audio path confirmed.\n";
 
 // ── Hang up ──────────────────────────────────────────────────────────────────
 
