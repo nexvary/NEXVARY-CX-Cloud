@@ -47,6 +47,17 @@ class SmsController extends Controller
             return redirect()->back()->withErrors(['body' => 'Telnyx is not configured. Connect your account in Settings → Integrations.']);
         }
 
+        // Verify the conversation's DID is owned by the authenticated user's tenant
+        $tenantId = auth()->user()->tenant_id ?? null;
+        $didOwned = DB::table('dids')
+            ->where('number', $conversation->did_number)
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->exists();
+
+        if (!$didOwned) {
+            return redirect()->back()->withErrors(['body' => 'You are not authorized to send from that number.']);
+        }
+
         try {
             $telnyx = TelnyxService::make();
             $result = $telnyx->sendSms(

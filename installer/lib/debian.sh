@@ -92,9 +92,13 @@ nx_install_postgresql_debian() {
   if systemctl is-system-running --quiet 2>/dev/null; then
     systemctl enable postgresql --now
   else
-    pg_ctlcluster 16 main start 2>&1 | nx_log_passthrough || true
+    pg_ctlcluster 16 main start 2>&1 | nx_log_passthrough
+    sleep 2
+    if ! pg_isready -h 127.0.0.1 -p 5432 &>/dev/null; then
+      nx_warn "PostgreSQL not ready after pg_ctlcluster start"
+    fi
   fi
-  nx_ok "PostgreSQL $(psql --version | awk '{print $3}') installed and started"
+  nx_ok "PostgreSQL 16 installed and started"
 }
 
 # ── Install Redis 7 ──────────────────────────────────────────────────────────

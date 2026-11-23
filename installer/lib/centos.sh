@@ -69,13 +69,23 @@ nx_install_postgresql_centos() {
     _dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-${stream}-x86_64/pgdg-redhat-repo-latest.noarch.rpm" \
       2>&1 | nx_log_passthrough
 
-    # pgdg-common and older-version repos are supplemental and their CDN is
-    # unreachable from Docker containers — disable them immediately so that
-    # subsequent dnf calls do not trigger a failing metadata refresh
-    dnf config-manager --disable \
-      pgdg-common pgdg-common-testing \
-      pgdg15 pgdg14 pgdg13 pgdg12 pgdg11 pgdg10 pgdg96 \
-      2>/dev/null || true
+    # pgdg-common and older-version repos cannot be reached from Docker containers.
+    # We MUST edit the .repo files directly with awk — using `dnf config-manager
+    # --disable` would itself trigger a metadata refresh for pgdg-common before
+    # it could disable it, causing the same error we are trying to prevent.
+    # Keep only [pgdg16] enabled; disable every other section.
+    local _pgdg_repo
+    for _pgdg_repo in /etc/yum.repos.d/pgdg*.repo; do
+      [[ -f "$_pgdg_repo" ]] || continue
+      awk '
+        /^\[pgdg16\]$/  { keep=1 }
+        /^\[/ && !/^\[pgdg16\]$/ { keep=0 }
+        keep            { print; next }
+        /^enabled[ \t]*=[ \t]*1/ { print "enabled=0"; next }
+        { print }
+      ' "$_pgdg_repo" > "${_pgdg_repo}.new" \
+        && mv "${_pgdg_repo}.new" "$_pgdg_repo"
+    done
 
     _dnf module disable postgresql -y 2>&1 | nx_log_passthrough || true
 
