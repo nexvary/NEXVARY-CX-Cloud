@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
 import {
   Search, ChevronDown, ChevronRight,
-  Server, Phone, Layers, Users, MessageSquare, CreditCard, Shield, Bot,
+  Phone, Users, MessageSquare, CreditCard, Shield, Bot,
   Download, Terminal, Settings, Globe, HelpCircle,
 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';

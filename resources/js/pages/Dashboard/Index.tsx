@@ -238,8 +238,8 @@ const SipPanel: React.FC<{ trunks: Trunk[]; services: Services }> = ({ trunks, s
 
 const ModuleCard: React.FC<{
     title: string; desc: string; icon: React.ElementType;
-    href: string; color: string; glow: string; muted: string;
-}> = ({ title, desc, icon: Icon, href, color, glow, muted }) => (
+    href: string; color: string; glow?: string; muted: string;
+}> = ({ title, desc, icon: Icon, href, color, muted }) => (
     <Link
         href={href}
         className="nx-card group relative overflow-hidden flex items-center gap-4 p-4 transition-all hover:scale-[1.02]"
