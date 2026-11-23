@@ -20,7 +20,7 @@ data class SipCredentials(
 @Singleton
 class CredentialStore @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : CredentialRepository {
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)

@@ -2,7 +2,7 @@ package com.nexvary.cx.ui.server
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nexvary.cx.data.CredentialStore
+import com.nexvary.cx.data.CredentialRepository
 import com.nexvary.cx.data.MobileApiService
 import com.nexvary.cx.data.SipCredentials
 import com.nexvary.cx.data.model.PairExchangeRequest
@@ -31,7 +31,7 @@ sealed class ServerUiState {
 @HiltViewModel
 class ServerViewModel @Inject constructor(
     private val apiService: MobileApiService,
-    private val credentialStore: CredentialStore,
+    private val credentialStore: CredentialRepository,
     private val sipEngine: SipEngine,
     private val json: Json,
 ) : ViewModel() {
