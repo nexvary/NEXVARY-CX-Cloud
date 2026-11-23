@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NEXVARY CX</string>
+
+    <!-- Pairing error messages — English; Arabic equivalents in values-ar/strings.xml -->
+    <string name="pairing_error_malformed_qr">Invalid QR code (malformed QR payload)</string>
+    <string name="pairing_error_https_required">HTTPS is required for pairing</string>
+    <string name="pairing_error_token_expired">Pairing token expired or rejected</string>
+    <string name="pairing_error_connection_failed">Connection failed</string>
+    <string name="pairing_error_sip_config">Paired — SIP configuration error</string>
+    <string name="pairing_error_unexpected">Unexpected error — please try again</string>
     <string name="channel_name">NEXVARY Calls</string>
     <string name="channel_description">Active SIP call notification</string>
     <string name="notification_title">NEXVARY — Active Call</string>

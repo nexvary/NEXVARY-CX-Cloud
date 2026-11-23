@@ -23,6 +23,8 @@ data class SipState(
 interface SipEngine {
     val state: StateFlow<SipState>
     fun configure(config: SipConfig)
+    /** Clear all accounts and authentication state without touching call state. */
+    fun reset()
     fun makeCall(number: String, hideNumber: Boolean = false)
     fun answer()
     fun hangUp()

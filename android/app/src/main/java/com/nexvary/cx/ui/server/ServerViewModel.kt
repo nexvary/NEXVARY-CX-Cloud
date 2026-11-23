@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nexvary.cx.data.CredentialRepository
 import com.nexvary.cx.data.MobileApiService
 import com.nexvary.cx.data.PairingClient
+import com.nexvary.cx.data.PairingErrors
 import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
 import com.nexvary.cx.data.model.ServerStatus
@@ -105,6 +106,12 @@ class ServerViewModel @Inject constructor(
                 )
                 credentialStore.save(newCreds)
 
+                // ── SIP state reset ───────────────────────────────────────────────
+                // When switching to a different server, explicitly clear the stale
+                // Linphone account so the UI shows unregistered immediately — the
+                // old registration is no longer valid.
+                if (!isSameServer) sipEngine.reset()
+
                 // ── SIP registration ──────────────────────────────────────────────
                 // Only configure Linphone when we actually have SIP credentials for
                 // this server. A fresh cross-server pairing leaves extension empty;
@@ -121,24 +128,22 @@ class ServerViewModel @Inject constructor(
                     } catch (e: Exception) {
                         // API pairing succeeded — report SIP failure separately so the
                         // UI shows the correct paired-but-sip-error state.
-                        _serverState.value = ServerUiState.Error(
-                            "تم الإقران — خطأ في إعداد SIP: ${e.message} (paired; SIP config error)"
-                        )
+                        _serverState.value = ServerUiState.Error(PairingErrors.SIP_CONFIG_ERROR)
                         return@launch
                     }
                 }
                 refresh()
 
             } catch (e: PairingException.MalformedPayload) {
-                _serverState.value = ServerUiState.Error(e.message ?: "رمز QR غير صالح")
+                _serverState.value = ServerUiState.Error(PairingErrors.MALFORMED_QR)
             } catch (e: PairingException.InsecureUrl) {
-                _serverState.value = ServerUiState.Error(e.message ?: "يلزم HTTPS")
+                _serverState.value = ServerUiState.Error(PairingErrors.HTTPS_REQUIRED)
             } catch (e: PairingException.TokenExpiredOrRejected) {
-                _serverState.value = ServerUiState.Error(e.message ?: "انتهت صلاحية رمز الإقران")
+                _serverState.value = ServerUiState.Error(PairingErrors.TOKEN_EXPIRED)
             } catch (e: PairingException.ConnectionFailed) {
-                _serverState.value = ServerUiState.Error(e.message ?: "فشل الاتصال")
+                _serverState.value = ServerUiState.Error(PairingErrors.CONNECTION_FAILED)
             } catch (e: Exception) {
-                _serverState.value = ServerUiState.Error("فشل الإقران: ${e.message}")
+                _serverState.value = ServerUiState.Error(PairingErrors.UNEXPECTED)
             }
         }
     }

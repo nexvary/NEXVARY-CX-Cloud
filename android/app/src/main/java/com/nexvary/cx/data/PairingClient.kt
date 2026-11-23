@@ -60,22 +60,19 @@ open class PairingClient @Inject constructor(private val json: Json) {
     protected open fun buildHttpClient(): OkHttpClient.Builder = OkHttpClient.Builder()
 
     /**
-     * @param serverUrl      The base URL from the QR payload. Must use HTTPS unless
-     *                       [enforceHttps] is false (tests only).
-     * @param pairingToken   The short-lived pairing bearer token from the QR payload.
-     * @param deviceId       A stable, random identifier for this device installation.
-     * @param enforceHttps   Set to false only in tests that target a local HTTP server.
+     * @param serverUrl    The base URL from the QR payload. Must use HTTPS.
+     * @param pairingToken The short-lived pairing bearer token from the QR payload.
+     * @param deviceId     A stable, random identifier for this device installation.
      */
     open suspend fun exchange(
         serverUrl: String,
         pairingToken: String,
         deviceId: String,
-        enforceHttps: Boolean = true,
     ): PairExchangeResponse {
         val base = serverUrl.trimEnd('/').let {
             if (it.endsWith('/')) it else "$it/"
         }
-        if (enforceHttps && !base.startsWith("https://")) {
+        if (!base.startsWith("https://")) {
             throw PairingException.InsecureUrl(base)
         }
 

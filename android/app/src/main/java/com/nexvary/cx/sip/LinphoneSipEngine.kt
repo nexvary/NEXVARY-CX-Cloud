@@ -87,6 +87,16 @@ class LinphoneSipEngine @Inject constructor(
         }
     }
 
+    override fun reset() {
+        // Clear accounts and credentials immediately so the UI reflects
+        // unregistered state between a cross-server pairing and SIP re-setup.
+        core?.let { c ->
+            c.clearAccounts()
+            c.clearAllAuthInfo()
+        }
+        _state.value = SipState()
+    }
+
     override fun configure(config: SipConfig) {
         val c = ensureCore()
         c.clearAccounts()

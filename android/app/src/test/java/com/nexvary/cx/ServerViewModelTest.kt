@@ -88,7 +88,6 @@ class FakePairingClient(
         serverUrl: String,
         pairingToken: String,
         deviceId: String,
-        enforceHttps: Boolean,
     ): PairExchangeResponse {
         captureRequest?.invoke(serverUrl, pairingToken)
         exception?.let { throw it }
@@ -402,6 +401,78 @@ class ServerViewModelTest {
     }
 
     @Test
+    fun `cross-server pairing calls sipEngine reset to clear the stale registration`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://old.example.com",
+                    extension   = "1001",
+                    sipPassword = "s3cr3t",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine      = recording,
+            pairingClient  = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("reset() must be called after cross-server pairing", recording.resetCallCount == 1)
+        assertTrue("configure() must NOT be called (no SIP creds for new server)", recording.configureCallCount == 0)
+    }
+
+    @Test
+    fun `same-server re-pairing does not reset the SIP engine`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://same.example.com",
+                    extension   = "1002",
+                    sipPassword = "sipPw",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine     = recording,
+            pairingClient = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("reset() must NOT be called on same-server re-pair", recording.resetCallCount == 0)
+        assertTrue("configure() must be called once (SIP creds carried over)", recording.configureCallCount == 1)
+    }
+
+    @Test
+    fun `same-URL pairing where account may differ preserves SIP credentials`() = runTest {
+        // When the URL is identical, the ViewModel cannot determine whether the SIP
+        // account changed. It carries the credentials forward (documented limitation).
+        // The SIP engine will re-register and fail if the account changed, surfacing
+        // the error naturally without destroying the existing configuration.
+        val store = FakeCredentialRepository(
+            SipCredentials(
+                serverUrl   = "https://shared.example.com",
+                extension   = "5001",
+                sipPassword = "acct1pw",
+                deviceToken = "tok-acct1",
+            )
+        )
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok-acct2","server_url":"https://shared.example.com"}""")
+        advanceUntilIdle()
+
+        val saved = store.credentials.value
+        // SIP credentials preserved — account verification is left to SIP re-registration
+        assertTrue("Extension preserved when URL matches", saved?.extension   == "5001")
+        assertTrue("Password preserved when URL matches",  saved?.sipPassword == "acct1pw")
+        assertTrue("New device token stored",              saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    @Test
     fun `SIP engine is not configured when exchange fails`() = runTest {
         val recording = RecordingSipEngine()
         val vm = makeVm(
@@ -433,6 +504,7 @@ private class NoOpSipEngine : SipEngine {
     private val _state = MutableStateFlow(SipState())
     override val state: StateFlow<SipState> = _state.asStateFlow()
     override fun configure(config: SipConfig) {}
+    override fun reset() {}
     override fun makeCall(number: String, hideNumber: Boolean) {}
     override fun answer() {}
     override fun hangUp() {}
@@ -440,13 +512,15 @@ private class NoOpSipEngine : SipEngine {
     override fun setSpeaker(enabled: Boolean) {}
 }
 
-// SipEngine that records configure() calls for assertion
+// SipEngine that records configure() and reset() calls for assertion
 private class RecordingSipEngine : SipEngine {
     private val _state = MutableStateFlow(SipState())
     override val state: StateFlow<SipState> = _state.asStateFlow()
     var configureCallCount = 0
+    var resetCallCount     = 0
     var lastConfig: SipConfig? = null
     override fun configure(config: SipConfig) { configureCallCount++; lastConfig = config }
+    override fun reset() { resetCallCount++; _state.value = SipState() }
     override fun makeCall(number: String, hideNumber: Boolean) {}
     override fun answer() {}
     override fun hangUp() {}
