@@ -52,12 +52,13 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
     },
     {
       label: t('nav.administration'),
-      href: '#admin',
+      href: '/admin',
       icon: Shield,
-      children: [
-        { label: t('nav.administration'), href: '/admin', icon: Shield },
-        { label: t('nav.call_freeze'), href: '/admin/call-freeze', icon: Phone },
-      ],
+    },
+    {
+      label: t('nav.call_freeze'),
+      href: '/admin/call-freeze',
+      icon: Phone,
     },
     {
       label: t('nav.pbx'),

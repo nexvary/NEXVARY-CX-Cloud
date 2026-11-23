@@ -112,11 +112,11 @@ const TrunkForm: React.FC<Props> = ({ trunk, presets }) => {
     });
 
     const [showUnlockWarning, setShowUnlockWarning] = useState(false);
+    const [fieldsUnlocked, setFieldsUnlocked] = useState(false);
 
     const selectedPreset   = data.preset_key ? presets[data.preset_key] : null;
     const authModes        = selectedPreset?.auth_modes ?? ['credential', 'ip_acl'];
-    // Derived — no extra state needed
-    const presetFieldsLocked = showUnlockWarning ? [] : (selectedPreset?.preset_fields ?? []);
+    const presetFieldsLocked = fieldsUnlocked ? [] : (selectedPreset?.preset_fields ?? []);
     const presetInstructions = selectedPreset?.instructions.en ?? '';
     const docsUrl            = selectedPreset?.docs_url ?? null;
 
@@ -144,6 +144,7 @@ const TrunkForm: React.FC<Props> = ({ trunk, presets }) => {
         const mode = presets[key]?.auth_modes[0] ?? 'credential';
         applyPresetDefaults(key, mode);
         setShowUnlockWarning(false);
+        setFieldsUnlocked(false);
     };
 
     const handleSpaceNameChange = (spaceName: string) => {
@@ -156,7 +157,7 @@ const TrunkForm: React.FC<Props> = ({ trunk, presets }) => {
     };
 
     const isPresetLocked = (field: string) =>
-        presetFieldsLocked.includes(field) && !showUnlockWarning;
+        presetFieldsLocked.includes(field);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -497,7 +498,7 @@ const TrunkForm: React.FC<Props> = ({ trunk, presets }) => {
                             <button
                                 type="button"
                                 className="text-xs underline ms-auto shrink-0"
-                                onClick={() => { setPresetFieldsLocked([]); setShowUnlockWarning(false); }}
+                                onClick={() => { setFieldsUnlocked(true); setShowUnlockWarning(false); }}
                                 style={{ color: 'var(--nx-warning)' }}
                             >
                                 Unlock fields

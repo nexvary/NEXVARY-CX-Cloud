@@ -5,13 +5,15 @@ on:
     branches: ["feature/stage-1-foundation"]
     paths:
       - "android/**"
-      - "app/Http/Controllers/Mobile/**"
+      - "app/Http/Controllers/API/MobileController.php"
+      - "routes/api.php"
       - ".github/workflows/android.yml"
   pull_request:
-    branches: ["feature/stage-1-foundation"]
+    branches: ["master"]
     paths:
       - "android/**"
-      - "app/Http/Controllers/Mobile/**"
+      - "app/Http/Controllers/API/MobileController.php"
+      - "routes/api.php"
       - ".github/workflows/android.yml"
 
 jobs:
