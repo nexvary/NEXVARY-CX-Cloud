@@ -44,23 +44,37 @@ function seedDid(string $number, string $tenantId): void
 /**
  * Build and sign a Telnyx webhook payload.
  *
- * Returns the request body, signature, and timestamp headers for use with
- * $this->post('/webhooks/telnyx', ...).
+ * The signature is computed over the raw JSON string (timestamp|body).
+ * Callers must POST the rawBody verbatim so $request->getContent() matches
+ * exactly what was signed — posting a decoded array would give form-encoded
+ * content that doesn't match.
  */
 function buildWebhookRequest(array $payload, string $secretKey, ?int $timestamp = null): array
 {
     $timestamp = $timestamp ?? now()->timestamp;
-    $body      = json_encode($payload);
-    $signed    = $timestamp . '|' . $body;
+    $rawBody   = json_encode($payload);
+    $signed    = $timestamp . '|' . $rawBody;
     $sig       = base64_encode(sodium_crypto_sign_detached($signed, $secretKey));
 
     return [
-        'body'    => json_decode($body, true),
+        'rawBody' => $rawBody,
         'headers' => [
             'telnyx-signature-ed25519' => $sig,
             'telnyx-timestamp'         => (string) $timestamp,
         ],
     ];
+}
+
+/**
+ * Post a signed Telnyx webhook request with the correct JSON content type.
+ *
+ * We must use $this->call() with a raw body string so that
+ * $request->getContent() returns the same JSON that was signed.
+ */
+function postWebhook(\Tests\TestCase $test, array $req): \Illuminate\Testing\TestResponse
+{
+    return $test->withHeaders($req['headers'])
+        ->call('POST', '/webhooks/telnyx', [], [], [], ['CONTENT_TYPE' => 'application/json'], $req['rawBody']);
 }
 
 function inboundPayload(string $to, string $from, string $text = 'Hello'): array
@@ -103,13 +117,12 @@ it('rejects webhook with an invalid Ed25519 signature', function () {
     $publicKey = base64_encode(sodium_crypto_sign_publickey($kp));
     config(['nexvary.telnyx.webhook_public_key' => $publicKey]);
 
-    $this->post('/webhooks/telnyx',
-        inboundPayload('+10000000001', '+15550000001'),
-        [
-            'telnyx-signature-ed25519' => base64_encode(str_repeat("\x00", SODIUM_CRYPTO_SIGN_BYTES)),
-            'telnyx-timestamp'         => (string) now()->timestamp,
-        ]
-    )->assertForbidden();
+    $rawBody = json_encode(inboundPayload('+10000000001', '+15550000001'));
+    $this->withHeaders([
+        'telnyx-signature-ed25519' => base64_encode(str_repeat("\x00", SODIUM_CRYPTO_SIGN_BYTES)),
+        'telnyx-timestamp'         => (string) now()->timestamp,
+    ])->call('POST', '/webhooks/telnyx', [], [], [], ['CONTENT_TYPE' => 'application/json'], $rawBody)
+      ->assertForbidden();
 });
 
 it('rejects webhook with a timestamp older than 5 minutes (replay protection)', function () {
@@ -121,7 +134,7 @@ it('rejects webhook with a timestamp older than 5 minutes (replay protection)', 
     $payload = inboundPayload('+10000000001', '+15550000001');
     $req     = buildWebhookRequest($payload, $secretKey, now()->subMinutes(6)->timestamp);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertForbidden();
+    postWebhook($this, $req)->assertForbidden();
 });
 
 // ── Inbound message: tenant resolution via DID ────────────────────────────────
@@ -138,7 +151,7 @@ it('creates inbound conversation with correct tenant_id resolved from DID owners
     $payload = inboundPayload('+10000000001', '+15550000001');
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     $this->assertDatabaseHas('sms_conversations', [
         'did_number'     => '+10000000001',
@@ -163,7 +176,7 @@ it('discards inbound message for a DID not assigned to any tenant', function () 
     $payload = inboundPayload('+19990000000', '+15550000001');
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     $this->assertDatabaseMissing('sms_conversations', ['did_number' => '+19990000000']);
     $this->assertDatabaseCount('sms_messages', 0);
@@ -185,7 +198,7 @@ it('discards inbound message for a DID seeded with no tenant_id', function () {
     $payload = inboundPayload('+18880000001', '+15550000001');
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     $this->assertDatabaseCount('sms_messages', 0);
 });
@@ -218,13 +231,13 @@ it('processes a duplicate webhook event idempotently (no duplicate message)', fu
     $req = buildWebhookRequest($payload, $secretKey);
 
     // First delivery
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
     $count1 = SmsMessage::where('telnyx_event_id', $eventId)->count();
     expect($count1)->toBe(1);
 
     // Re-delivery of same event (new timestamp so signature must be re-generated)
     $req2 = buildWebhookRequest($payload, $secretKey);
-    $this->post('/webhooks/telnyx', $req2['body'], $req2['headers'])->assertOk();
+    postWebhook($this, $req2)->assertOk();
     $count2 = SmsMessage::where('telnyx_event_id', $eventId)->count();
     expect($count2)->toBe(1); // still exactly one — idempotent
 });
@@ -255,7 +268,7 @@ it('updates message status for a matching delivery event', function () {
     $payload = statusPayload('message.delivered', $telnyxMessageId);
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     $this->assertDatabaseHas('sms_messages', [
         'telnyx_message_id' => $telnyxMessageId,
@@ -272,7 +285,7 @@ it('ignores delivery event for an unknown telnyx_message_id without touching oth
     $payload = statusPayload('message.delivered', Str::uuid());
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     // No crash, no data mutation
     $this->assertDatabaseCount('sms_messages', 0);
@@ -304,7 +317,7 @@ it('does not overwrite delivered status with a late sent event', function () {
     $payload = statusPayload('message.sent', $telnyxMessageId);
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     $this->assertDatabaseHas('sms_messages', [
         'telnyx_message_id' => $telnyxMessageId,
@@ -371,7 +384,7 @@ it('handles a legacy null-tenant conversation without creating a duplicate', fun
     $payload = inboundPayload('+10000000007', '+15550000007');
     $req     = buildWebhookRequest($payload, $secretKey);
 
-    $this->post('/webhooks/telnyx', $req['body'], $req['headers'])->assertOk();
+    postWebhook($this, $req)->assertOk();
 
     // The unique constraint prevents a second conversation — only one exists
     $count = SmsConversation::withoutGlobalScopes()

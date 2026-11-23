@@ -23,7 +23,7 @@ export default function Guide({
     selectedTenant?: string;
 }) {
     const { t, i18n } = useTranslation();
-    const { flash } = usePage<{ flash?: { success?: string } }>().props;
+    const { flash, errors: pageErrors = {} } = usePage<{ flash?: { success?: string }; errors?: Record<string, string> }>().props;
     const form = useForm({ first_name: '', last_name: '', email: '', phone: '' });
     const tenantForm = useForm({ tenant_id: selectedTenant ?? '' });
     const Back = i18n.dir() === 'rtl' ? ArrowRight : ArrowLeft;
@@ -75,7 +75,7 @@ export default function Guide({
                         value={form.data[field]} onChange={event => form.setData(field, event.target.value)} aria-invalid={!!form.errors[field]} />
                     {form.errors[field] && <span className="text-red-300" role="alert">{t('setup.invalid_field')}</span>}
                 </label>)}
-                {form.errors.tenant && <p className="sm:col-span-2 text-amber-300 text-sm" role="alert">{form.errors.tenant}</p>}
+                {pageErrors.tenant && <p className="sm:col-span-2 text-amber-300 text-sm" role="alert">{pageErrors.tenant}</p>}
                 <div className="sm:col-span-2">
                     <button className="nx-btn-primary" disabled={form.processing}>{t('management.add_contact')}</button>
                     {flash?.success === 'contact_saved' && <p className="mt-2 text-emerald-300" role="status">{t('management.contact_saved')}</p>}
