@@ -4,8 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexvary.cx.data.CredentialRepository
 import com.nexvary.cx.data.MobileApiService
+import com.nexvary.cx.data.PairingClient
+import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
-import com.nexvary.cx.data.model.PairExchangeRequest
 import com.nexvary.cx.data.model.ServerStatus
 import com.nexvary.cx.sip.SipConfig
 import com.nexvary.cx.sip.SipEngine
@@ -33,6 +34,7 @@ class ServerViewModel @Inject constructor(
     private val apiService: MobileApiService,
     private val credentialStore: CredentialRepository,
     private val sipEngine: SipEngine,
+    private val pairingClient: PairingClient,
     private val json: Json,
 ) : ViewModel() {
 
@@ -58,19 +60,39 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Initiates QR pairing using a dedicated HTTP client that bypasses the
+     * global OkHttp interceptor.
+     *
+     * The global interceptor is correct for authenticated API calls (it rewrites
+     * the destination to the saved server and attaches the stored device token).
+     * Both are wrong here: the exchange must reach the **QR server** and carry
+     * the **QR pairing token**, not the stored device token.
+     *
+     * On failure the existing credentials are left untouched.
+     */
     fun pair(qrPayload: String) {
         viewModelScope.launch {
+            _serverState.value = ServerUiState.Loading
+            val existing = credentialStore.credentials.value
+
             try {
-                val parsed = json.parseToJsonElement(qrPayload).jsonObject
-                val pairingToken = parsed["pairing_token"]?.jsonPrimitive?.content ?: return@launch
-                val serverUrl = parsed["server_url"]?.jsonPrimitive?.content ?: return@launch
+                // ── Validate QR payload before any network request ────────────────
+                val parsed = try {
+                    json.parseToJsonElement(qrPayload).jsonObject
+                } catch (e: Exception) {
+                    throw PairingException.MalformedPayload("not valid JSON")
+                }
+                val pairingToken = parsed["pairing_token"]?.jsonPrimitive?.content
+                    ?: throw PairingException.MalformedPayload("missing pairing_token")
+                val serverUrl = parsed["server_url"]?.jsonPrimitive?.content
+                    ?: throw PairingException.MalformedPayload("missing server_url")
 
+                // ── Exchange ──────────────────────────────────────────────────────
                 val deviceId = UUID.randomUUID().toString()
-                val response = apiService.exchangePairingToken(
-                    PairExchangeRequest(deviceName = "NEXVARY CX Android", deviceId = deviceId)
-                )
+                val response = pairingClient.exchange(serverUrl, pairingToken, deviceId)
 
-                val existing = credentialStore.credentials.value
+                // ── Persist only after a successful exchange ──────────────────────
                 val newCreds = SipCredentials(
                     serverUrl = serverUrl,
                     extension = existing?.extension ?: "",
@@ -87,8 +109,17 @@ class ServerViewModel @Inject constructor(
                     )
                 )
                 refresh()
+
+            } catch (e: PairingException.MalformedPayload) {
+                _serverState.value = ServerUiState.Error(e.message ?: "رمز QR غير صالح")
+            } catch (e: PairingException.InsecureUrl) {
+                _serverState.value = ServerUiState.Error(e.message ?: "يلزم HTTPS")
+            } catch (e: PairingException.TokenExpiredOrRejected) {
+                _serverState.value = ServerUiState.Error(e.message ?: "انتهت صلاحية رمز الإقران")
+            } catch (e: PairingException.ConnectionFailed) {
+                _serverState.value = ServerUiState.Error(e.message ?: "فشل الاتصال")
             } catch (e: Exception) {
-                _serverState.value = ServerUiState.Error("Pairing failed: ${e.message}")
+                _serverState.value = ServerUiState.Error("فشل الإقران: ${e.message}")
             }
         }
     }
