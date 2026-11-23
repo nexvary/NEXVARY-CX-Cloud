@@ -124,7 +124,7 @@ fun ServerScreen(
             Icon(Icons.Default.ChevronRight, contentDescription = null)
         }
 
-        // Service statuses
+        // Service statuses / storage recovery
         when (val s = serverState) {
             is ServerUiState.Success -> {
                 Spacer(Modifier.height(16.dp))
@@ -134,6 +134,9 @@ fun ServerScreen(
             is ServerUiState.Error -> {
                 Spacer(Modifier.height(8.dp))
                 Text(s.message, color = NxError, fontSize = 13.sp)
+            }
+            is ServerUiState.StorageUnavailable -> {
+                StorageUnavailableCard(onClearForRecovery = { viewModel.clearForRecovery() })
             }
             else -> Unit
         }
@@ -226,6 +229,50 @@ private fun ServiceStatusRow(name: String, up: Boolean) {
         Text(name, color = NxSilver, fontSize = 14.sp)
         Spacer(Modifier.weight(1f))
         Text(if (up) "يعمل" else "متوقف", color = if (up) NxGreen else NxError, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun StorageUnavailableCard(onClearForRecovery: () -> Unit) {
+    var recoveryAttempted by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(16.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(NxError.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .padding(16.dp),
+    ) {
+        Text(
+            "خطأ في التخزين المشفر — لا يمكن حفظ بيانات الاعتماد",
+            color = NxError,
+            fontSize = 14.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Encrypted storage unavailable — credentials cannot be saved",
+            color = NxError.copy(alpha = 0.8f),
+            fontSize = 12.sp,
+        )
+        Spacer(Modifier.height(12.dp))
+        if (recoveryAttempted) {
+            Text(
+                "أعد تشغيل التطبيق لاستكمال الاسترداد\nRestart the app to complete recovery",
+                color = NxSilver,
+                fontSize = 13.sp,
+            )
+        } else {
+            Button(
+                onClick = {
+                    onClearForRecovery()
+                    recoveryAttempted = true
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = NxError),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("حذف بيانات الاعتماد / Delete credentials", color = Color.White, fontSize = 13.sp)
+            }
+        }
     }
 }
 

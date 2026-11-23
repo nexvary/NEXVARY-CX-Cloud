@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android Auto Backup exclusions (API < 31).
+    Credential files must never leave the device — they bind a device token that
+    is specific to this physical installation and cannot be restored to another
+    device or account without re-pairing via QR.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="nexvary_credentials.xml" />
+    <exclude domain="sharedpref" path="nexvary_credentials_plain.xml" />
+</full-backup-content>

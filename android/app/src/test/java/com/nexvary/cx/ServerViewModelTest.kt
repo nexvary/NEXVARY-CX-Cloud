@@ -2,8 +2,10 @@ package com.nexvary.cx
 
 import com.nexvary.cx.data.CredentialRepository
 import com.nexvary.cx.data.PairingClient
+import com.nexvary.cx.data.PairingErrors
 import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
+import com.nexvary.cx.data.StorageUnavailableException
 import com.nexvary.cx.data.MobileApiService
 import com.nexvary.cx.data.model.PairExchangeRequest
 import com.nexvary.cx.data.model.PairExchangeResponse
@@ -38,10 +40,34 @@ import java.io.IOException
 
 class FakeCredentialRepository(initial: SipCredentials? = null) : CredentialRepository {
     private val _credentials = MutableStateFlow(initial)
+    override val isStorageAvailable: Boolean = true
     override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
     override fun isConfigured() = _credentials.value != null
     override fun save(credentials: SipCredentials) { _credentials.value = credentials }
     override fun clear() { _credentials.value = null }
+    override fun clearForRecovery() { _credentials.value = null }
+}
+
+/** Storage unavailable at init — isStorageAvailable=false, save() always throws. */
+class StorageUnavailableCredentialRepository : CredentialRepository {
+    private val _credentials = MutableStateFlow<SipCredentials?>(null)
+    override val isStorageAvailable: Boolean = false
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override fun isConfigured() = false
+    override fun save(credentials: SipCredentials) { throw StorageUnavailableException() }
+    override fun clear() {}
+    override fun clearForRecovery() {}
+}
+
+/** Storage appears available at init but save() fails (key invalidated mid-session). */
+class FailOnSaveCredentialRepository(initial: SipCredentials? = null) : CredentialRepository {
+    private val _credentials = MutableStateFlow(initial)
+    override val isStorageAvailable: Boolean = true
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override fun isConfigured() = _credentials.value != null
+    override fun save(credentials: SipCredentials) { throw StorageUnavailableException() }
+    override fun clear() { _credentials.value = null }
+    override fun clearForRecovery() { _credentials.value = null }
 }
 
 class FakeMobileApiService(
@@ -473,6 +499,85 @@ class ServerViewModelTest {
         assertTrue("extension must be cleared — account identity unverifiable", saved?.extension   == "")
         assertTrue("sipPassword must be cleared — account identity unverifiable", saved?.sipPassword == "")
         assertTrue("New device token stored",                                   saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    // ── Storage-unavailable regression tests ─────────────────────────────────
+
+    @Test
+    fun `ViewModel starts in StorageUnavailable when storage is not available`() {
+        val vm = makeVm(credentialStore = StorageUnavailableCredentialRepository())
+        assertTrue(
+            "Expected StorageUnavailable state when ESP cannot init",
+            vm.serverState.value is ServerUiState.StorageUnavailable,
+        )
+    }
+
+    @Test
+    fun `pair is refused immediately when storage is unavailable at init`() = runTest {
+        var exchangeCalled = false
+        val pairingClient = FakePairingClient(captureRequest = { _, _ -> exchangeCalled = true })
+        val vm = makeVm(
+            credentialStore = StorageUnavailableCredentialRepository(),
+            pairingClient   = pairingClient,
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("Exchange must not be called when storage is unavailable", !exchangeCalled)
+        assertTrue(
+            "State must be Error (not Loading or Success) when storage is unavailable",
+            vm.serverState.value is ServerUiState.Error,
+        )
+        val msg = (vm.serverState.value as ServerUiState.Error).message
+        assertTrue(
+            "Error message must reference storage unavailability",
+            msg == PairingErrors.STORAGE_UNAVAILABLE,
+        )
+    }
+
+    @Test
+    fun `save write failure during pair sets storage error state without reporting pairing success`() = runTest {
+        val store = FailOnSaveCredentialRepository(null)
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue(
+            "State must be Error when save() throws mid-pairing",
+            vm.serverState.value is ServerUiState.Error,
+        )
+        val msg = (vm.serverState.value as ServerUiState.Error).message
+        assertTrue(
+            "Error message must reference storage unavailability",
+            msg == PairingErrors.STORAGE_UNAVAILABLE,
+        )
+        // No credentials must have been persisted
+        assertNull(
+            "No credentials must be stored after a failed save",
+            store.credentials.value,
+        )
+    }
+
+    @Test
+    fun `normal encrypted pairing still works when storage is available`() = runTest {
+        val store = FakeCredentialRepository(null)
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        // After a successful pair the ViewModel calls refresh() which yields Success
+        assertTrue(
+            "State must be Success after normal encrypted pairing",
+            vm.serverState.value is ServerUiState.Success,
+        )
+        val saved = store.credentials.value
+        assertTrue("Saved serverUrl must match QR payload",         saved?.serverUrl   == "https://cx.example.com")
+        assertTrue("Saved deviceToken must come from exchange",      saved?.deviceToken == "new-device-tok-from-server")
+        assertTrue("Saved extension must be blank (SIP not in QR)", saved?.extension   == "")
+        assertTrue("Saved sipPassword must be blank",               saved?.sipPassword == "")
     }
 
     @Test

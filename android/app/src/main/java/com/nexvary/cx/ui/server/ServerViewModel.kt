@@ -8,6 +8,7 @@ import com.nexvary.cx.data.PairingClient
 import com.nexvary.cx.data.PairingErrors
 import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
+import com.nexvary.cx.data.StorageUnavailableException
 import com.nexvary.cx.data.model.ServerStatus
 import com.nexvary.cx.sip.SipConfig
 import com.nexvary.cx.sip.SipEngine
@@ -28,6 +29,10 @@ sealed class ServerUiState {
     data class Success(val status: ServerStatus) : ServerUiState()
     data class Error(val message: String) : ServerUiState()
     object NotConfigured : ServerUiState()
+    /** Encrypted credential storage could not initialise. No pairing or save is possible
+     *  until a successful cold restart. The user can call [ServerViewModel.clearForRecovery]
+     *  to delete the corrupted file and then restart the app. */
+    object StorageUnavailable : ServerUiState()
 }
 
 @HiltViewModel
@@ -46,7 +51,21 @@ class ServerViewModel @Inject constructor(
     val credentials: StateFlow<SipCredentials?> = credentialStore.credentials
 
     init {
-        if (credentialStore.isConfigured()) refresh()
+        when {
+            !credentialStore.isStorageAvailable -> _serverState.value = ServerUiState.StorageUnavailable
+            credentialStore.isConfigured() -> refresh()
+        }
+    }
+
+    /**
+     * Delete the encrypted preferences file and direct the user to restart.
+     * Only available when [isStorageAvailable] is false (i.e. the keystore is
+     * inaccessible). Has no effect and no data is read if storage IS available.
+     * [ServerUiState] does not change — the UI should communicate that a cold
+     * restart is required before normal operation resumes.
+     */
+    fun clearForRecovery() {
+        credentialStore.clearForRecovery()
     }
 
     fun refresh() {
@@ -74,6 +93,13 @@ class ServerViewModel @Inject constructor(
      */
     fun pair(qrPayload: String) {
         viewModelScope.launch {
+            // Guard before any network call: refuse immediately if encrypted storage
+            // is unavailable so we do not consume a single-use pairing token that
+            // cannot be persisted.
+            if (!credentialStore.isStorageAvailable) {
+                _serverState.value = ServerUiState.Error(PairingErrors.STORAGE_UNAVAILABLE)
+                return@launch
+            }
             _serverState.value = ServerUiState.Loading
             try {
                 // ── Validate QR payload before any network request ────────────────
@@ -135,6 +161,10 @@ class ServerViewModel @Inject constructor(
                 _serverState.value = ServerUiState.Error(PairingErrors.TOKEN_EXPIRED)
             } catch (e: PairingException.ConnectionFailed) {
                 _serverState.value = ServerUiState.Error(PairingErrors.CONNECTION_FAILED)
+            } catch (e: StorageUnavailableException) {
+                // save() threw mid-pairing (key invalidated after startup). Exchange
+                // consumed the token but nothing was written — no credentials changed.
+                _serverState.value = ServerUiState.Error(PairingErrors.STORAGE_UNAVAILABLE)
             } catch (e: Exception) {
                 _serverState.value = ServerUiState.Error(PairingErrors.UNEXPECTED)
             }
