@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Installer dependency test — installs PHP, PostgreSQL, Redis
-# Usage: bash test-deps.sh <debian|centos>
+# Usage: bash test-deps.sh <debian>
+# Supported adapters: debian (covers Debian 12, Debian 13, Ubuntu 24.04)
+# CentOS/RHEL adapters have been removed (owner decision: not a supported platform)
 
 set -euo pipefail
 
 INSTALLER_LIB='/installer/lib'
-ADAPTER="${1:?Adapter required: debian or centos}"
+ADAPTER="${1:?Adapter required: debian}"
 
 # Minimal UI stubs
 nx_warn()           { echo "WARN: $*" >&2; }
@@ -47,24 +49,6 @@ case "$ADAPTER" in
     echo "=== Installing Redis ==="
     nx_install_redis_debian
     redis-cli ping | grep -q PONG && echo "  ✓ Redis responding to PING"
-    ;;
-
-  centos)
-    source "${INSTALLER_LIB}/centos.sh"
-
-    echo "=== Installing PHP 8.3 ==="
-    nx_install_php_centos
-    php -v && php -m | grep -q pdo_pgsql && echo "  ✓ pdo_pgsql extension loaded"
-
-    echo "=== Installing PostgreSQL 16 ==="
-    nx_install_postgresql_centos
-    pg_isready -h 127.0.0.1 -p 5432 2>/dev/null && echo "  ✓ PostgreSQL accepting connections" || \
-      echo "  → PostgreSQL may need systemd to start fully"
-
-    echo "=== Installing Redis ==="
-    nx_install_redis_centos
-    redis-cli ping 2>/dev/null | grep -q PONG && echo "  ✓ Redis responding to PING" || \
-      echo "  → Redis may need systemd to start fully"
     ;;
 
   *)

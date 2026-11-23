@@ -11,11 +11,14 @@ use Illuminate\Database\Eloquent\Scope;
  *
  * Rules:
  *  - Unauthenticated: returns nothing (1=0)
- *  - Authenticated with tenant_id: scopes to that tenant
- *  - Authenticated without tenant_id (superadmin): no automatic scope applied;
- *    controllers are required to add explicit scoping for superadmin paths
+ *  - Authenticated, tenant_id set: scopes to that tenant
+ *  - Authenticated, tenant_id null, superadmin role: no auto-scope;
+ *    controllers MUST add ->where('tenant_id', $id) or
+ *    ->withoutGlobalScope(TenantScope::class) explicitly
+ *  - Authenticated, tenant_id null, NOT superadmin: returns nothing (1=0)
  *
  * A missing tenant_id NEVER silently grants global access to tenant data.
+ * Superadmin status is verified by role, not inferred from a null tenant_id.
  */
 class TenantScope implements Scope
 {
@@ -30,8 +33,17 @@ class TenantScope implements Scope
 
         if ($user->tenant_id !== null) {
             $builder->where($model->qualifyColumn('tenant_id'), $user->tenant_id);
+            return;
         }
-        // Superadmin (tenant_id = null): no auto-scope — controllers must
-        // apply ->where('tenant_id', $id) or withoutGlobalScope(TenantScope::class)
+
+        // User has null tenant_id — only a verified superadmin proceeds unscoped.
+        // Any other user (e.g. misconfigured account) gets denied.
+        if (!$user->hasRole('superadmin')) {
+            $builder->whereRaw('1 = 0');
+        }
+
+        // Verified superadmin: no auto-scope applied.
+        // Controllers must scope explicitly (->where('tenant_id', $id) or
+        // ->withoutGlobalScope(TenantScope::class)) for any superadmin path.
     }
 }

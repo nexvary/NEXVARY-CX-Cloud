@@ -15,18 +15,17 @@ on:
 permissions:
   contents: read
 
-# ── Compatibility Matrix ───────────────────────────────────────────────────────
-# Platform          | Support     | Test method
-# ----------------  | ----------- | ----------------
-# Debian 12         | Verified    | Docker container
-# Debian 13 (Trixie)| Verified    | Docker container
-# Ubuntu 24.04      | Verified    | Docker container
-# CentOS Stream 9   | Verified    | Docker container
-# CentOS Stream 10  | Verified    | Docker container
+# ── Supported Linux Matrix ─────────────────────────────────────────────────────
+# Platform              | Support   | Test method
+# ----------------------|-----------|-----------------------------
+# Debian 12 (Bookworm)  | Verified  | Docker — detection + deps
+# Debian 13 (Trixie)    | Verified  | Docker — detection + deps
+# Ubuntu 24.04 LTS      | Verified  | Docker — detection + deps
+# CentOS / RHEL (all)   | REMOVED   | Not supported — see STAGE-2 decision
 
 jobs:
   detect-and-unit:
-    name: Detection unit tests — ${{ matrix.os }}
+    name: Detection tests — ${{ matrix.os }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -53,20 +52,6 @@ jobs:
             expected_id: ubuntu
             expected_version: '24.04'
             pkg_mgr: apt
-            supported: 'yes'
-
-          - os: CentOS Stream 9
-            image: quay.io/centos/centos:stream9
-            expected_id: centos
-            expected_version: '9'
-            pkg_mgr: dnf
-            supported: 'yes'
-
-          - os: CentOS Stream 10
-            image: quay.io/centos/centos:stream10
-            expected_id: centos
-            expected_version: '10'
-            pkg_mgr: dnf
             supported: 'yes'
 
     steps:
@@ -96,13 +81,13 @@ jobs:
             image: debian:12
             adapter: debian
 
+          - os: Debian 13
+            image: debian:trixie
+            adapter: debian
+
           - os: Ubuntu 24.04
             image: ubuntu:24.04
             adapter: debian
-
-          - os: CentOS Stream 9
-            image: quay.io/centos/centos:stream9
-            adapter: centos
 
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +122,6 @@ jobs:
             installer/lib/ui.sh \
             installer/lib/detect.sh \
             installer/lib/debian.sh \
-            installer/lib/centos.sh \
             installer/lib/freeswitch.sh \
             installer/lib/app.sh \
             installer/lib/nginx.sh \
@@ -157,22 +141,18 @@ jobs:
           cat > /tmp/matrix.md <<'MD'
           # NEXVARY CX Cloud — OS Compatibility Matrix
 
-          | Operating System     | Version | Support   | Test Status   |
-          |----------------------|---------|-----------|---------------|
-          | Debian               | 13      | Verified  | CI tested      |
-          | Debian               | 12      | Verified  | CI tested      |
-          | Ubuntu               | 24.04   | Verified  | CI tested      |
-          | Ubuntu               | 22.04   | Compatible| Not CI tested  |
-          | CentOS Stream        | 10      | Verified  | CI tested      |
-          | CentOS Stream        | 9       | Verified  | CI tested      |
-          | CentOS Linux (any)   | 7/8     | ❌ EOL     | Rejected       |
-          | RHEL / Rocky / Alma  | 9+      | Partial   | Not CI tested  |
+          | Operating System     | Version | Support   | Test Status         |
+          |----------------------|---------|-----------|---------------------|
+          | Debian               | 13      | Verified  | CI tested           |
+          | Debian               | 12      | Verified  | CI tested           |
+          | Ubuntu               | 24.04   | Verified  | CI tested           |
+          | Ubuntu               | 22.04   | Compatible| Not CI tested       |
+          | CentOS / RHEL (all)  | any     | ❌ Removed | Not supported       |
 
           ## Notes
-          - **Verified**: Tested in CI on each push
+          - **Verified**: Tested in CI on each push (detection + dependency install)
           - **Compatible**: Expected to work, not in automated matrix
-          - **Partial**: May work, no guarantee
-          - **Rejected**: Explicitly blocked (EOL, security risk)
+          - **Removed**: Owner decision — CentOS excluded from current release
 
           Generated: $(date -Iseconds)
           MD

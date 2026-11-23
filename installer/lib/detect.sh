@@ -75,40 +75,15 @@ nx_detect_os() {
       esac
       ;;
 
-    centos)
-      NX_PKG_MGR='dnf'
-      # CentOS Stream sets VERSION_ID to 8, 9 or 10
-      case "$NX_OS_VERSION" in
-        9)
-          NX_OS_CODENAME='stream9'
-          NX_SUPPORTED='yes'
-          ;;
-        10)
-          NX_OS_CODENAME='stream10'
-          NX_SUPPORTED='yes'
-          ;;
-        8)
-          # CentOS Stream 8 reached EOL 2024-05-31
-          NX_SUPPORTED='no'
-          nx_error "CentOS Stream 8 reached end-of-life on 2024-05-31 and is not supported."
-          return 1
-          ;;
-        7|6|5)
-          NX_SUPPORTED='no'
-          nx_error "CentOS Linux $NX_OS_VERSION is end-of-life and not supported. Use CentOS Stream 9 or 10."
-          return 1
-          ;;
-        *)
-          NX_SUPPORTED='partial'
-          nx_warn "CentOS version $NX_OS_VERSION is unrecognised."
-          ;;
-      esac
-      ;;
-
-    rhel|rocky|almalinux)
-      NX_PKG_MGR='dnf'
-      NX_SUPPORTED='partial'
-      nx_warn "$NX_OS_ID $NX_OS_VERSION may work but is not an explicitly tested platform."
+    centos|rhel|rocky|almalinux|fedora)
+      # RHEL-family distributions are not supported.
+      # Owner decision (Stage 2): NEXVARY CX Cloud supports Debian 12/13 and
+      # Ubuntu 24.04 LTS only. CentOS and all RHEL-based variants are excluded
+      # from the current release.
+      NX_SUPPORTED='no'
+      nx_error "NEXVARY CX Cloud does not support $NX_OS_ID $NX_OS_VERSION."
+      nx_error "Supported platforms: Debian 12, Debian 13, Ubuntu 24.04 LTS."
+      return 1
       ;;
 
     *)

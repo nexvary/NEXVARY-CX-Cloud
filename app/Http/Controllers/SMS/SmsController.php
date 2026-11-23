@@ -47,13 +47,10 @@ class SmsController extends Controller
             return redirect()->back()->withErrors(['body' => 'Telnyx is not configured. Connect your account in Settings → Integrations.']);
         }
 
-        // Verify the conversation's DID is owned by the authenticated user's tenant
-        $tenantId = auth()->user()->tenant_id ?? null;
-        $didOwned = DB::table('dids')
-            ->where('number', $conversation->did_number)
-            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
-            ->exists();
-
+        // Verify the conversation's DID is owned by the authenticated user's tenant.
+        // ->when($tenantId, ...) would silently become an unrestricted lookup for
+        // null tenant_id — so we use an explicit branch instead.
+        $didOwned = $this->tenantOwnsDid(auth()->user(), $conversation->did_number);
         if (!$didOwned) {
             return redirect()->back()->withErrors(['body' => 'You are not authorized to send from that number.']);
         }
@@ -105,13 +102,8 @@ class SmsController extends Controller
             return redirect()->back()->withErrors(['body' => 'Telnyx is not configured.']);
         }
 
-        // Verify the caller owns the from-number (tenant-scoped DID check)
-        $tenantId = auth()->user()->tenant_id ?? null;
-        $didOwned = DB::table('dids')
-            ->where('number', $request->input('from'))
-            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
-            ->exists();
-
+        // Verify the caller owns the from-number (tenant-scoped DID check).
+        $didOwned = $this->tenantOwnsDid(auth()->user(), $request->input('from'));
         if (!$didOwned) {
             return redirect()->back()->withErrors(['from' => 'You are not authorized to send from that number.']);
         }
@@ -154,6 +146,35 @@ class SmsController extends Controller
         } catch (\RuntimeException $e) {
             return redirect()->back()->withErrors(['body' => $e->getMessage()]);
         }
+    }
+
+    // ── DID ownership verification ────────────────────────────────────────────
+
+    /**
+     * Verify that $user is authorized to send from $didNumber.
+     *
+     * - Regular tenant user: DID must exist and belong to their tenant.
+     * - Verified superadmin (tenant_id = null + superadmin role): DID must exist
+     *   in the system (tenant unrestricted — superadmin manages all tenants).
+     * - Any other null-tenant user: denied (no tenant context, not superadmin).
+     */
+    private function tenantOwnsDid(\App\Models\User $user, string $didNumber): bool
+    {
+        $tenantId = $user->tenant_id;
+
+        if ($tenantId !== null) {
+            return DB::table('dids')
+                ->where('number', $didNumber)
+                ->where('tenant_id', $tenantId)
+                ->exists();
+        }
+
+        if ($user->hasRole('superadmin')) {
+            return DB::table('dids')->where('number', $didNumber)->exists();
+        }
+
+        // No tenant context and not superadmin: deny unconditionally.
+        return false;
     }
 
     // ── Webhook (Telnyx → server) ─────────────────────────────────────────────
