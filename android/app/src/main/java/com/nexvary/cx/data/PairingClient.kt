@@ -54,6 +54,12 @@ open class PairingClient @Inject constructor(private val json: Json) {
     private val mediaType = "application/json".toMediaType()
 
     /**
+     * Returns a base [OkHttpClient.Builder] for the pairing exchange.
+     * Tests override this to inject a custom SSL factory without touching production code.
+     */
+    protected open fun buildHttpClient(): OkHttpClient.Builder = OkHttpClient.Builder()
+
+    /**
      * @param serverUrl      The base URL from the QR payload. Must use HTTPS unless
      *                       [enforceHttps] is false (tests only).
      * @param pairingToken   The short-lived pairing bearer token from the QR payload.
@@ -73,7 +79,7 @@ open class PairingClient @Inject constructor(private val json: Json) {
             throw PairingException.InsecureUrl(base)
         }
 
-        val client = OkHttpClient.Builder()
+        val client = buildHttpClient()
             // Never follow redirects: a redirect would forward the Authorization
             // header containing the pairing token to a potentially different origin.
             .followRedirects(false)

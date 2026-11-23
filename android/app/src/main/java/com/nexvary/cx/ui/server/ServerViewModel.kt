@@ -64,12 +64,12 @@ class ServerViewModel @Inject constructor(
      * Initiates QR pairing using a dedicated HTTP client that bypasses the
      * global OkHttp interceptor.
      *
-     * The global interceptor is correct for authenticated API calls (it rewrites
-     * the destination to the saved server and attaches the stored device token).
-     * Both are wrong here: the exchange must reach the **QR server** and carry
-     * the **QR pairing token**, not the stored device token.
+     * SIP credentials (extension + password) are server-specific and are only
+     * carried forward when re-pairing with the **same server URL**. A different
+     * server URL always starts with empty SIP credentials — the user must supply
+     * SIP settings for the new account separately.
      *
-     * On failure the existing credentials are left untouched.
+     * On failure the existing credentials and SIP configuration are left untouched.
      */
     fun pair(qrPayload: String) {
         viewModelScope.launch {
@@ -92,22 +92,41 @@ class ServerViewModel @Inject constructor(
                 val deviceId = UUID.randomUUID().toString()
                 val response = pairingClient.exchange(serverUrl, pairingToken, deviceId)
 
-                // ── Persist only after a successful exchange ──────────────────────
+                // ── SIP credential isolation ──────────────────────────────────────
+                // Carry SIP credentials only when pairing the same server. A
+                // matching hostname alone is not enough — the SIP account may differ.
+                val isSameServer = existing?.serverUrl != null &&
+                    normalizeUrl(existing.serverUrl) == normalizeUrl(serverUrl)
                 val newCreds = SipCredentials(
                     serverUrl = serverUrl,
-                    extension = existing?.extension ?: "",
-                    sipPassword = existing?.sipPassword ?: "",
+                    extension  = if (isSameServer) existing?.extension  ?: "" else "",
+                    sipPassword = if (isSameServer) existing?.sipPassword ?: "" else "",
                     deviceToken = response.token,
                 )
                 credentialStore.save(newCreds)
 
-                sipEngine.configure(
-                    SipConfig(
-                        serverUrl = serverUrl,
-                        extension = newCreds.extension,
-                        password = newCreds.sipPassword,
-                    )
-                )
+                // ── SIP registration ──────────────────────────────────────────────
+                // Only configure Linphone when we actually have SIP credentials for
+                // this server. A fresh cross-server pairing leaves extension empty;
+                // the user will supply SIP settings via the manual setup flow.
+                if (newCreds.extension.isNotEmpty() && newCreds.sipPassword.isNotEmpty()) {
+                    try {
+                        sipEngine.configure(
+                            SipConfig(
+                                serverUrl = serverUrl,
+                                extension = newCreds.extension,
+                                password  = newCreds.sipPassword,
+                            )
+                        )
+                    } catch (e: Exception) {
+                        // API pairing succeeded — report SIP failure separately so the
+                        // UI shows the correct paired-but-sip-error state.
+                        _serverState.value = ServerUiState.Error(
+                            "تم الإقران — خطأ في إعداد SIP: ${e.message} (paired; SIP config error)"
+                        )
+                        return@launch
+                    }
+                }
                 refresh()
 
             } catch (e: PairingException.MalformedPayload) {
@@ -123,4 +142,6 @@ class ServerViewModel @Inject constructor(
             }
         }
     }
+
+    private fun normalizeUrl(url: String): String = url.trimEnd('/').lowercase()
 }
