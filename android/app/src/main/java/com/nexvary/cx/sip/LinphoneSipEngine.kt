@@ -11,10 +11,11 @@ import org.linphone.core.Call
 import org.linphone.core.Core
 import org.linphone.core.CoreListenerStub
 import org.linphone.core.Factory
+import org.linphone.core.GlobalState
+import org.linphone.core.LogCollectionState
 import org.linphone.core.MediaEncryption
 import org.linphone.core.Privacy
 import org.linphone.core.RegistrationState
-import org.linphone.core.TransportType
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,7 +79,7 @@ class LinphoneSipEngine @Inject constructor(
     private fun ensureCore(): Core {
         return core ?: run {
             val factory = Factory.instance()
-            factory.setLogCollectionEnabled(org.linphone.core.LogCollectionState.Disabled)
+            factory.enableLogCollection(LogCollectionState.Disabled)
             val c = factory.createCore(null, null, context)
             c.addListener(coreListener)
             core = c
@@ -103,16 +104,16 @@ class LinphoneSipEngine @Inject constructor(
         c.addAuthInfo(authInfo)
 
         val params = c.createAccountParams()
-        params.identityAddress = identity
-        params.serverAddress = serverAddr
-        params.registerEnabled = true
-        params.publishEnabled = false
+        params.setIdentityAddress(identity)
+        params.setServerAddress(serverAddr)
+        params.setRegisterEnabled(true)
+        params.setPublishEnabled(false)
 
         val account = c.createAccount(params)
         c.addAccount(account)
-        c.defaultAccount = account
+        c.setDefaultAccount(account)
 
-        if (!c.isStarted) c.start()
+        if (c.globalState != GlobalState.On) c.start()
     }
 
     override fun makeCall(number: String, hideNumber: Boolean) {
@@ -120,7 +121,6 @@ class LinphoneSipEngine @Inject constructor(
         val address = c.interpretUrl(number) ?: return
         val params = c.createCallParams(null) ?: return
         params.mediaEncryption = MediaEncryption.SRTP
-        params.isMediaEncryptionMandatory = true
         if (hideNumber) params.privacy = Privacy.Id.toInt()
         _state.value = _state.value.copy(hideMyNumber = hideNumber)
         c.inviteAddressWithParams(address, params)
