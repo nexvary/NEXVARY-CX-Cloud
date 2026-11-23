@@ -5,11 +5,15 @@ on:
     branches: ['feature/stage-1-foundation', master, main]
     paths:
       - 'installer/**'
+      - 'INSTALL-NEXVARY.sh'
+      - 'UPDATE-NEXVARY.sh'
       - '.github/workflows/installer-linux.yml'
   pull_request:
     branches: [master, main]
     paths:
       - 'installer/**'
+      - 'INSTALL-NEXVARY.sh'
+      - 'UPDATE-NEXVARY.sh'
   workflow_dispatch:
 
 permissions:
@@ -117,6 +121,8 @@ jobs:
           shellcheck \
             --severity=error \
             --exclude=SC1091 \
+            INSTALL-NEXVARY.sh \
+            UPDATE-NEXVARY.sh \
             installer/nexvary-bootstrap.sh \
             installer/nexvary-install.sh \
             installer/lib/ui.sh \

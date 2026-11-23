@@ -83,26 +83,35 @@ UNIT
 nx_verify_services() {
   nx_step "Verifying service status"
 
-  local all_ok=true
+  # Discover actual postgresql and redis unit names (may include version suffix)
+  local pg_svc; pg_svc="$(systemctl list-units 'postgresql*' --no-legend 2>/dev/null | awk '{print $1}' | head -1 || echo 'postgresql')"
+  local redis_svc; redis_svc="$(systemctl list-units 'redis*' --no-legend 2>/dev/null | awk '{print $1}' | head -1 || echo 'redis-server')"
+  [[ -z "$pg_svc" ]]    && pg_svc='postgresql'
+  [[ -z "$redis_svc" ]] && redis_svc='redis-server'
 
-  local services=('nginx' 'postgresql' 'postgresql-16' 'redis-server' 'redis')
-
-  # Find the actual postgresql and redis service names
-  local pg_svc; pg_svc="$(systemctl list-units 'postgresql*' --no-legend 2>/dev/null | awk '$4=="running"{print $1}' | head -1)"
-  local redis_svc; redis_svc="$(systemctl list-units 'redis*' --no-legend 2>/dev/null | awk '$4=="running"{print $1}' | head -1)"
-
-  for svc_candidate in nginx "$pg_svc" "$redis_svc" nexvary-queue nexvary-scheduler.timer; do
-    [[ -z "$svc_candidate" ]] && continue
-    if systemctl is-active --quiet "$svc_candidate" 2>/dev/null; then
-      nx_ok "$svc_candidate is active"
+  # Essential services — installer cannot safely complete without them
+  for svc in nginx "$pg_svc" "$redis_svc"; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      nx_ok "$svc is active"
     else
-      nx_warn "$svc_candidate is not active"
+      systemctl status "$svc" --no-pager --lines=20 2>/dev/null || true
+      nx_fatal "$svc is not running. Installation cannot complete. Run: journalctl -xe -u $svc"
+    fi
+  done
+
+  # Non-essential services — warn on failure (they may still be starting up)
+  local all_ok=true
+  for svc in nexvary-queue nexvary-scheduler.timer; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      nx_ok "$svc is active"
+    else
+      nx_warn "$svc is not active"
       all_ok=false
     fi
   done
 
   if [[ "$all_ok" == 'false' ]]; then
-    nx_warn "Some services are not running. Use 'systemctl status <service>' to investigate."
+    nx_warn "Some services are not active. Use 'systemctl status <service>' to investigate."
   fi
 }
 

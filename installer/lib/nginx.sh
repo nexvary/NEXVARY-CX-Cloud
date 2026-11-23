@@ -9,6 +9,12 @@ readonly NX_NGINX_SITE='nexvary-cx'
 # ── PHP-FPM socket detection ──────────────────────────────────────────────────
 
 nx_php_fpm_socket() {
+  # Return the pre-computed socket path when nx_configure_php_fpm has run.
+  # This ensures the pool config and all nginx upstreams always use the same path.
+  if [[ -n "${NX_FPM_SOCKET:-}" ]]; then
+    echo "${NX_FPM_SOCKET}"
+    return
+  fi
   # Try known socket paths
   local candidates=(
     "/run/php/php8.3-fpm.sock"
@@ -38,6 +44,10 @@ nx_configure_nginx() {
   # Remove any existing default site that conflicts
   rm -f /etc/nginx/sites-enabled/default \
         /etc/nginx/conf.d/default.conf 2>/dev/null || true
+
+  # Back up any existing config so we can restore it if nginx -t fails
+  local _bak="${conf_file}.bak-$(date +%s)"
+  if [[ -f "$conf_file" ]]; then cp "$conf_file" "$_bak"; fi
 
   cat > "$conf_file" <<NGINX
 # NEXVARY CX Cloud — Nginx configuration
@@ -104,7 +114,15 @@ NGINX
     ln -sf "$conf_file" "/etc/nginx/sites-enabled/${NX_NGINX_SITE}.conf"
   fi
 
-  nginx -t 2>&1 | nx_log_passthrough && systemctl reload nginx
+  if nginx -t 2>&1 | nx_log_passthrough; then
+    rm -f "$_bak" 2>/dev/null || true
+    systemctl reload nginx
+  else
+    nx_error "Nginx config test failed — restoring previous state"
+    if [[ -f "$_bak" ]]; then mv "$_bak" "$conf_file"; else rm -f "$conf_file"; fi
+    nginx -t 2>/dev/null || true
+    nx_fatal "Nginx configuration invalid — rolled back"
+  fi
   nx_ok "Nginx configured for http://${domain}/"
 }
 
@@ -120,13 +138,19 @@ nx_configure_php_fpm() {
     return
   fi
 
+  # Derive socket path from the installed PHP version so the pool config and
+  # all nginx upstream blocks always reference the same socket file.
+  local _php_ver
+  _php_ver="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo '8.3')"
+  export NX_FPM_SOCKET="/run/php/php${_php_ver}-fpm.sock"
+
   cat > "${pool_dir}/nexvary-cx.conf" <<FPM
 ; NEXVARY CX Cloud PHP-FPM pool
 [nexvary-cx]
 user  = ${NX_APP_USER:-nexvary}
 group = ${NX_APP_USER:-nexvary}
 
-listen = /run/php/php8.3-fpm.sock
+listen = ${NX_FPM_SOCKET}
 listen.owner = www-data
 listen.group = www-data
 listen.mode  = 0660
@@ -287,7 +311,19 @@ NGINX
     ln -sf "$conf_file" "/etc/nginx/sites-enabled/${NX_NGINX_SITE}.conf"
   fi
 
-  nginx -t 2>&1 | nx_log_passthrough && systemctl reload nginx
+  if nginx -t 2>&1 | nx_log_passthrough; then
+    systemctl reload nginx
+  else
+    nx_error "Nginx HTTPS config test failed — restoring previous state"
+    for f_bak in /etc/nginx/sites-enabled/*.pre-nexvary-"${stamp}" \
+                 /etc/nginx/conf.d/*.pre-nexvary-"${stamp}"; do
+      [[ -f "$f_bak" ]] || continue
+      mv "$f_bak" "${f_bak%.pre-nexvary-${stamp}}" 2>/dev/null || true
+    done
+    rm -f "$conf_file" 2>/dev/null || true
+    nginx -t 2>/dev/null || true
+    nx_fatal "Nginx HTTPS configuration invalid — rolled back"
+  fi
   nx_ok "Nginx configured for https://${domain}/"
 
   # Update APP_URL to HTTPS so QR pairing targets the right origin

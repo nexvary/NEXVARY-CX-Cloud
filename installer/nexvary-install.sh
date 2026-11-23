@@ -179,6 +179,21 @@ nx_configure_postgresql
 nx_configure_redis
 nx_set_permissions
 
+# Wait for PostgreSQL to accept connections before running migrations.
+# pg_isready is provided by the postgresql-client package (installed with PostgreSQL).
+_pg_wait=0
+until pg_isready -q 2>/dev/null; do
+  _pg_wait=$((_pg_wait + 1))
+  if [[ $_pg_wait -ge 30 ]]; then
+    nx_fatal "PostgreSQL did not become ready within 30 seconds — check: journalctl -xe -u postgresql*"
+  fi
+  sleep 1
+done
+unset _pg_wait
+
+nx_run_migrations
+nx_cache_app
+
 # ── Phase 5: Web Server ───────────────────────────────────────────────────────
 
 nx_section "Phase 5 — Web Server"
@@ -219,7 +234,9 @@ nx_verify_services
 
 nx_section "Phase 7 — Final Verification"
 
-[[ "${NX_FS_SKIP:-}" != '1' ]] && nx_verify_freeswitch 2>/dev/null || true
+if [[ "${NX_FS_SKIP:-}" != '1' ]]; then
+  nx_verify_freeswitch
+fi
 
 nx_print_setup_url
 

@@ -331,11 +331,19 @@ nx_configure_postgresql() {
     sudo -u postgres psql -c "CREATE DATABASE ${db_name} OWNER ${db_user} ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' TEMPLATE template0;"
     nx_ok "PostgreSQL user '$db_user' and database '$db_name' created"
   else
-    # Reset password if already exists
-    db_pass="$(sudo -u postgres psql -tAc "SELECT passwd FROM pg_shadow WHERE usename='${db_user}'" 2>/dev/null || echo '')"
+    # Read the stored plaintext password from the secrets file.
+    # Never read pg_shadow.passwd — it stores an opaque hash verifier (md5 or
+    # scram-sha-256), not the original plaintext; writing that hash to
+    # DB_PASSWORD would break Laravel authentication.
+    local creds_file='/etc/nexvary/database.conf'
+    if [[ -f "$creds_file" ]]; then
+      db_pass="$(grep '^DB_PASSWORD=' "$creds_file" 2>/dev/null | cut -d'=' -f2- | tr -d '[:space:]' || echo '')"
+    fi
     if [[ -z "$db_pass" ]]; then
+      # No stored password — generate a fresh one and update PostgreSQL.
       db_pass="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
-      sudo -u postgres psql -c "ALTER USER ${db_user} WITH PASSWORD '${db_pass}';" 2>/dev/null || true
+      sudo -u postgres psql -c "ALTER USER ${db_user} WITH PASSWORD '${db_pass}';"
+      nx_info "New PostgreSQL password generated"
     fi
     nx_ok "PostgreSQL database '$db_name' already exists"
   fi
@@ -354,6 +362,12 @@ nx_configure_postgresql() {
     "$db_name" "$db_user" "$db_pass" > "$creds_file"
   chmod 640 "$creds_file"
   chown "root:${NX_APP_USER}" "$creds_file" 2>/dev/null || true
+
+  # Prove the credentials work before proceeding — catches any mismatch early.
+  if ! PGPASSWORD="${db_pass}" psql -h 127.0.0.1 -U "${db_user}" -d "${db_name}" -c '\q' 2>/dev/null; then
+    nx_fatal "PostgreSQL authentication test failed for user '${db_user}' — check /etc/nexvary/database.conf"
+  fi
+  nx_ok "PostgreSQL credentials verified"
 }
 
 # ── Configure Redis password ───────────────────────────────────────────────────

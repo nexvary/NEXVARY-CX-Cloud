@@ -63,7 +63,7 @@ sudo bash INSTALL-NEXVARY.sh --domain=your.domain.com
 
 The installer will:
 1. Detect your OS and verify prerequisites
-2. Install PHP 8.3, Node 20, PostgreSQL 16, Redis, Nginx
+2. Install PHP 8.3, Node.js 22, PostgreSQL 16, Redis, Nginx
 3. Build FreeSWITCH v1.10.11 from source (or use SignalWire repo if token set)
 4. Fetch and deploy commit `${COMMIT_SHA}` from GitHub
 5. Run database migrations
@@ -100,7 +100,7 @@ Expected: `${COMMIT_SHA}`
 
 Verify the services:
 ```bash
-systemctl status nexvary-horizon nexvary-rtc nginx postgresql redis-server freeswitch
+systemctl status nexvary-queue nexvary-scheduler.timer nginx postgresql redis-server freeswitch
 ```
 
 ## Android APK

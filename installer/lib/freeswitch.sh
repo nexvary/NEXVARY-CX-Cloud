@@ -282,6 +282,15 @@ EOF
   chown root:www-data "$secrets_file" 2>/dev/null || chown root:nginx "$secrets_file" 2>/dev/null || true
 
   nx_ok "FreeSWITCH ESL configured on 127.0.0.1:${NX_FS_ESL_PORT}"
+
+  # Reload FreeSWITCH to apply the new ESL password on a reinstall.
+  # On a fresh install FreeSWITCH is not yet started at this point, so the
+  # check is a no-op.
+  if nx_freeswitch_running; then
+    nx_info "Restarting FreeSWITCH to apply ESL configuration change…"
+    systemctl restart freeswitch
+    sleep 3
+  fi
 }
 
 # ── Health check ──────────────────────────────────────────────────────────────
@@ -323,13 +332,17 @@ nx_verify_freeswitch() {
     esl_ok="$(fs_cli -x 'module_exists mod_event_socket' 2>/dev/null || echo 'unknown')"
     if [[ "$sofia_ok" == *'true'* ]]; then
       nx_ok "mod_sofia is loaded"
+    elif [[ "$sofia_ok" == 'unknown' ]]; then
+      nx_warn "mod_sofia status unknown — fs_cli did not respond"
     else
-      nx_warn "Could not confirm mod_sofia via fs_cli (got: ${sofia_ok})"
+      nx_fatal "mod_sofia is not loaded. FreeSWITCH SIP stack is unavailable. Check: journalctl -xe -u freeswitch"
     fi
     if [[ "$esl_ok" == *'true'* ]]; then
       nx_ok "mod_event_socket is loaded"
+    elif [[ "$esl_ok" == 'unknown' ]]; then
+      nx_warn "mod_event_socket status unknown — fs_cli did not respond"
     else
-      nx_warn "Could not confirm mod_event_socket via fs_cli (got: ${esl_ok})"
+      nx_fatal "mod_event_socket is not loaded. ESL integration will not work. Check: journalctl -xe -u freeswitch"
     fi
   fi
 }

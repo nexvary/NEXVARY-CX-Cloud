@@ -43,11 +43,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # On pull_request events, github.sha is a synthetic PR merge commit.
+          # Always check out the actual source commit so the bundle is pinned correctly.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Gather version metadata
         id: meta
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
-          COMMIT_SHA="${{ github.sha }}"
+          # On pull_request events, github.sha is a synthetic merge commit that
+          # GitHub constructs for the PR.  Use the PR head SHA when available.
+          if [[ -n "${PR_HEAD_SHA:-}" ]]; then
+            COMMIT_SHA="${PR_HEAD_SHA}"
+          else
+            COMMIT_SHA="${PUSH_SHA}"
+          fi
           SHORT_SHA="${COMMIT_SHA:0:7}"
           BUNDLE_VERSION="1.0.0-rc.${SHORT_SHA}"
           BUNDLE_DIR="nexvary-cx-${BUNDLE_VERSION}"
@@ -60,6 +73,20 @@ jobs:
             echo "artifact_name=${ARTIFACT_NAME}"
             echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Assert checkout HEAD matches target SHA
+        # Proves the checkout ref resolved to the branch HEAD, not to a synthetic
+        # PR merge commit.  Fail fast so the RELEASE file is never pinned to a
+        # commit that does not exist on any real branch.
+        run: |
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          EXPECTED_SHA="${{ steps.meta.outputs.commit_sha }}"
+          if [[ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]]; then
+            printf '[FAIL] HEAD mismatch:\n  expected: %s\n  actual:   %s\n' \
+              "${EXPECTED_SHA}" "${ACTUAL_SHA}" >&2
+            exit 1
+          fi
+          printf '[PASS] HEAD=%s\n' "${ACTUAL_SHA}"
 
       - name: Assemble bundle directory
         run: |
