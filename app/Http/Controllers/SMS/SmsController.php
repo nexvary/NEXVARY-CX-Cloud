@@ -86,12 +86,23 @@ class SmsController extends Controller
     {
         $request->validate([
             'to'   => ['required', 'string', 'regex:/^\+[1-9]\d{7,14}$/'],
-            'from' => ['required', 'string'],
+            'from' => ['required', 'string', 'regex:/^\+[1-9]\d{7,14}$/'],
             'body' => ['required', 'string', 'max:1600'],
         ]);
 
         if (!TelnyxService::configured()) {
             return redirect()->back()->withErrors(['body' => 'Telnyx is not configured.']);
+        }
+
+        // Verify the caller owns the from-number (tenant-scoped DID check)
+        $tenantId = auth()->user()->tenant_id ?? null;
+        $didOwned = DB::table('dids')
+            ->where('number', $request->input('from'))
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->exists();
+
+        if (!$didOwned) {
+            return redirect()->back()->withErrors(['from' => 'You are not authorized to send from that number.']);
         }
 
         try {

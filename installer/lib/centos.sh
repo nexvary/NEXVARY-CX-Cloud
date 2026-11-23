@@ -68,6 +68,15 @@ nx_install_postgresql_centos() {
   if ! rpm -q postgresql16-server &>/dev/null; then
     _dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-${stream}-x86_64/pgdg-redhat-repo-latest.noarch.rpm" \
       2>&1 | nx_log_passthrough
+
+    # pgdg-common and older-version repos are supplemental and their CDN is
+    # unreachable from Docker containers — disable them immediately so that
+    # subsequent dnf calls do not trigger a failing metadata refresh
+    dnf config-manager --disable \
+      pgdg-common pgdg-common-testing \
+      pgdg15 pgdg14 pgdg13 pgdg12 pgdg11 pgdg10 pgdg96 \
+      2>/dev/null || true
+
     _dnf module disable postgresql -y 2>&1 | nx_log_passthrough || true
 
     nx_spinner_start "Installing PostgreSQL 16…"
@@ -82,9 +91,16 @@ nx_install_postgresql_centos() {
   if systemctl is-system-running --quiet 2>/dev/null; then
     systemctl enable postgresql-16 --now
   else
-    su - postgres -c '/usr/pgsql-16/bin/pg_ctl start -D /var/lib/pgsql/16/data -l /tmp/pg16.log' 2>/dev/null || true
+    # Docker containers run without systemd as PID 1
+    su - postgres -c '/usr/pgsql-16/bin/pg_ctl start -D /var/lib/pgsql/16/data -l /tmp/pg16.log' \
+      2>&1 | nx_log_passthrough
+    sleep 2
+    if ! /usr/pgsql-16/bin/pg_isready -h 127.0.0.1 -p 5432 &>/dev/null; then
+      nx_warn "PostgreSQL not ready after pg_ctl start"
+      nx_info "Last pg_ctl log: $(tail -5 /tmp/pg16.log 2>/dev/null || echo '(no log)')"
+    fi
   fi
-  nx_ok "PostgreSQL $(psql --version 2>/dev/null | awk '{print $3}') installed and started"
+  nx_ok "PostgreSQL 16 installed and started"
 }
 
 # ── Install Redis 7 ───────────────────────────────────────────────────────────
@@ -115,7 +131,11 @@ nx_install_redis_centos() {
   if systemctl is-system-running --quiet 2>/dev/null; then
     systemctl enable redis --now
   else
-    redis-server --daemonize yes 2>/dev/null || true
+    redis-server --daemonize yes 2>&1 | nx_log_passthrough
+    sleep 1
+    if ! redis-cli ping 2>/dev/null | grep -q PONG; then
+      nx_warn "Redis did not respond to PING after daemonize start"
+    fi
   fi
   nx_ok "Redis installed and started"
 }

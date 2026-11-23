@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Trunk extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'name', 'provider', 'username', 'sip_server', 'sip_port',
+        'tenant_id', 'name', 'provider', 'username', 'sip_server', 'sip_port',
         'register', 'codec_prefs', 'concurrent_calls_limit',
         'outbound_caller_id', 'enabled', 'status',
     ];

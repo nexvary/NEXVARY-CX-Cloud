@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class BillingAccount extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'name', 'type', 'balance', 'credit_limit',
+        'tenant_id', 'name', 'type', 'balance', 'credit_limit',
         'currency', 'rate_table_id', 'enabled',
     ];
 

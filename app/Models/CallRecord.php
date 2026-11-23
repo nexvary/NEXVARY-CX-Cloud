@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class CallRecord extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'uuid', 'caller_id_number', 'caller_id_name', 'destination_number', 'direction',
+        'tenant_id', 'uuid', 'caller_id_number', 'caller_id_name', 'destination_number', 'direction',
         'duration_seconds', 'billable_seconds', 'hangup_cause',
         'recording_path', 'extension_id', 'trunk_id', 'billing_account_id',
         'started_at', 'answered_at', 'ended_at',

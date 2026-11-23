@@ -125,8 +125,8 @@ class TelnyxService
     {
         $publicKey = config('nexvary.telnyx.webhook_public_key');
         if (empty($publicKey)) {
-            Log::warning('Telnyx: webhook_public_key not configured — accepting all webhooks (unsafe)');
-            return true;
+            Log::critical('Telnyx: webhook_public_key not configured — rejecting webhook (fail-closed)');
+            return false;
         }
 
         $signature   = $request->header('telnyx-signature-ed25519');

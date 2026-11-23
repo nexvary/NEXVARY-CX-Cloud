@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Extension extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'number', 'name', 'sip_password', 'voicemail_pin',
+        'tenant_id', 'number', 'name', 'sip_password', 'voicemail_pin',
         'dnd_enabled', 'call_forward_enabled', 'call_forward_number',
         'timeout', 'enabled', 'context',
     ];

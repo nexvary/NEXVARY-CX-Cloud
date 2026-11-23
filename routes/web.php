@@ -155,6 +155,9 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/users',         fn() => inertia('Settings/Users'))->name('users');
         Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
         Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
+        // Mobile device pairing — generates a one-time QR pairing token (web session auth)
+        Route::post('/devices/pair', [\App\Http\Controllers\API\MobileController::class, 'generatePairingToken'])
+             ->name('devices.pair');
     });
 
     // ── Info Pages ────────────────────────────────────────────────────────

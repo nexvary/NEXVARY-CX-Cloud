@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class CallQueue extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, BelongsToTenant;
 
     protected $fillable = [
-        'name', 'strategy', 'moh_sound', 'timeout', 'max_waiters',
+        'tenant_id', 'name', 'strategy', 'moh_sound', 'timeout', 'max_waiters',
         'announce_holdtime', 'enabled',
     ];
 

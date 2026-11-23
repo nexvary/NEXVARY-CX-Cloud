@@ -130,27 +130,17 @@ class MobileController extends Controller
     {
         $perPage = min((int) ($request->query('per_page', 25)), 100);
 
-        // Scope to current user's tenant when tenant isolation is active
-        $query = SmsConversation::query();
-        $tenantId = $request->user()->tenant_id ?? null;
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        }
-
-        $conversations = $query->latest('last_message_at')
+        // Tenant isolation is enforced by the BelongsToTenant global scope on SmsConversation
+        $conversations = SmsConversation::latest('last_message_at')
             ->paginate($perPage, ['id', 'did_number', 'contact_number', 'status', 'last_message_at']);
 
         return response()->json($conversations);
     }
 
-    public function smsMessages(Request $request, SmsConversation $conversation): JsonResponse
+    public function smsMessages(SmsConversation $conversation): JsonResponse
     {
-        // Verify ownership: conversation must belong to same tenant as the user
-        $tenantId = $request->user()->tenant_id ?? null;
-        if ($tenantId && $conversation->tenant_id !== $tenantId) {
-            return response()->json(['error' => 'Not found'], 404);
-        }
-
+        // Route model binding resolves through the BelongsToTenant global scope,
+        // so a conversation from another tenant triggers a 404 automatically.
         $messages = $conversation->messages()->latest()->limit(100)->get(
             ['id', 'direction', 'body', 'status', 'telnyx_message_id', 'sent_at', 'delivered_at']
         );
@@ -180,26 +170,52 @@ class MobileController extends Controller
         return response()->json(['data' => $alerts, 'total' => count($alerts)]);
     }
 
-    // ── Pairing / Token management ────────────────────────────────────────────
+    // ── Device management ─────────────────────────────────────────────────────
+
+    public function listDevices(Request $request): JsonResponse
+    {
+        $devices = $request->user()->tokens()
+            ->where('name', 'like', 'device-%')
+            ->get(['id', 'name', 'last_used_at', 'expires_at', 'created_at']);
+
+        return response()->json(['data' => $devices]);
+    }
+
+    public function revokeDevice(Request $request, int $tokenId): JsonResponse
+    {
+        $deleted = $request->user()->tokens()
+            ->where('id', $tokenId)
+            ->where('name', 'like', 'device-%')
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['error' => 'Device token not found'], 404);
+        }
+
+        return response()->json(['revoked' => true]);
+    }
+
+    // ── Pairing flow ──────────────────────────────────────────────────────────
 
     /**
-     * Returns a time-limited QR pairing token for a new device.
-     * Requires the 'mobile.admin' ability.
+     * Step 1 (web UI): generate a short-lived pairing QR token.
+     * Called from the web settings page — requires web session auth (not mobile token).
+     * The token has only the 'mobile.pair' ability so it cannot access the API directly.
      */
-    public function generatePairingQr(Request $request): JsonResponse
+    public static function generatePairingToken(\Illuminate\Http\Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // Revoke old mobile tokens for this user
-        $user->tokens()->where('name', 'like', 'mobile-%')->delete();
+        // Clean up expired pairing tokens only (do not revoke active device tokens)
+        $user->tokens()
+            ->where('name', 'like', 'pairing-%')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '<', now()))
+            ->delete();
 
-        // Create a short-lived pairing token (valid 10 minutes)
-        // The Android app exchanges this for a durable device session via
-        // POST /api/mobile/v1/pair/exchange (device completes pairing)
         $token = $user->createToken(
-            name: 'mobile-pairing-' . now()->timestamp,
-            abilities: ['mobile', 'mobile.admin'],
-            expiresAt: now()->addMinutes(10)
+            name: 'pairing-' . now()->timestamp,
+            abilities: ['mobile.pair'],
+            expiresAt: now()->addMinutes(10),
         );
 
         return response()->json([
@@ -207,6 +223,39 @@ class MobileController extends Controller
             'expires_at'    => now()->addMinutes(10)->toIso8601String(),
             'server_url'    => config('app.url'),
             'api_version'   => 'v1',
+        ]);
+    }
+
+    /**
+     * Step 2 (Android app): exchange a one-time pairing token for a durable device token.
+     * Requires a valid bearer token with 'mobile.pair' ability.
+     * The pairing token is immediately revoked after exchange (single-use).
+     */
+    public function exchangePairingToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'device_name' => ['required', 'string', 'max:100'],
+            'device_id'   => ['required', 'string', 'max:200'],
+        ]);
+
+        $user        = $request->user();
+        $pairingToken = $request->bearerToken();
+
+        // Create the durable device token with minimal required abilities
+        $deviceToken = $user->createToken(
+            name: 'device-' . substr(md5($request->input('device_id')), 0, 8),
+            abilities: ['mobile'],
+            expiresAt: now()->addDays(90),
+        );
+
+        // Revoke the single-use pairing token immediately
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'token'       => $deviceToken->plainTextToken,
+            'expires_at'  => now()->addDays(90)->toIso8601String(),
+            'server_url'  => config('app.url'),
+            'api_version' => 'v1',
         ]);
     }
 }

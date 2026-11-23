@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,10 +10,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RingGroup extends Model
 {
-    use HasUuids, SoftDeletes;
+    use HasUuids, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
-        'name', 'extension', 'strategy', 'timeout',
+        'tenant_id', 'name', 'extension', 'strategy', 'timeout',
         'destination', 'destination_type', 'enabled',
     ];
 

@@ -75,7 +75,14 @@ class GuideController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'regex:/^\\+?[0-9][0-9 ()-]{3,29}$/D'],
         ]);
-        DB::table('contacts')->insert(['id' => Str::uuid(), 'created_at' => now(), 'updated_at' => now(), ...$data]);
+        $tenantId = auth()->user()->tenant_id ?? null;
+        DB::table('contacts')->insert([
+            'id'        => Str::uuid(),
+            'tenant_id' => $tenantId,
+            'created_at'=> now(),
+            'updated_at'=> now(),
+            ...$data,
+        ]);
 
         return to_route('admin.show', ['module' => 'contacts'])->with('success', 'contact_saved');
     }
