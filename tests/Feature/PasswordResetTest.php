@@ -135,3 +135,42 @@ it('reset regenerates remember_token to invalidate remember-me sessions', functi
     $user->refresh();
     expect($user->remember_token)->not->toBe($originalRemember);
 });
+
+// ── Token revocation on reset ─────────────────────────────────────────────────
+
+it('reset revokes all existing mobile API tokens', function () {
+    $user  = User::factory()->create(['password' => \Illuminate\Support\Facades\Hash::make('OldPassword1!')]);
+    $token = $user->createToken('device-abc', ['mobile']);
+
+    $response = Password::broker()->createToken($user);
+
+    $this->post('/reset-password', [
+        'token'                 => $response,
+        'email'                 => $user->email,
+        'password'              => 'NewPassword1!',
+        'password_confirmation' => 'NewPassword1!',
+    ]);
+
+    // All Sanctum tokens should be gone after a password reset.
+    expect($user->tokens()->count())->toBe(0);
+});
+
+it('old bearer token is rejected after a password reset', function () {
+    config(['nexvary.installed' => true]);
+    $user  = User::factory()->create(['password' => \Illuminate\Support\Facades\Hash::make('OldPassword1!')]);
+    $plain = $user->createToken('device-xyz', ['mobile'])->plainTextToken;
+
+    $response = Password::broker()->createToken($user);
+
+    $this->post('/reset-password', [
+        'token'                 => $response,
+        'email'                 => $user->email,
+        'password'              => 'NewPassword2!',
+        'password_confirmation' => 'NewPassword2!',
+    ]);
+
+    // The old token should no longer authenticate the user.
+    $this->withToken($plain)
+         ->getJson('/api/mobile/v1/status')
+         ->assertUnauthorized();
+});

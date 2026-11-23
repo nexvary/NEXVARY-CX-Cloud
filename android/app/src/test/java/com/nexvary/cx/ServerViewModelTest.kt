@@ -161,6 +161,74 @@ class ServerViewModelTest {
             vm.serverState.value is ServerUiState.Success,
         )
     }
+
+    // ── Re-pairing / server-address change ───────────────────────────────────
+
+    @Test
+    fun `re-pairing to a new server does not send old device token to the new server`() = runTest {
+        // Capture the PairExchangeRequest the ViewModel sends to the API.
+        var capturedRequest: PairExchangeRequest? = null
+        val capturingApi = object : MobileApiService {
+            override suspend fun serverStatus(): ServerStatus =
+                FakeMobileApiService().serverStatus()
+            override suspend fun exchangePairingToken(request: PairExchangeRequest): PairExchangeResponse {
+                capturedRequest = request
+                return PairExchangeResponse(
+                    token = "new-server-token",
+                    expiresAt = "2027-01-01T00:00:00Z",
+                    serverUrl = "https://new.example.com",
+                    apiVersion = "v1",
+                )
+            }
+        }
+        val vm = ServerViewModel(
+            apiService = capturingApi,
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl = "https://old.example.com",
+                    extension = "1001",
+                    sipPassword = "s3cret",
+                    deviceToken = "old-device-secret-token",
+                )
+            ),
+            sipEngine = NoOpSipEngine(),
+            json = testJson,
+        )
+
+        val qrPayload = """{"pairing_token":"qr-tok-999","server_url":"https://new.example.com"}"""
+        vm.pair(qrPayload)
+        advanceUntilIdle()
+
+        // The exchange request must only carry device identity, never the old token.
+        val req = capturedRequest
+        assertTrue("exchangePairingToken must have been called", req != null)
+        assertTrue(
+            "PairExchangeRequest must not contain the old device token",
+            !req.toString().contains("old-device-secret-token"),
+        )
+        // After pairing, the stored token must be the one the new server issued.
+        val saved = vm.credentials.value
+        assertTrue("Saved serverUrl must be the new server", saved?.serverUrl == "https://new.example.com")
+        assertTrue("Saved token must be the one from the new server, not the old one",
+            saved?.deviceToken == "new-server-token")
+    }
+
+    @Test
+    fun `Server screen shows NotConfigured state on first launch`() {
+        // Regression guard: ensure the ViewModel starts in NotConfigured (not
+        // Loading or Error) so the screen can render without attempting any
+        // network call.
+        val vm = ServerViewModel(
+            apiService = FakeMobileApiService(),
+            credentialStore = FakeCredentialRepository(null),
+            sipEngine = NoOpSipEngine(),
+            json = testJson,
+        )
+        assertTrue(
+            "Screen must render as NotConfigured before any server is paired",
+            vm.serverState.value is ServerUiState.NotConfigured,
+        )
+    }
 }
 
 // Minimal SipEngine that never touches Android or Linphone internals

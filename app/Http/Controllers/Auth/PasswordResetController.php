@@ -59,6 +59,10 @@ class PasswordResetController extends Controller
                     'remember_token' => Str::random(60),
                 ])->save();
 
+                // Revoke all mobile API tokens so active device sessions
+                // cannot be used with the old password.
+                $user->tokens()->delete();
+
                 event(new PasswordReset($user));
             }
         );
