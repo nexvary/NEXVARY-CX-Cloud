@@ -56,6 +56,47 @@ for scenario in ${QA_SCENARIOS:-en-desktop en-mobile ar-desktop ar-mobile}; do
     echo "The encrypted installation settings are missing from the scenario storage directory." >&2
     exit 1
   fi
+
+  # ── Reboot simulation (en-desktop only) ─────────────────────────────────────
+  #
+  # Stage 4 requires proof that after a server restart:
+  #   • The database (PostgreSQL) retains all data (migrations, admin user)
+  #   • The app starts cleanly (no in-memory-only state)
+  #   • Previously created admin can log in again
+  #   • The /setup route stays 404 (install flag is DB-backed)
+  #
+  # We simulate this by stopping the PHP dev server and restarting it,
+  # then running a Playwright post-restart verification.
+  if [[ "$scenario" == 'en-desktop' ]]; then
+    echo ""
+    echo "── Reboot simulation: stopping server ─────────────────────────────────"
+    kill "$app_pid"
+    status=0
+    wait "$app_pid" 2>/dev/null || status=$?
+    if [[ "$status" -ne 0 && "$status" -ne 143 ]]; then
+      echo "Server exited with unexpected status $status before reboot simulation." >&2
+      exit "$status"
+    fi
+    app_pid=''
+    echo "── Reboot simulation: restarting server ───────────────────────────────"
+    (
+      cd public
+      exec php -d variables_order=EGPCS -S "127.0.0.1:${QA_HTTP_PORT:-18081}" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
+    ) >> "$qa_root/http.log" 2>&1 &
+    app_pid=$!
+    curl --noproxy '*' --silent --show-error --fail --retry 15 --retry-connrefused "$QA_BASE_URL/up" > /dev/null
+    echo "── Reboot simulation: server restarted — running post-restart checks ──"
+    if ! node scripts/qa-post-restart.mjs; then
+      tail -n 20 "$qa_root/http.log" >&2
+      if [[ -s "$LARAVEL_STORAGE_PATH/logs/laravel.log" ]]; then
+        tail -n 20 "$LARAVEL_STORAGE_PATH/logs/laravel.log" >&2
+      fi
+      echo "Post-restart check failed." >&2
+      exit 1
+    fi
+    echo "── Reboot simulation: PASSED ───────────────────────────────────────────"
+  fi
+
   kill "$app_pid"
   # A dev server may report either graceful shutdown or SIGTERM.
   status=0
