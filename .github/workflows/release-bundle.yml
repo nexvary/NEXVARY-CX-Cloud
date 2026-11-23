@@ -52,12 +52,14 @@ jobs:
           BUNDLE_VERSION="1.0.0-rc.${SHORT_SHA}"
           BUNDLE_DIR="nexvary-cx-${BUNDLE_VERSION}"
           ARTIFACT_NAME="nexvary-cx-release-bundle-${SHORT_SHA}"
-          echo "commit_sha=${COMMIT_SHA}"         >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}"           >> "$GITHUB_OUTPUT"
-          echo "bundle_version=${BUNDLE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "bundle_dir=${BUNDLE_DIR}"         >> "$GITHUB_OUTPUT"
-          echo "artifact_name=${ARTIFACT_NAME}"   >> "$GITHUB_OUTPUT"
-          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          {
+            echo "commit_sha=${COMMIT_SHA}"
+            echo "short_sha=${SHORT_SHA}"
+            echo "bundle_version=${BUNDLE_VERSION}"
+            echo "bundle_dir=${BUNDLE_DIR}"
+            echo "artifact_name=${ARTIFACT_NAME}"
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Assemble bundle directory
         run: |
@@ -68,140 +70,41 @@ jobs:
           cp UPDATE-NEXVARY.sh  "${BUNDLE_DIR}/"
 
       - name: Write pinned RELEASE file
-        # This is the authoritative source of the application revision that this
-        # bundle installs.  installer/lib/app.sh reads it and refuses to deploy
-        # any other commit.
+        # Authoritative source of the application revision this bundle installs.
+        # installer/lib/app.sh reads this and refuses to deploy any other commit.
         run: |
           COMMIT_SHA="${{ steps.meta.outputs.commit_sha }}"
           BUNDLE_DIR="${{ steps.meta.outputs.bundle_dir }}"
           printf '%s\n' "${COMMIT_SHA}" > "${BUNDLE_DIR}/installer/RELEASE"
-          echo "RELEASE file written: $(cat "${BUNDLE_DIR}/installer/RELEASE")"
+          echo "RELEASE file: $(cat "${BUNDLE_DIR}/installer/RELEASE")"
+
+      - name: Generate INSTALL.md from template
+        # Uses envsubst so the template lives in-repo (installer/INSTALL.md.in)
+        # and no heredoc is embedded in YAML, avoiding column-0 parse failures.
+        env:
+          COMMIT_SHA:       ${{ steps.meta.outputs.commit_sha }}
+          COMMIT_SHA_SHORT: ${{ steps.meta.outputs.short_sha }}
+          BUNDLE_VERSION:   ${{ steps.meta.outputs.bundle_version }}
+          BUILD_TIMESTAMP:  ${{ steps.meta.outputs.timestamp }}
+        run: |
+          BUNDLE_DIR="${{ steps.meta.outputs.bundle_dir }}"
+          envsubst < installer/INSTALL.md.in > "${BUNDLE_DIR}/INSTALL.md"
+          echo "INSTALL.md generated ($(wc -l < "${BUNDLE_DIR}/INSTALL.md") lines)"
 
       - name: Compute SHA-256 checksums
         run: |
           BUNDLE_DIR="${{ steps.meta.outputs.bundle_dir }}"
           find "${BUNDLE_DIR}" -type f | sort | xargs sha256sum > "${BUNDLE_DIR}/SHA256SUMS"
           echo "Generated $(wc -l < "${BUNDLE_DIR}/SHA256SUMS") checksums"
-
-      - name: Write INSTALL.md
-        run: |
-          BUNDLE_DIR="${{ steps.meta.outputs.bundle_dir }}"
-          COMMIT="${{ steps.meta.outputs.commit_sha }}"
-          VERSION="${{ steps.meta.outputs.bundle_version }}"
-          TS="${{ steps.meta.outputs.timestamp }}"
-
-          cat > "${BUNDLE_DIR}/INSTALL.md" <<INSTALL_DOC
-# NEXVARY CX Cloud — Installation Guide
-
-**Bundle version:** ${VERSION}
-**Commit:** \`${COMMIT}\`
-**Built:** ${TS}
-
----
-
-## Prerequisites
-
-| Requirement | Minimum |
-|-------------|---------|
-| Operating system | Debian 13 (Trixie) or Ubuntu 24.04 LTS |
-| RAM | 2 GB |
-| Disk | 20 GB |
-| Root access | Required |
-| Outbound internet | Required (package downloads) |
-
-## Application source revision
-
-This bundle installs **exactly** commit \`${COMMIT}\`.
-The installer reads the pinned SHA from \`installer/RELEASE\` and uses
-\`git fetch origin ${COMMIT:0:12}… && git checkout FETCH_HEAD\` — it never
-installs the default branch tip. The installed SHA is recorded to
-\`/etc/nexvary/installed_revision\` and verified before the installer exits.
-
-## FreeSWITCH
-
-FreeSWITCH is **installed by the installer** (\`installer/lib/freeswitch.sh\`).
-No separate preparation is needed. The installer adds the official FreeSWITCH
-Debian repository and installs the packages automatically.
-
-If you are installing on a network that blocks the FreeSWITCH repository,
-pre-install FreeSWITCH 1.10+ and pass \`--skip-freeswitch\` to the installer.
-
-## Quick install
-
-\`\`\`bash
-bash INSTALL-NEXVARY.sh
-\`\`\`
-
-The installer will:
-1. Detect your OS and verify prerequisites
-2. Install PHP 8.3, Node 20, PostgreSQL 16, Redis, Nginx, FreeSWITCH
-3. Fetch and deploy commit \`${COMMIT}\` from GitHub
-4. Run database migrations
-5. Create the first administrator via a setup wizard
-6. Configure Nginx and systemd services
-7. Optionally install a Let's Encrypt TLS certificate
-
-## Upgrading an existing installation
-
-Re-run the installer with the **new** bundle, passing the SHA that is currently
-installed as \`--upgrade-from\`:
-
-\`\`\`bash
-# Find the currently installed SHA:
-cat /etc/nexvary/installed_revision
-
-# Then run the new bundle's installer:
-bash INSTALL-NEXVARY.sh --upgrade-from=<installed-sha>
-\`\`\`
-
-The installer will fail with a clear version-mismatch error if the installed
-SHA does not match what \`--upgrade-from\` specifies, or if the flag is omitted.
-
-## Post-install verification
-
-After installation completes, open the printed HTTPS URL in a browser.
-The setup wizard page should load. Complete the wizard, then sign in.
-
-Verify the installed revision:
-\`\`\`bash
-cat /etc/nexvary/installed_revision
-\`\`\`
-Expected: \`${COMMIT}\`
-
-Verify the services:
-\`\`\`bash
-systemctl status nexvary-horizon nexvary-rtc nginx postgresql redis-server freeswitch
-\`\`\`
-
-## Android APK
-
-The matching debug APK is published as the \`nexvary-cx-debug-apk\` artifact
-from the **NEXVARY CX Android — CI** workflow run on the same commit.
-
-To pair the Android app:
-1. Install the APK on your device
-2. Sign in to the web admin panel
-3. Navigate to **Settings → Pair Mobile App**
-4. Scan the QR code with the app's Server tab → ربط عبر QR
-
-## Checksums
-
-Verify bundle integrity before installation:
-\`\`\`bash
-sha256sum -c SHA256SUMS
-\`\`\`
-
-INSTALL_DOC
+          cat "${BUNDLE_DIR}/SHA256SUMS"
 
       - name: Create tarball
         run: |
           BUNDLE_DIR="${{ steps.meta.outputs.bundle_dir }}"
           tar -czf "${BUNDLE_DIR}.tar.gz" "${BUNDLE_DIR}/"
           sha256sum "${BUNDLE_DIR}.tar.gz" > "${BUNDLE_DIR}.tar.gz.sha256"
-          echo "Bundle tarball:"
-          ls -lh "${BUNDLE_DIR}.tar.gz"
-          echo "Tarball checksum:"
-          cat "${BUNDLE_DIR}.tar.gz.sha256"
+          echo "Tarball: $(ls -lh "${BUNDLE_DIR}.tar.gz" | awk '{print $5, $9}')"
+          echo "Checksum: $(cat "${BUNDLE_DIR}.tar.gz.sha256")"
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
@@ -213,7 +116,7 @@ INSTALL_DOC
           if-no-files-found: error
           retention-days: 90
 
-      - name: Upload bundle directory (unpacked, for verify job)
+      - name: Upload bundle directory (for verify job)
         uses: actions/upload-artifact@v4
         with:
           name: nexvary-cx-bundle-unpacked-${{ steps.meta.outputs.short_sha }}
@@ -221,9 +124,14 @@ INSTALL_DOC
           if-no-files-found: error
           retention-days: 90
 
-  # ── Verify job ─────────────────────────────────────────────────────────────
+  # ── Verify job ──────────────────────────────────────────────────────────────
   # Downloads the unpacked bundle artifact and runs test-pinned-sha.sh inside
-  # a Debian 13 container to prove the SHA contract holds.
+  # a Debian 13 container to prove:
+  #   1. installer/RELEASE exists and contains the build SHA
+  #   2. nexvary-install.sh correctly reads and exports NX_RELEASE_COMMIT
+  #   3. Version-mismatch guard: same SHA → no-op
+  #   4. Version-mismatch guard: different SHA without --upgrade-from → fatal
+  #   5. Version-mismatch guard: matching --upgrade-from → proceeds
   verify:
     name: Verify pinned SHA and mismatch guard
     runs-on: ubuntu-24.04
@@ -240,26 +148,27 @@ INSTALL_DOC
       - name: Run SHA contract tests in Debian 13 container
         run: |
           COMMIT_SHA="${{ needs.bundle.outputs.commit_sha }}"
-          BUNDLE_DIR="bundle"
-
           docker run --rm \
-            -v "$PWD/${BUNDLE_DIR}:/bundle:ro" \
+            -v "$PWD/bundle:/bundle:ro" \
             debian:trixie \
             bash /bundle/installer/tests/test-pinned-sha.sh /bundle "${COMMIT_SHA}"
 
-      - name: Verify RELEASE file is present in tarball
+      - name: Verify RELEASE SHA survives artifact round-trip
         run: |
-          # Download the packed bundle artifact and confirm RELEASE survives
-          # the tar round-trip.
-          BUNDLE_DIR="${{ needs.bundle.outputs.bundle_dir }}"
           COMMIT_SHA="${{ needs.bundle.outputs.commit_sha }}"
-
-          # We need the tarball — download separately
-          echo "Checking via unpacked artifact (tarball round-trip not available in this job)"
-          RELEASE_SHA="$(tr -d '[:space:]' < "bundle/installer/RELEASE")"
+          RELEASE_SHA="$(tr -d '[:space:]' < bundle/installer/RELEASE)"
           if [[ "${RELEASE_SHA}" == "${COMMIT_SHA}" ]]; then
             echo "[PASS] RELEASE SHA in artifact matches build SHA: ${RELEASE_SHA}"
           else
             echo "[FAIL] RELEASE SHA mismatch: expected=${COMMIT_SHA} got=${RELEASE_SHA}" >&2
+            exit 1
+          fi
+
+      - name: Confirm RELEASE SHA is covered by SHA256SUMS
+        run: |
+          if grep -q "installer/RELEASE" bundle/SHA256SUMS; then
+            echo "[PASS] installer/RELEASE is listed in SHA256SUMS"
+          else
+            echo "[FAIL] installer/RELEASE is NOT listed in SHA256SUMS" >&2
             exit 1
           fi

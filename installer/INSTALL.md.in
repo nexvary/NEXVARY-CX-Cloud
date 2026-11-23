@@ -1,0 +1,99 @@
+# NEXVARY CX Cloud — Installation Guide
+
+**Bundle version:** ${BUNDLE_VERSION}
+**Commit:** `${COMMIT_SHA}`
+**Built:** ${BUILD_TIMESTAMP}
+
+---
+
+## Prerequisites
+
+| Requirement | Minimum |
+|-------------|---------|
+| Operating system | Debian 13 (Trixie) or Ubuntu 24.04 LTS |
+| RAM | 2 GB |
+| Disk | 20 GB |
+| Root access | Required |
+| Outbound internet | Required (package downloads) |
+
+## Application source revision
+
+This bundle installs **exactly** commit `${COMMIT_SHA}`.
+The installer reads the pinned SHA from `installer/RELEASE` and uses
+`git fetch origin ${COMMIT_SHA_SHORT}… && git checkout FETCH_HEAD` — it never
+installs the default branch tip. The installed SHA is recorded to
+`/etc/nexvary/installed_revision` and verified before the installer exits.
+
+## FreeSWITCH
+
+FreeSWITCH is **installed by the installer** (`installer/lib/freeswitch.sh`).
+No separate preparation is needed. The installer adds the official FreeSWITCH
+Debian repository and installs the packages automatically.
+
+If you are installing on a network that blocks the FreeSWITCH repository,
+pre-install FreeSWITCH 1.10+ and pass `--skip-freeswitch` to the installer.
+
+## Quick install
+
+```bash
+bash INSTALL-NEXVARY.sh
+```
+
+The installer will:
+1. Detect your OS and verify prerequisites
+2. Install PHP 8.3, Node 20, PostgreSQL 16, Redis, Nginx, FreeSWITCH
+3. Fetch and deploy commit `${COMMIT_SHA}` from GitHub
+4. Run database migrations
+5. Create the first administrator via a setup wizard
+6. Configure Nginx and systemd services
+7. Optionally install a Let's Encrypt TLS certificate
+
+## Upgrading an existing installation
+
+Re-run the installer with the **new** bundle, passing the SHA that is currently
+installed as `--upgrade-from`:
+
+```bash
+# Find the currently installed SHA:
+cat /etc/nexvary/installed_revision
+
+# Then run the new bundle's installer:
+bash INSTALL-NEXVARY.sh --upgrade-from=<installed-sha>
+```
+
+The installer will fail with a clear version-mismatch error if the installed
+SHA does not match what `--upgrade-from` specifies, or if the flag is omitted.
+
+## Post-install verification
+
+After installation completes, open the printed HTTPS URL in a browser.
+The setup wizard page should load. Complete the wizard, then sign in.
+
+Verify the installed revision:
+```bash
+cat /etc/nexvary/installed_revision
+```
+Expected: `${COMMIT_SHA}`
+
+Verify the services:
+```bash
+systemctl status nexvary-horizon nexvary-rtc nginx postgresql redis-server freeswitch
+```
+
+## Android APK
+
+The matching debug APK is published as the `nexvary-cx-debug-apk` artifact
+from the **NEXVARY CX Android — CI** workflow run on the same commit.
+
+To pair the Android app:
+1. Install the APK on your device
+2. Sign in to the web admin panel
+3. Navigate to **Settings → Pair Mobile App**
+4. Scan the QR code with the app's Server tab → ربط عبر QR
+
+## Checksums
+
+Verify bundle integrity before installation:
+```bash
+sha256sum -c SHA256SUMS
+```
