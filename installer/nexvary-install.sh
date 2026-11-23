@@ -57,6 +57,7 @@ for arg in "$@"; do
     --yes)             export NX_YES='1' ;;
     --ref=*)           export NX_INSTALL_REF="${arg#*=}" ;;
     --upgrade-from=*)  export NX_UPGRADE_FROM="${arg#*=}" ;;
+    --reuse-cert)      export NX_HTTPS='existing-cert' ;;
     --help|-h)
       printf "Usage: sudo nexvary install [OPTIONS]\n"
       printf "See https://nexvary.com/docs/install for full documentation.\n"
@@ -186,11 +187,21 @@ nx_section "Phase 5 — Web Server"
 source "${INSTALLER_LIB}/nginx.sh"
 
 nx_configure_php_fpm
-nx_configure_nginx
+
+# Auto-detect an existing Let's Encrypt certificate so the owner does not
+# need a flag when the host already has HTTPS configured.
+if [[ -z "${NX_HTTPS:-}" && -n "${NX_DOMAIN:-}" ]]; then
+  if [[ -f "/etc/letsencrypt/live/${NX_DOMAIN}/fullchain.pem" ]]; then
+    export NX_HTTPS='existing-cert'
+    nx_info "Existing certificate detected for ${NX_DOMAIN} — reusing (pass --https=certbot to override)."
+  fi
+fi
 
 case "${NX_HTTPS:-}" in
-  certbot)    nx_configure_https_certbot ;;
-  selfsigned) nx_configure_https_selfsigned ;;
+  existing-cert) nx_configure_nginx_https ;;
+  certbot)       nx_configure_nginx; nx_configure_https_certbot ;;
+  selfsigned)    nx_configure_nginx; nx_configure_https_selfsigned ;;
+  *)             nx_configure_nginx ;;
 esac
 
 # ── Phase 6: systemd Services ─────────────────────────────────────────────────
