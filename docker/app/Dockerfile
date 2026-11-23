@@ -45,16 +45,17 @@ FROM php:8.3-fpm-bookworm AS production
 LABEL org.opencontainers.image.title="NEXVARY CX Cloud — Laravel App"
 LABEL org.opencontainers.image.vendor="NEXVARY"
 
+# Install runtime libs only — extensions were compiled in composer-deps stage
+# and are copied below. No -dev headers needed here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libwebp7 \
     libicu72 libonig5 libxml2 libssl3 \
     curl gettext-base \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && docker-php-ext-install -j$(nproc) \
-        pdo pdo_pgsql pgsql opcache \
-        zip mbstring xml curl bcmath intl gd sockets \
-    && rm -rf /var/lib/apt/lists/* /tmp/pear
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy compiled PHP extensions from the builder stage
+COPY --from=composer-deps /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=composer-deps /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 
 # PHP config
 COPY docker/app/conf/php.ini /usr/local/etc/php/conf.d/nexvary.ini
