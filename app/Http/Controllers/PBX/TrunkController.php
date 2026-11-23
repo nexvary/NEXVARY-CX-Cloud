@@ -96,8 +96,12 @@ class TrunkController extends Controller
 
     public function update(Request $request, Trunk $trunk): \Illuminate\Http\RedirectResponse
     {
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'name'              => ['required', 'string'],
+            'name'              => ['required', 'string',
+                Rule::unique('trunks', 'name')->where('tenant_id', $tenantId)->ignore($trunk->id),
+            ],
             'auth_mode'         => ['required', 'string', 'in:credential,ip_acl'],
             'sip_host'          => ['required', 'string', 'max:253'],
             'sip_port'          => ['integer', 'min:1', 'max:65535'],

@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\FusionPbxConfigService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,10 +33,18 @@ class DidController extends Controller
 
     public function store(Request $request): \Illuminate\Http\RedirectResponse
     {
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'number'           => ['required', 'string', 'unique:dids,number'],
+            // DID numbers are unique per tenant, not globally
+            'number'           => ['required', 'string',
+                Rule::unique('dids', 'number')->where('tenant_id', $tenantId),
+            ],
             'description'      => ['nullable', 'string'],
-            'trunk_id'         => ['nullable', 'uuid'],
+            // Trunk must belong to the same tenant
+            'trunk_id'         => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'destination_type' => ['nullable', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination_id'   => ['nullable', 'uuid'],
             'enabled'          => ['boolean'],
@@ -60,10 +69,16 @@ class DidController extends Controller
 
     public function update(Request $request, Did $did): \Illuminate\Http\RedirectResponse
     {
+        $tenantId = $request->user()->tenant_id;
+
         $did->update($request->validate([
-            'number'           => ['required', 'string'],
+            'number'           => ['required', 'string',
+                Rule::unique('dids', 'number')->where('tenant_id', $tenantId)->ignore($did->id),
+            ],
             'description'      => ['nullable', 'string'],
-            'trunk_id'         => ['nullable', 'uuid'],
+            'trunk_id'         => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'destination_type' => ['nullable', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination_id'   => ['nullable', 'uuid'],
             'enabled'          => ['boolean'],
@@ -92,13 +107,17 @@ class DidController extends Controller
             $this->config->deleteInboundRoute(['id' => $did->id]);
         } else {
             // Resolve the tenant's SIP domain so the inbound transfer lands in
-            // the correct per-tenant dialplan context (not the global "default").
-            $domain = 'default';
-            if ($did->tenant_id) {
-                $tenant = Tenant::find($did->tenant_id);
-                if ($tenant) {
-                    $domain = $tenant->sipDomain();
-                }
+            // the correct per-tenant dialplan context.
+            // A DID without a resolvable tenant domain must not fall back to
+            // the shared 'default' context — log and use an isolated fallback.
+            if ($did->tenant_id && ($tenant = Tenant::find($did->tenant_id))) {
+                $domain = $tenant->sipDomain();
+            } else {
+                \Illuminate\Support\Facades\Log::warning(
+                    "DID {$did->id} has no resolvable tenant domain — route not written",
+                    ['did' => $did->number]
+                );
+                return;
             }
 
             $this->config->writeInboundRoute([

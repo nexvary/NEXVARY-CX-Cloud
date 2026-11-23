@@ -1,4 +1,4 @@
-# ── Stage 1: Build prerequisites ──────────────────────────────────────────────
+# ── Stage 1: Build spandsp3 ────────────────────────────────────────────────────
 # spandsp3 is not in Debian bookworm (only 0.0.6 is available); FreeSWITCH
 # 1.10.11 requires >= 3.0. Build from the FreeSWITCH project fork.
 FROM debian:bookworm-slim AS spandsp-builder
@@ -41,8 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libldns-dev \
     # Lua scripting
     liblua5.4-dev \
-    # sofia-sip for mod_sofia (Debian bookworm satisfies >= 1.12.11 requirement)
-    libsofia-sip-ua-dev \
+    # sofia-sip is built from source below (Debian bookworm has 1.12.11 — FS requires >= 1.13.17)
+    # Required for sofia-sip source build: glib, gettext/autopoint
+    libglib2.0-dev gettext \
     # libtiff needed by spandsp3 at link time
     libtiff-dev \
     # nasm/yasm for codec assembly optimisations
@@ -54,6 +55,17 @@ COPY --from=spandsp-builder /usr/local/include/spandsp* /usr/local/include/
 COPY --from=spandsp-builder /usr/local/lib/libspandsp*  /usr/local/lib/
 COPY --from=spandsp-builder /usr/local/lib/pkgconfig/spandsp.pc /usr/local/lib/pkgconfig/
 RUN ldconfig
+
+# Build sofia-sip >= 1.13.17 from the FreeSWITCH fork.
+# Debian bookworm ships 1.12.11 which FS 1.10.11's configure rejects.
+RUN git clone --depth=1 https://github.com/freeswitch/sofia-sip.git /usr/src/sofia-sip \
+    && cd /usr/src/sofia-sip \
+    && ([ -f autogen.sh ] && sh autogen.sh || autoreconf -fi) \
+    && ./configure --prefix=/usr/local --disable-static \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && rm -rf /usr/src/sofia-sip
 
 WORKDIR /usr/src
 RUN git clone --depth=1 --branch v${FS_VERSION} \
@@ -89,7 +101,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libedit2 libncurses6 \
     libldns3 \
     liblua5.4-0 \
-    libsofia-sip-ua0 \
+    # sofia-sip-ua0 NOT from apt — built from source (1.12.11 from apt is too old)
+    libglib2.0-0 \
     libtiff6 \
     curl netcat-openbsd ca-certificates gettext-base \
     && rm -rf /var/lib/apt/lists/*
@@ -102,6 +115,9 @@ COPY --from=builder /usr/local/share/freeswitch  /usr/local/share/freeswitch
 
 # spandsp3 runtime library (built from source, not in Debian)
 COPY --from=spandsp-builder /usr/local/lib/libspandsp* /usr/local/lib/
+
+# sofia-sip runtime library (built from source, Debian version is too old)
+COPY --from=builder /usr/local/lib/libsofia* /usr/local/lib/
 
 # Default configuration shipped with the image; entrypoint copies to volume on first run
 COPY --from=builder /usr/local/etc/freeswitch    /usr/share/nexvary/freeswitch-defaults

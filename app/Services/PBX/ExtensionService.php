@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ExtensionService
@@ -19,6 +20,10 @@ class ExtensionService
     /**
      * Resolve the FreeSWITCH SIP domain for an extension's tenant.
      * This domain is used as both the directory path and the user_context.
+     *
+     * Never returns the shared 'default' context — that would mix tenant traffic.
+     * Extensions without a resolvable tenant get an isolated 'no-tenant' context
+     * which has no dialplan routes, so they cannot reach other tenants.
      */
     private function resolveDomain(Extension $extension): string
     {
@@ -30,7 +35,11 @@ class ExtensionService
                 return $tenant->sipDomain();
             }
         }
-        return 'default';
+        Log::warning('Extension has no resolvable tenant — using isolated no-tenant context', [
+            'extension_id' => $extension->id,
+            'number'       => $extension->number,
+        ]);
+        return 'no-tenant';
     }
 
     public function list(array $filters = []): Collection

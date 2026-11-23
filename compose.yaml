@@ -32,6 +32,11 @@ x-app-common: &app-common
   volumes:
     - app_storage:/var/www/nexvary-cx/storage
     - app_cache:/var/www/nexvary-cx/bootstrap/cache
+    # FreeSWITCH config volume shared with the freeswitch service.
+    # FusionPbxConfigService writes per-tenant extension/dialplan/gateway
+    # XML files here; FreeSWITCH reads them on reload.
+    # The freeswitch entrypoint sets o+w on the writable subdirectories.
+    - fs_conf:/etc/freeswitch
   networks:
     - nexvary-net
   # Containers need to reach FreeSWITCH on the host network via host.docker.internal

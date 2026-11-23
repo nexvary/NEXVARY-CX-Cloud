@@ -369,11 +369,18 @@ XML;
 
     private function renderOutboundRouteXml(array $route): string
     {
-        $pattern = htmlspecialchars($route['pattern'] ?? '.*', ENT_XML1);
-        $gateway = htmlspecialchars($route['gateway'] ?? '', ENT_XML1);
-        $prefix  = htmlspecialchars($route['prefix'] ?? '', ENT_XML1);
-        $id      = $route['id'];
-        $domain  = htmlspecialchars($route['domain'] ?? 'default', ENT_XML1);
+        $rawPattern = $route['pattern'] ?? '.*';
+        $pattern    = htmlspecialchars($rawPattern, ENT_XML1);
+        $gateway    = htmlspecialchars($route['gateway'] ?? '', ENT_XML1);
+        $prefix     = htmlspecialchars($route['prefix'] ?? '', ENT_XML1);
+        $id         = $route['id'];
+        $domain     = htmlspecialchars($route['domain'] ?? 'default', ENT_XML1);
+
+        // If the dial pattern contains a capture group, FreeSWITCH will set $1
+        // to the matched portion (e.g. the number after stripping a prefix).
+        // If there is no capture group, $1 is undefined — use ${destination_number}
+        // so the full dialed number is passed to the gateway instead of nothing.
+        $dialTarget = str_contains($rawPattern, '(') ? '\$1' : '\${destination_number}';
 
         // The outbound route lives in dialplan/{domain}/ so it is only reachable
         // from extensions authenticated in the same domain context.
@@ -384,7 +391,7 @@ XML;
   <extension name="nexvary-outbound-{$id}">
     <condition field="destination_number" expression="^{$pattern}$">
       <action application="set" data="effective_caller_id_number=\${caller_id_number}"/>
-      <action application="bridge" data="sofia/gateway/{$gateway}/{$prefix}\$1"/>
+      <action application="bridge" data="sofia/gateway/{$gateway}/{$prefix}{$dialTarget}"/>
     </condition>
   </extension>
 </include>
@@ -427,7 +434,9 @@ XML;
     private function ensureDir(string $dir): void
     {
         if (!File::isDirectory($dir)) {
-            File::makeDirectory($dir, 0750, true);
+            // 0777: the FreeSWITCH container (root) and app container (www-data)
+            // share the fs_conf volume; each creates subdirs the other must traverse.
+            File::makeDirectory($dir, 0777, true);
         }
     }
 

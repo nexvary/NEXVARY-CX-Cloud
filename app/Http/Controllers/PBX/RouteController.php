@@ -39,13 +39,11 @@ class RouteController extends Controller
     private function tenantDomain(Request $request): string
     {
         $tenantId = $request->user()->tenant_id;
-        if ($tenantId) {
-            $tenant = Tenant::find($tenantId);
-            if ($tenant) {
-                return $tenant->sipDomain();
-            }
-        }
-        return 'default';
+        // Refuse to fall back to the shared 'default' SIP context — that would
+        // silently mix a tenant's calls with the system default context.
+        abort_if(empty($tenantId), 403, 'PBX routes require a tenant context.');
+        $tenant = Tenant::findOrFail($tenantId);
+        return $tenant->sipDomain();
     }
 
     // ── Index ─────────────────────────────────────────────────────────────────
@@ -103,7 +101,10 @@ class RouteController extends Controller
             'name'             => ['required', 'string', 'max:100'],
             'destination_type' => ['required', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination'      => ['required', 'string', 'max:100'],
-            'trunk_id'         => ['nullable', 'uuid', 'exists:trunks,id'],
+            // Trunk must belong to the same tenant — prevents using another tenant's gateway
+            'trunk_id'         => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'priority'         => ['integer', 'min:1', 'max:999'],
             'enabled'          => ['boolean'],
         ]);
@@ -130,8 +131,18 @@ class RouteController extends Controller
             'name'         => ['required', 'string', 'max:100',
                 Rule::unique('outbound_routes', 'name')->where('tenant_id', $tenantId),
             ],
-            'dial_pattern' => ['required', 'string', 'max:100'],
-            'trunk_id'     => ['nullable', 'uuid', 'exists:trunks,id'],
+            // Validate regex is syntactically safe; reject patterns with no meaning
+            'dial_pattern' => ['required', 'string', 'max:200',
+                function ($attr, $val, $fail) {
+                    if (@preg_match('/^(?:' . $val . ')$/', '') === false) {
+                        $fail('The dial pattern is not a valid regular expression.');
+                    }
+                },
+            ],
+            // Trunk must belong to the same tenant — prevents using another tenant's gateway
+            'trunk_id'     => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'trunk_prefix' => ['nullable', 'string', 'max:20'],
             'priority'     => ['integer', 'min:1', 'max:999'],
             'enabled'      => ['boolean'],
@@ -207,7 +218,9 @@ class RouteController extends Controller
             'name'             => ['required', 'string', 'max:100'],
             'destination_type' => ['required', 'string', 'in:extension,ivr,queue,ring_group,voicemail'],
             'destination'      => ['required', 'string', 'max:100'],
-            'trunk_id'         => ['nullable', 'uuid', 'exists:trunks,id'],
+            'trunk_id'         => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'priority'         => ['integer', 'min:1', 'max:999'],
             'enabled'          => ['boolean'],
         ]);
@@ -236,8 +249,16 @@ class RouteController extends Controller
                     ->where('tenant_id', $tenantId)
                     ->ignore($route->id),
             ],
-            'dial_pattern' => ['required', 'string', 'max:100'],
-            'trunk_id'     => ['nullable', 'uuid', 'exists:trunks,id'],
+            'dial_pattern' => ['required', 'string', 'max:200',
+                function ($attr, $val, $fail) {
+                    if (@preg_match('/^(?:' . $val . ')$/', '') === false) {
+                        $fail('The dial pattern is not a valid regular expression.');
+                    }
+                },
+            ],
+            'trunk_id'     => ['nullable', 'uuid',
+                Rule::exists('trunks', 'id')->where('tenant_id', $tenantId),
+            ],
             'trunk_prefix' => ['nullable', 'string', 'max:20'],
             'priority'     => ['integer', 'min:1', 'max:999'],
             'enabled'      => ['boolean'],

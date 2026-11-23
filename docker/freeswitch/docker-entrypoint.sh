@@ -43,6 +43,19 @@ cat > "${FS_CONF}/vars.xml" <<VARS
 </include>
 VARS
 
+# ── Allow the app container (www-data) to write tenant-specific configs ───────
+# The app service mounts this same fs_conf volume and writes per-tenant
+# extension, dialplan and gateway files into these subdirectories.
+# FreeSWITCH reads all files in these directories; the app creates new ones.
+# chmod o+w on the directories (not files) allows writes by any container user.
+for _dir in \
+    "${FS_CONF}/directory" \
+    "${FS_CONF}/dialplan" \
+    "${FS_CONF}/sip_profiles/external"; do
+  mkdir -p "${_dir}"
+  find "${_dir}" -type d -exec chmod o+w {} \;
+done
+
 # ── Ensure required directories exist ─────────────────────────────────────────
 mkdir -p "${FS_LOG}" "${FS_DATA}/recordings" "${FS_DATA}/storage" "${FS_DATA}/db"
 

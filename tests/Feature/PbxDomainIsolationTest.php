@@ -474,3 +474,130 @@ it('1D: cross-tenant route access returns 404', function () {
         ->get("/pbx/outbound-routes/{$routeB->id}/edit")
         ->assertNotFound();
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Security hardening — tenant-scoped trunk validation & routing fixes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+it('SEC: cannot reference another tenant\'s trunk in an inbound route', function () {
+    [$tenantA, $userA] = makeIsolatedTenant('a.sec.test');
+    [$tenantB,]        = makeIsolatedTenant('b.sec.test');
+
+    // Trunk belonging to tenant B
+    $trunkB = Trunk::create([
+        'tenant_id' => $tenantB->id,
+        'name'      => 'B Trunk',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'sip.b.test',
+        'enabled'   => true,
+    ]);
+
+    $this->actingAs($userA)->post('/pbx/inbound-routes', [
+        'name'             => 'Attack Route',
+        'did'              => '+15559999999',
+        'destination_type' => 'extension',
+        'destination'      => '1001',
+        'trunk_id'         => $trunkB->id,  // cross-tenant trunk
+        'enabled'          => true,
+    ])->assertSessionHasErrors('trunk_id');
+});
+
+it('SEC: cannot reference another tenant\'s trunk in an outbound route', function () {
+    [$tenantA, $userA] = makeIsolatedTenant('a.sec2.test');
+    [$tenantB,]        = makeIsolatedTenant('b.sec2.test');
+
+    $trunkB = Trunk::create([
+        'tenant_id' => $tenantB->id,
+        'name'      => 'B Outbound Trunk',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'out.b.test',
+        'enabled'   => true,
+    ]);
+
+    $this->actingAs($userA)->post('/pbx/outbound-routes', [
+        'name'         => 'Attack Outbound',
+        'dial_pattern' => '.*',
+        'trunk_id'     => $trunkB->id,  // cross-tenant trunk
+        'enabled'      => true,
+    ])->assertSessionHasErrors('trunk_id');
+});
+
+it('SEC: outbound route with no capture group uses destination_number not $1', function () {
+    // Pattern '.*' has no capture group: bridge must use ${destination_number}
+    $service = app(\App\Services\PBX\FusionPbxConfigService::class);
+    $method  = (new \ReflectionClass($service))->getMethod('renderOutboundRouteXml');
+    $method->setAccessible(true);
+    $xml = $method->invoke($service, [
+        'id'      => 'test-uuid',
+        'pattern' => '.*',
+        'gateway' => 'nexvary-gw1',
+        'prefix'  => '',
+        'domain'  => 'acme.test',
+    ]);
+    expect($xml)->toContain('${destination_number}')
+                ->not->toContain('$1');
+});
+
+it('SEC: outbound route with capture group uses $1', function () {
+    // Pattern '^9(\d+)$' captures digits after prefix 9: bridge must use $1
+    $service = app(\App\Services\PBX\FusionPbxConfigService::class);
+    $method  = (new \ReflectionClass($service))->getMethod('renderOutboundRouteXml');
+    $method->setAccessible(true);
+    $xml = $method->invoke($service, [
+        'id'      => 'test-uuid2',
+        'pattern' => '^9(\d+)$',
+        'gateway' => 'nexvary-gw1',
+        'prefix'  => '',
+        'domain'  => 'acme.test',
+    ]);
+    expect($xml)->toContain('$1');
+});
+
+it('SEC: invalid dial pattern is rejected on create', function () {
+    [$tenant, $user] = makeIsolatedTenant('pat.test.local');
+    mockExtServices();
+
+    $this->actingAs($user)->post('/pbx/outbound-routes', [
+        'name'         => 'Bad Pattern',
+        'dial_pattern' => '(unclosed',  // invalid regex
+        'enabled'      => true,
+    ])->assertSessionHasErrors('dial_pattern');
+});
+
+it('SEC: DID number uniqueness is scoped to tenant, not global', function () {
+    [$tenantA, $userA] = makeIsolatedTenant('a.did.sec.test');
+    [$tenantB, $userB] = makeIsolatedTenant('b.did.sec.test');
+    [$pbxA, $configA]  = mockExtServices();
+
+    // enabled:false → deleteInboundRoute (removes any stale config)
+    $configA->shouldReceive('deleteInboundRoute')->once();
+    $pbxA->shouldReceive('reloadDialplan')->once()->andReturn(true);
+
+    // Tenant A creates DID
+    $this->actingAs($userA)->post('/pbx/dids', [
+        'number'  => '+12125550000',
+        'enabled' => false,
+    ])->assertRedirect('/pbx/dids');
+
+    [$pbxB, $configB] = mockExtServices();
+    $configB->shouldReceive('deleteInboundRoute')->once();
+    $pbxB->shouldReceive('reloadDialplan')->once()->andReturn(true);
+
+    // Tenant B can create the same DID number — different tenant
+    $this->actingAs($userB)->post('/pbx/dids', [
+        'number'  => '+12125550000',
+        'enabled' => false,
+    ])->assertRedirect('/pbx/dids');
+});
+
+it('SEC: extension without tenant uses no-tenant domain, not shared default', function () {
+    $service = app(\App\Services\PBX\ExtensionService::class);
+    $ext     = new \App\Models\Extension(['number' => '5000', 'tenant_id' => null]);
+
+    $method = (new \ReflectionClass($service))->getMethod('resolveDomain');
+    $method->setAccessible(true);
+    $domain = $method->invoke($service, $ext);
+
+    expect($domain)->toBe('no-tenant')
+                   ->not->toBe('default');
+});
