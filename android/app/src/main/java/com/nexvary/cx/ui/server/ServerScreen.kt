@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexvary.cx.ui.theme.*
 
+private enum class ScanMode { None, Camera, ManualPaste }
+
 @Composable
 fun ServerScreen(
     onBack: () -> Unit,
@@ -28,8 +30,9 @@ fun ServerScreen(
     val serverState by viewModel.serverState.collectAsState()
     val sipState by viewModel.sipState.collectAsState()
     val credentials by viewModel.credentials.collectAsState()
-    var showQrScanner by remember { mutableStateOf(false) }
+    var scanMode by remember { mutableStateOf(ScanMode.None) }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -98,7 +101,7 @@ fun ServerScreen(
 
         // QR Pairing button
         Button(
-            onClick = { showQrScanner = true },
+            onClick = { scanMode = ScanMode.Camera },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = NxBlue),
             shape = RoundedCornerShape(14.dp),
@@ -135,19 +138,33 @@ fun ServerScreen(
             else -> Unit
         }
 
-        // QR scanner dialog placeholder
-        if (showQrScanner) {
+        // Manual-paste dialog (shown when user chooses paste from camera screen,
+        // or when camera permission is unavailable)
+        if (scanMode == ScanMode.ManualPaste) {
             QrInputDialog(
-                onDismiss = { showQrScanner = false },
+                onDismiss = { scanMode = ScanMode.None },
                 onConfirm = { payload ->
                     viewModel.pair(payload)
-                    showQrScanner = false
+                    scanMode = ScanMode.None
                 },
             )
         }
 
         Spacer(Modifier.height(32.dp))
+    } // end Column
+
+    // Camera scanner — full-screen overlay rendered on top of the Column
+    if (scanMode == ScanMode.Camera) {
+        CameraQrScanner(
+            onScanned = { payload ->
+                viewModel.pair(payload)
+                scanMode = ScanMode.None
+            },
+            onDismiss = { scanMode = ScanMode.None },
+            onManualEntry = { scanMode = ScanMode.ManualPaste },
+        )
     }
+    } // end Box
 }
 
 @Composable

@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Post-splash app theme — used after the splash screen is dismissed -->
     <style name="Theme.NexvaryCx" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/black</item>
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
-    <style name="Theme.NexvaryCx.SplashScreen" parent="Theme.NexvaryCx" />
+
+    <!--
+        Starting theme: activity uses this until installSplashScreen() transitions
+        to Theme.NexvaryCx after the first frame is drawn.
+        On API 31+ the system enforces its own splash; on API 26-30 this gives a
+        consistent black background behind the adaptive icon.
+    -->
+    <style name="Theme.NexvaryCx.Starting" parent="Theme.NexvaryCx">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="postSplashScreenTheme">@style/Theme.NexvaryCx</item>
+    </style>
 </resources>

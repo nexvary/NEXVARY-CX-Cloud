@@ -1,6 +1,7 @@
 package com.nexvary.cx.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,17 +22,26 @@ data class SipCredentials(
 class CredentialStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : CredentialRepository {
-    private val prefs by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            "nexvary_credentials",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "nexvary_credentials",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        } catch (_: Exception) {
+            // Android Keystore unavailable (some emulator configurations, locked boot state).
+            // Wipe any partially-written encrypted file and use plaintext as a fallback so
+            // the app can start. The user can re-pair via QR to restore credentials.
+            context.deleteSharedPreferences("nexvary_credentials")
+            context.getSharedPreferences("nexvary_credentials_plain", Context.MODE_PRIVATE)
+        }
     }
 
     private val _credentials = MutableStateFlow(load())
