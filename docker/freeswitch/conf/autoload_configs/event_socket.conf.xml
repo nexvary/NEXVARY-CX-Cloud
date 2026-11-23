@@ -1,0 +1,12 @@
+<!-- Event Socket — listen on all interfaces so Docker bridge containers can connect -->
+<configuration name="event_socket.conf" description="Socket Client">
+  <settings>
+    <param name="nat-map"            value="false"/>
+    <!-- Listen on all interfaces: necessary for containers on Docker bridge to reach ESL -->
+    <param name="listen-ip"          value="0.0.0.0"/>
+    <param name="listen-port"        value="8021"/>
+    <param name="password"           value="$${default_password}"/>
+    <!-- Allow loopback and RFC-1918 (covers Docker bridge 172.16.0.0/12) -->
+    <param name="apply-inbound-acl"  value="loopback.auto,lan.auto"/>
+  </settings>
+</configuration>

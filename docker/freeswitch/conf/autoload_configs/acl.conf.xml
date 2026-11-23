@@ -1,0 +1,24 @@
+<!-- Access Control Lists — adds Docker bridge subnet for ESL/API access -->
+<configuration name="acl.conf" description="Network Lists">
+  <network-lists>
+
+    <list name="loopback.auto" default="allow">
+      <node type="allow" cidr="127.0.0.1/8"/>
+    </list>
+
+    <!-- RFC-1918 private ranges, covers Docker bridge (172.17.0.0/16 by default) -->
+    <list name="lan.auto" default="allow">
+      <node type="allow" cidr="10.0.0.0/8"/>
+      <node type="allow" cidr="172.16.0.0/12"/>
+      <node type="allow" cidr="192.168.0.0/16"/>
+    </list>
+
+    <list name="localnet.auto" default="allow">
+      <node type="allow" cidr="127.0.0.1/8"/>
+      <node type="allow" cidr="10.0.0.0/8"/>
+      <node type="allow" cidr="172.16.0.0/12"/>
+      <node type="allow" cidr="192.168.0.0/16"/>
+    </list>
+
+  </network-lists>
+</configuration>

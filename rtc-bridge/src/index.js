@@ -259,9 +259,14 @@ function buildIceServers() {
 
 // ── Start Server ──────────────────────────────────────────────────────────
 
-server.listen(config.port, '127.0.0.1', () => {
+// In a Docker container the bind address must be 0.0.0.0 so the container's
+// published port is reachable from the host/nginx proxy.  Defaults to 127.0.0.1
+// for standalone (non-containerised) deployments.
+const bindAddress = process.env.RTC_BIND_ADDRESS ?? '127.0.0.1';
+server.listen(config.port, bindAddress, () => {
   log('info', 'NEXVARY WebRTC Bridge started', {
     port: config.port,
+    bind: bindAddress,
     tls: config.tls.enabled,
     freeswitch: `${config.freeswitch.host}:${config.freeswitch.wsPort}`,
   });

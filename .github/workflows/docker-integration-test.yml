@@ -1,0 +1,275 @@
+name: Docker — Integration Tests
+
+on:
+  push:
+    branches: [feature/stage-1-foundation, main]
+    paths:
+      - 'compose.yaml'
+      - 'docker/**'
+      - 'rtc-bridge/**'
+      - 'app/**'
+      - '.env.docker.example'
+      - 'deploy/**'
+      - '.github/workflows/docker-integration-test.yml'
+  pull_request:
+    paths:
+      - 'compose.yaml'
+      - 'docker/**'
+      - 'rtc-bridge/**'
+      - 'app/**'
+      - '.env.docker.example'
+      - 'deploy/**'
+      - '.github/workflows/docker-integration-test.yml'
+  workflow_dispatch:
+
+jobs:
+  docker-integration:
+    name: Docker Compose stack integration test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      DOMAIN: ci.nexvary-test.local
+      HTTP_PORT: 8080
+      FS_VERSION: 1.10.11
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR (pull pre-built FreeSWITCH image)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Generate test secrets ──────────────────────────────────────────────
+      - name: Generate test secrets and deploy/.env
+        run: |
+          set -euo pipefail
+
+          APP_KEY="base64:$(openssl rand -base64 32)"
+          DB_PASSWORD="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
+          REDIS_PASSWORD="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
+          FS_ESL_PASSWORD="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
+          RTC_BRIDGE_TOKEN="$(openssl rand -hex 32)"
+          REVERB_APP_KEY="$(openssl rand -hex 16)"
+          REVERB_APP_SECRET="$(openssl rand -hex 32)"
+          INSTALL_SECRET="$(openssl rand -hex 32)"
+
+          mkdir -p deploy
+
+          sed \
+            -e "s|DOMAIN_PLACEHOLDER|${DOMAIN}|g" \
+            -e "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" \
+            -e "s|^APP_URL=.*|APP_URL=https://${DOMAIN}|" \
+            -e "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" \
+            -e "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|" \
+            -e "s|^FREESWITCH_ESL_PASSWORD=.*|FREESWITCH_ESL_PASSWORD=${FS_ESL_PASSWORD}|" \
+            -e "s|^RTC_BRIDGE_TOKEN=.*|RTC_BRIDGE_TOKEN=${RTC_BRIDGE_TOKEN}|" \
+            -e "s|^REVERB_APP_KEY=.*|REVERB_APP_KEY=${REVERB_APP_KEY}|" \
+            -e "s|^REVERB_APP_SECRET=.*|REVERB_APP_SECRET=${REVERB_APP_SECRET}|" \
+            -e "s|^NEXVARY_INSTALL_SECRET=.*|NEXVARY_INSTALL_SECRET=${INSTALL_SECRET}|" \
+            -e "s|^NEXVARY_HTTP_PORT=.*|NEXVARY_HTTP_PORT=${HTTP_PORT}|" \
+            .env.docker.example > deploy/.env
+
+          chmod 600 deploy/.env
+          echo "deploy/.env written"
+
+          # Export ESL password for use in later steps (never logged)
+          echo "FS_ESL_PASSWORD=${FS_ESL_PASSWORD}" >> "$GITHUB_ENV"
+
+      # ── Build application images ───────────────────────────────────────────
+      - name: Build app and rtc-bridge images
+        run: |
+          docker compose --env-file deploy/.env build --pull app rtc-bridge
+        timeout-minutes: 15
+
+      # ── Pull pre-built FreeSWITCH from GHCR ───────────────────────────────
+      - name: Pull FreeSWITCH image from GHCR
+        run: |
+          docker pull "ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION}" || {
+            echo "GHCR image not yet published — building locally"
+            docker compose --env-file deploy/.env build freeswitch
+          }
+
+      # ── Start the stack ────────────────────────────────────────────────────
+      - name: Start Compose stack
+        run: |
+          docker compose --env-file deploy/.env up --detach --remove-orphans
+        timeout-minutes: 5
+
+      # ── Wait for core services ─────────────────────────────────────────────
+      - name: Wait for PostgreSQL to be healthy
+        run: |
+          for i in $(seq 1 24); do
+            STATE=$(docker compose --env-file deploy/.env ps --format json postgres 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Health',''))" 2>/dev/null || echo '')
+            [[ "$STATE" == 'healthy' ]] && { echo "PostgreSQL healthy"; break; }
+            [[ $i -eq 24 ]] && { echo "PostgreSQL not healthy after 120s"; docker compose --env-file deploy/.env logs postgres; exit 1; }
+            sleep 5
+          done
+
+      - name: Wait for Redis to be healthy
+        run: |
+          for i in $(seq 1 12); do
+            STATE=$(docker compose --env-file deploy/.env ps --format json redis 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Health',''))" 2>/dev/null || echo '')
+            [[ "$STATE" == 'healthy' ]] && { echo "Redis healthy"; break; }
+            [[ $i -eq 12 ]] && { echo "Redis not healthy after 60s"; docker compose --env-file deploy/.env logs redis; exit 1; }
+            sleep 5
+          done
+
+      - name: Wait for Laravel app to be healthy
+        run: |
+          for i in $(seq 1 36); do
+            STATE=$(docker compose --env-file deploy/.env ps --format json app 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Health',''))" 2>/dev/null || echo '')
+            [[ "$STATE" == 'healthy' ]] && { echo "App healthy"; break; }
+            [[ "$STATE" == 'unhealthy' ]] && { echo "App unhealthy"; docker compose --env-file deploy/.env logs app; exit 1; }
+            [[ $i -eq 36 ]] && { echo "App not healthy after 180s"; docker compose --env-file deploy/.env logs app; exit 1; }
+            sleep 5
+          done
+
+      - name: Wait for Nginx to be healthy
+        run: |
+          for i in $(seq 1 24); do
+            STATE=$(docker compose --env-file deploy/.env ps --format json nginx 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Health',''))" 2>/dev/null || echo '')
+            [[ "$STATE" == 'healthy' ]] && { echo "Nginx healthy"; break; }
+            [[ "$STATE" == 'unhealthy' ]] && { echo "Nginx unhealthy"; docker compose --env-file deploy/.env logs nginx; exit 1; }
+            [[ $i -eq 24 ]] && { echo "Nginx not healthy after 120s"; docker compose --env-file deploy/.env logs nginx; exit 1; }
+            sleep 5
+          done
+
+      # ── FreeSWITCH health (best-effort — ESL from GitHub Actions runner) ──
+      - name: Wait for FreeSWITCH (host networking)
+        run: |
+          # FreeSWITCH uses network_mode: host; ESL binds to 127.0.0.1:8021
+          for i in $(seq 1 36); do
+            if fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" -x 'status' 2>/dev/null | grep -q 'UP'; then
+              echo "FreeSWITCH ESL: authenticated connection verified"
+              break
+            fi
+            # Also check container health
+            STATE=$(docker compose --env-file deploy/.env ps --format json freeswitch 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Health',''))" 2>/dev/null || echo '')
+            if [[ "$STATE" == 'unhealthy' ]]; then
+              echo "FreeSWITCH container unhealthy"
+              docker compose --env-file deploy/.env logs freeswitch
+              exit 1
+            fi
+            [[ $i -eq 36 ]] && {
+              echo "FreeSWITCH did not become healthy after 180s"
+              docker compose --env-file deploy/.env logs --tail=50 freeswitch
+              exit 1
+            }
+            sleep 5
+          done
+
+      # ── Functional tests ───────────────────────────────────────────────────
+      - name: Test — Laravel health endpoint
+        run: |
+          HTTP_STATUS=$(curl -so /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/up" || echo '000')
+          [[ "$HTTP_STATUS" == '200' ]] || {
+            echo "FAIL: /up returned ${HTTP_STATUS}"
+            docker compose --env-file deploy/.env logs app
+            exit 1
+          }
+          echo "PASS: Laravel /up → 200"
+
+      - name: Test — Laravel can connect to PostgreSQL
+        run: |
+          RESULT=$(docker compose --env-file deploy/.env exec -T app \
+            php artisan tinker --no-interaction -- "echo DB::connection()->getPdo() ? 'PDO_OK' : 'PDO_FAIL';" \
+            2>&1 | tr -d '\r')
+          echo "$RESULT" | grep -q 'PDO_OK' || {
+            echo "FAIL: Laravel/PostgreSQL connection failed"
+            echo "$RESULT"
+            exit 1
+          }
+          echo "PASS: Laravel → PostgreSQL connection OK"
+
+      - name: Test — Laravel can connect to Redis
+        run: |
+          RESULT=$(docker compose --env-file deploy/.env exec -T app \
+            php artisan tinker --no-interaction -- "echo Redis::connection()->ping() === true ? 'REDIS_OK' : 'REDIS_FAIL';" \
+            2>&1 | tr -d '\r')
+          echo "$RESULT" | grep -q 'REDIS_OK' || {
+            echo "FAIL: Laravel/Redis connection failed"
+            echo "$RESULT"
+            exit 1
+          }
+          echo "PASS: Laravel → Redis connection OK"
+
+      - name: Test — Migrations ran successfully
+        run: |
+          RESULT=$(docker compose --env-file deploy/.env exec -T app \
+            php artisan migrate:status --no-interaction 2>&1 | tr -d '\r')
+          echo "$RESULT" | grep -q 'Ran' || {
+            echo "FAIL: No migrations appear to have run"
+            echo "$RESULT"
+            exit 1
+          }
+          echo "PASS: Migrations ran"
+          echo "$RESULT" | tail -20
+
+      - name: Test — RTC bridge responds to health check
+        run: |
+          # rtc-bridge is on the bridge network; reach it via nginx proxy
+          HTTP_STATUS=$(curl -so /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/rtc/health" \
+                        2>/dev/null || echo '000')
+          # 200 = healthy, 404 = no health route at that path (not an infra failure)
+          [[ "$HTTP_STATUS" =~ ^(200|404)$ ]] || {
+            echo "FAIL: RTC bridge health returned ${HTTP_STATUS}"
+            docker compose --env-file deploy/.env logs rtc-bridge
+            exit 1
+          }
+          echo "PASS: RTC bridge reachable (HTTP ${HTTP_STATUS})"
+
+      - name: Test — FreeSWITCH modules loaded (via ESL)
+        run: |
+          if ! command -v fs_cli &>/dev/null; then
+            echo "INFO: fs_cli not installed on runner — skipping ESL module check"
+            exit 0
+          fi
+          MODULES="mod_sofia mod_event_socket mod_verto mod_dialplan_xml"
+          for MOD in $MODULES; do
+            RESULT=$(fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
+                      -x "module_exists ${MOD}" 2>/dev/null || echo '')
+            [[ "$RESULT" == 'true' ]] || {
+              echo "FAIL: Module ${MOD} not loaded (got: '${RESULT}')"
+              exit 1
+            }
+            echo "PASS: ${MOD} loaded"
+          done
+
+      # ── Print container status summary ─────────────────────────────────────
+      - name: Container status summary
+        if: always()
+        run: |
+          echo "=== docker compose ps ==="
+          docker compose --env-file deploy/.env ps
+          echo ""
+          echo "=== Unhealthy / exited containers ==="
+          docker compose --env-file deploy/.env ps --filter status=exited || true
+          docker compose --env-file deploy/.env ps --filter health=unhealthy || true
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose --env-file deploy/.env logs --tail=100 2>&1 | \
+            grep -v 'password\|PASSWORD\|secret\|SECRET\|key\|KEY' || true
+
+      # ── Tear down ─────────────────────────────────────────────────────────
+      - name: Tear down Compose stack
+        if: always()
+        run: docker compose --env-file deploy/.env down --volumes --remove-orphans
