@@ -56,7 +56,14 @@
     "field_phone": "رقم الهاتف",
     "field_currency": "العملة",
     "field_created_at": "وقت التسجيل",
-    "field_action": "الإجراء"
+    "field_action": "الإجراء",
+    "field_did_number": "رقم DID",
+    "field_contact_number": "رقم جهة الاتصال",
+    "select_tenant_prompt": "— اختر عميلًا —",
+    "select_tenant_button": "تبديل",
+    "no_tenant_selected": "لم يُختر عميل",
+    "working_as": "يعمل باسم: {{name}}",
+    "select_tenant_to_view": "اختر عميلًا أعلاه لعرض سجلاته أو تعديلها."
   },
   "setup": {
     "title": "معالج التثبيت",

@@ -54,10 +54,19 @@ it('enforces administrator permissions on configuration pages and writes', funct
     $role = \Spatie\Permission\Models\Role::findOrCreate('superadmin', 'web');
     $user->assignRole($role);
     $this->get('/admin')->assertOk();
+
+    // Superadmin must select a tenant before saving tenant-scoped records.
+    $this->post('/admin/contacts', ['first_name' => 'Customer', 'email' => 'ok@example.test'])
+        ->assertSessionHasErrors('tenant');
+    $this->assertDatabaseMissing('contacts', ['email' => 'ok@example.test']);
+
+    // After selecting a tenant the save succeeds and uses the correct tenant_id.
+    $tenant = \App\Models\Tenant::factory()->create();
+    $this->post('/admin/select-tenant', ['tenant_id' => $tenant->id]);
     $this->post('/admin/contacts', ['first_name' => 'Customer', 'email' => 'bad'])->assertSessionHasErrors('email');
     $this->post('/admin/contacts', ['first_name' => 'Customer', 'email' => 'ok@example.test'])
         ->assertRedirect('/admin/contacts');
-    $this->assertDatabaseHas('contacts', ['email' => 'ok@example.test']);
+    $this->assertDatabaseHas('contacts', ['email' => 'ok@example.test', 'tenant_id' => $tenant->id]);
 });
 
 it('does not allow a pending second factor on the dashboard', function () {
@@ -78,14 +87,16 @@ it('creates and invalidates login sessions and records audit events', function (
 });
 
 it('saves trunk and extension drafts without enabling SIP', function () {
-    $user = User::factory()->create();
+    // Tenant admin users need a valid tenant_id; without one the controller aborts 403.
+    $tenant = \App\Models\Tenant::factory()->create();
+    $user   = User::factory()->create(['tenant_id' => $tenant->id]);
     $user->assignRole(\Spatie\Permission\Models\Role::findOrCreate('admin', 'web'));
     $this->actingAs($user)->post('/admin/trunks/draft', [
         'name' => 'Local trunk', 'sip_host' => '127.0.0.1', 'sip_port' => 5060,
     ])->assertRedirect('/admin/trunks');
     $this->post('/admin/extensions/draft', ['number' => '1001', 'description' => 'Reception'])
         ->assertRedirect('/admin/extensions');
-    $this->assertDatabaseHas('trunks', ['name' => 'Local trunk', 'register' => false, 'enabled' => false]);
-    $this->assertDatabaseHas('extensions', ['number' => '1001', 'enabled' => false]);
+    $this->assertDatabaseHas('trunks', ['name' => 'Local trunk', 'register' => false, 'enabled' => false, 'tenant_id' => $tenant->id]);
+    $this->assertDatabaseHas('extensions', ['number' => '1001', 'enabled' => false, 'tenant_id' => $tenant->id]);
     $this->post('/admin/extensions/draft', ['number' => '1001'])->assertSessionHasErrors('number');
 });

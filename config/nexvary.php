@@ -32,6 +32,7 @@ return [
     'telnyx' => [
         'api_key'              => env('TELNYX_API_KEY'),
         'public_key'           => env('TELNYX_PUBLIC_KEY'),
+        'webhook_public_key'   => env('TELNYX_WEBHOOK_PUBLIC_KEY'),
         'messaging_profile_id' => env('TELNYX_MESSAGING_PROFILE_ID'),
         'webhook_secret'       => env('TELNYX_WEBHOOK_SECRET'),
         'sip_trunk_id'         => env('TELNYX_SIP_TRUNK_ID'),

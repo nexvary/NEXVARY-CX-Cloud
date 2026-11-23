@@ -53,6 +53,7 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/', [\App\Http\Controllers\Admin\GuideController::class, 'index'])->name('index');
         Route::get('/{module}', [\App\Http\Controllers\Admin\GuideController::class, 'show'])->name('show');
         Route::post('/contacts', [\App\Http\Controllers\Admin\GuideController::class, 'storeContact'])->name('contacts.store');
+        Route::post('/select-tenant', [\App\Http\Controllers\Admin\GuideController::class, 'selectTenant'])->name('select_tenant');
         Route::post('/{module}/draft', [\App\Http\Controllers\Admin\ConfigurationController::class, 'store'])->name('draft.store');
     });
 

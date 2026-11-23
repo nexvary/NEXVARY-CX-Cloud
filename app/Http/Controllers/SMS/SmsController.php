@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\SMS;
 
 use App\Http\Controllers\Controller;
+use App\Models\Scopes\TenantScope;
 use App\Models\SmsConversation;
 use App\Models\SmsMessage;
 use App\Services\Telnyx\TelnyxService;
@@ -108,6 +109,12 @@ class SmsController extends Controller
             return redirect()->back()->withErrors(['from' => 'You are not authorized to send from that number.']);
         }
 
+        // Resolve the DID's owning tenant so the conversation carries the correct tenant_id.
+        // For regular tenant users this matches their own tenant; for superadmin it may differ.
+        $didTenantId = DB::table('dids')
+            ->where('number', $request->input('from'))
+            ->value('tenant_id');
+
         try {
             $telnyx = TelnyxService::make();
             $result = $telnyx->sendSms(
@@ -116,16 +123,21 @@ class SmsController extends Controller
                 text: $request->input('body'),
             );
 
-            $convo = DB::transaction(function () use ($request, $result) {
-                $convo = SmsConversation::firstOrCreate(
-                    [
-                        'did_number'     => $request->input('from'),
-                        'contact_number' => $request->input('to'),
-                    ],
-                    ['status' => 'open'],
-                );
+            $from = $request->input('from');
+            $to   = $request->input('to');
+            $body = $request->input('body');
+
+            $convo = DB::transaction(function () use ($from, $to, $body, $result, $didTenantId) {
+                // Bypass TenantScope so we can search/create by the natural unique key
+                // (did_number, contact_number). The DID is globally unique so this lookup
+                // is implicitly tenant-scoped. We pass tenant_id explicitly in defaults.
+                $convo = SmsConversation::withoutGlobalScope(TenantScope::class)
+                    ->firstOrCreate(
+                        ['did_number' => $from, 'contact_number' => $to],
+                        ['tenant_id' => $didTenantId, 'status' => 'open'],
+                    );
                 $convo->messages()->create([
-                    'body'              => $request->input('body'),
+                    'body'              => $body,
                     'direction'         => 'outbound',
                     'status'            => $result['success'] ? 'sent' : 'failed',
                     'telnyx_message_id' => $result['message_id'],
@@ -228,11 +240,11 @@ class SmsController extends Controller
         // ── 5. Process by event type ──────────────────────────────────────────
         try {
             match ($eventType) {
-                'message.received' => $this->handleInboundMessage($data, $eventId),
-                'message.sent'     => $this->handleMessageStatus($data, 'sent'),
-                'message.delivered'=> $this->handleMessageStatus($data, 'delivered'),
-                'message.failed'   => $this->handleMessageStatus($data, 'failed'),
-                default            => null, // unknown event types are silently ignored
+                'message.received'  => $this->handleInboundMessage($data, $eventId),
+                'message.sent'      => $this->handleMessageStatus($data, 'sent'),
+                'message.delivered' => $this->handleMessageStatus($data, 'delivered'),
+                'message.failed'    => $this->handleMessageStatus($data, 'failed'),
+                default             => null, // unknown event types are silently ignored
             };
         } catch (\Throwable $e) {
             Log::error('Telnyx webhook processing error', [
@@ -261,11 +273,30 @@ class SmsController extends Controller
             return;
         }
 
-        DB::transaction(function () use ($from, $to, $text, $msgId, $eventId) {
-            $convo = SmsConversation::firstOrCreate(
-                ['did_number' => $to, 'contact_number' => $from],
-                ['status' => 'new'],
-            );
+        // Determine the owning tenant from DID ownership in the database.
+        // The webhook has no authenticated user, so we resolve tenant explicitly.
+        $tenantId = DB::table('dids')
+            ->where('number', $to)
+            ->whereNotNull('tenant_id')
+            ->value('tenant_id');
+
+        if ($tenantId === null) {
+            Log::warning('Telnyx webhook: message.received for unknown or unassigned DID — discarding', [
+                'to' => $to,
+            ]);
+            return;
+        }
+
+        DB::transaction(function () use ($from, $to, $text, $msgId, $eventId, $tenantId) {
+            // Bypass TenantScope: no authenticated user in webhook context.
+            // We scope manually using the tenant_id resolved from DID ownership.
+            // DIDs are globally unique, so (did_number, contact_number) already
+            // implies tenant uniqueness under normal operation.
+            $convo = SmsConversation::withoutGlobalScope(TenantScope::class)
+                ->firstOrCreate(
+                    ['did_number' => $to, 'contact_number' => $from],
+                    ['tenant_id' => $tenantId, 'status' => 'new'],
+                );
 
             $convo->messages()->create([
                 'body'              => $text,
@@ -294,6 +325,11 @@ class SmsController extends Controller
 
         $message = SmsMessage::where('telnyx_message_id', $msgId)->first();
         if (!$message) {
+            return;
+        }
+
+        // Prevent status regression: a late 'sent' event must not overwrite 'delivered'.
+        if ($status === 'sent' && $message->status === 'delivered') {
             return;
         }
 
