@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Tenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +86,8 @@ class ConfigurationController extends Controller
      * Returns the tenant_id for the current request.
      *
      * - Tenant user: their own tenant_id
-     * - Superadmin:  the session-selected tenant, or null if none chosen
+     * - Superadmin:  the session-selected tenant, or the only tenant when
+     *   exactly one exists (fresh-install convenience), or null when unresolvable
      * - Null-tenant, non-superadmin: abort 403
      */
     private function resolveEffectiveTenantId(): ?string
@@ -97,7 +99,19 @@ class ConfigurationController extends Controller
         }
 
         if ($user->hasRole('superadmin')) {
-            return session('admin_selected_tenant_id');
+            $selected = session('admin_selected_tenant_id');
+            if ($selected !== null) {
+                return $selected;
+            }
+
+            $tenants = Tenant::pluck('id');
+            if ($tenants->count() === 1) {
+                $only = $tenants->first();
+                session(['admin_selected_tenant_id' => $only]);
+                return $only;
+            }
+
+            return null;
         }
 
         abort(403);

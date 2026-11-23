@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Install;
 
 use App\Http\Controllers\Controller;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Install\Installation;
 use App\Services\PBX\FreeSwitchService;
@@ -143,6 +144,15 @@ class WizardController extends Controller
                 ]);
                 Role::findOrCreate('superadmin', 'web');
                 $user->assignRole('superadmin');
+
+                // Create the initial default tenant so the Guide module is immediately usable.
+                // The superadmin stays tenant_id = null but GuideController auto-selects the
+                // only tenant when exactly one exists, avoiding a chicken-and-egg problem.
+                $orgSlug = \Illuminate\Support\Str::slug($admin['name'] . '-org', '-');
+                Tenant::create([
+                    'name' => $admin['name'] . ' Organization',
+                    'slug' => $orgSlug ?: 'main-org',
+                ]);
             });
 
             if (!rename($temporary, Installation::path())) {

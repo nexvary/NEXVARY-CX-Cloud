@@ -36,8 +36,8 @@ export default function Guide({
         {module && <Link href="/admin" className="nx-btn-secondary mb-4"><Back aria-hidden="true" className="size-4" />{t('setup.back')}</Link>}
         <h1 className="text-2xl font-semibold">{title}</h1>
 
-        {/* Superadmin tenant selector */}
-        {availableTenants.length > 0 && <div className="nx-card mt-3 flex flex-wrap items-center gap-3 p-3">
+        {/* Superadmin tenant selector — only shown when multiple tenants exist (single tenant is auto-selected) */}
+        {availableTenants.length > 1 && <div className="nx-card mt-3 flex flex-wrap items-center gap-3 p-3">
             <Building2 aria-hidden="true" className="size-4 shrink-0 text-sky-300" />
             {selectedTenantName
                 ? <span className="text-sm">{t('management.working_as', { name: selectedTenantName })}</span>

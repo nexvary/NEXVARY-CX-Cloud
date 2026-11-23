@@ -70,7 +70,6 @@ class GuideController extends Controller
         $availableTenants = $user->hasRole('superadmin')
             ? Tenant::get(['id', 'name'])->toArray()
             : [];
-        $selectedTenantId = session('admin_selected_tenant_id');
 
         if ($definition !== null) {
             [$table, $columns, $hasDeletedAt] = $definition;
@@ -120,6 +119,9 @@ class GuideController extends Controller
             ];
             $pbx->disconnect();
         }
+
+        // Read selectedTenantId after resolveEffectiveTenantId() may have auto-selected one tenant.
+        $selectedTenantId = session('admin_selected_tenant_id');
 
         return Inertia::render('Admin/Guide', [
             'modules'          => array_keys(self::MODULES),
@@ -177,7 +179,8 @@ class GuideController extends Controller
      * Returns the tenant_id the current request should operate on.
      *
      * - Tenant user: their own tenant_id (always set, never null)
-     * - Superadmin:  the tenant selected in session, or null when none has been chosen
+     * - Superadmin:  the session-selected tenant, or the only tenant when
+     *   exactly one exists (fresh-install convenience), or null when unresolvable
      * - Null-tenant, non-superadmin: abort 403 (misconfigured account)
      */
     private function resolveEffectiveTenantId(): ?string
@@ -189,7 +192,22 @@ class GuideController extends Controller
         }
 
         if ($user->hasRole('superadmin')) {
-            return session('admin_selected_tenant_id');
+            $selected = session('admin_selected_tenant_id');
+            if ($selected !== null) {
+                return $selected;
+            }
+
+            // Fresh-install convenience: if exactly one tenant exists in the system,
+            // auto-select it so the Guide is immediately usable after first setup.
+            // With 0 or 2+ tenants, explicit selection is required.
+            $tenants = Tenant::pluck('id');
+            if ($tenants->count() === 1) {
+                $only = $tenants->first();
+                session(['admin_selected_tenant_id' => $only]);
+                return $only;
+            }
+
+            return null;
         }
 
         abort(403);
