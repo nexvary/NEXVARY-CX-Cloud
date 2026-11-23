@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "nexvary-cx"
 include(":app")
+include(":linphone-stub")
