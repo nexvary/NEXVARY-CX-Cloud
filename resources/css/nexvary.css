@@ -51,6 +51,18 @@
   --nx-error:          #ff1744;
   --nx-info:           #40c4ff;
 
+  /* Neon pink — marketing / secondary accent */
+  --nx-pink:           #ff2d78;
+  --nx-pink-light:     #ff6ba8;
+  --nx-pink-muted:     rgba(255,45,120,0.12);
+  --nx-pink-glow:      rgba(255,45,120,0.25);
+  --nx-glow-pink:      0 0 20px rgba(255,45,120,0.3);
+
+  /* Electric blue — information / link accent */
+  --nx-blue:           #0a7fff;
+  --nx-blue-muted:     rgba(10,127,255,0.12);
+  --nx-glow-blue-e:    0 0 20px rgba(10,127,255,0.3);
+
   /* Luminous effects */
   --nx-glow-silver:    0 0 15px rgba(200,208,224,0.12);
   --nx-glow-blue:      0 0 20px rgba(64,196,255,0.2);

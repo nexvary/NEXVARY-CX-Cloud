@@ -11,6 +11,7 @@ use App\Models\Trunk;
 use App\Services\PBX\FreeSwitchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -83,6 +84,19 @@ class DashboardController extends Controller
             }
         }
 
+        $trunks = Trunk::select('id', 'name', 'sip_host', 'enabled')
+            ->limit(10)
+            ->get()
+            ->map(fn ($t) => [
+                'id'      => $t->id,
+                'name'    => $t->name,
+                'host'    => $t->sip_host,
+                'enabled' => (bool) $t->enabled,
+            ])->toArray();
+
+        $dbHealthy    = $this->probeDb();
+        $redisHealthy = $this->probeRedis();
+
         return Inertia::render('Dashboard/Index', [
             'stats' => [
                 'extensions'             => $totalExtensions,
@@ -107,7 +121,23 @@ class DashboardController extends Controller
             'call_volume_chart' => $callVolumeChart,
             'recent_calls'      => $recentCalls,
             'security_alerts'   => 0,
+            'trunks'            => $trunks,
+            'services'          => [
+                'freeswitch' => $pbxStatus['connected'] ?? false,
+                'database'   => $dbHealthy,
+                'redis'      => $redisHealthy,
+            ],
         ]);
+    }
+
+    private function probeDb(): bool
+    {
+        try { return (int) DB::scalar('select 1') === 1; } catch (\Throwable) { return false; }
+    }
+
+    private function probeRedis(): bool
+    {
+        try { return (string) Redis::connection()->ping() === 'PONG'; } catch (\Throwable) { return false; }
     }
 
     public function metrics(): JsonResponse

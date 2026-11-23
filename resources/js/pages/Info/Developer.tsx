@@ -46,23 +46,31 @@ const DeveloperPage: React.FC = () => (
     </div>
 
     <div className="p-6 space-y-6 nx-animate-in">
-      {/* Developer card */}
+      {/* Developer card — Corporate Seal + Company Info */}
       <div className="nx-card p-8">
-        <div className="flex items-start gap-6">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center text-black text-3xl font-black shrink-0"
-            style={{ background: 'var(--nx-green)', boxShadow: 'var(--nx-glow-green)' }}
-          >
-            N
+        <div className="flex items-start gap-6 flex-wrap">
+          {/* Corporate Seal */}
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <img
+              src="/images/seal.webp"
+              alt="NEXVARY Inc. Corporate Seal"
+              className="w-32 h-32 rounded-full object-cover"
+              style={{ boxShadow: '0 0 30px rgba(200,165,80,0.4), 0 0 60px rgba(200,165,80,0.15)' }}
+            />
+            <span className="text-xs" style={{ color: 'var(--nx-silver-dim)' }}>NEXVARY INC.</span>
           </div>
-          <div className="flex-1">
+
+          <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold text-nx-primary">Nexvary Inc.</h2>
-            <p className="text-nx-secondary mt-1">
+            <p className="text-xs uppercase tracking-widest mt-0.5 mb-3" style={{ color: 'var(--nx-silver-dim)' }}>
+              Wyoming Corporation · United States of America
+            </p>
+            <p className="text-nx-secondary leading-relaxed">
               Nexvary develops open-source cloud communications infrastructure for
               telephony operators, contact centers, and enterprises. NEXVARY CX Cloud
               is the company's flagship self-hosted PBX and CX platform.
             </p>
-            <div className="flex flex-wrap gap-3 mt-4">
+            <div className="flex flex-wrap gap-3 mt-5">
               {links.map(link => (
                 <a
                   key={link.href}

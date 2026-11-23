@@ -190,7 +190,22 @@
     "no_calls_today": "No calls today",
     "no_recent_calls": "No recent calls",
     "security_alerts": "security alerts",
-    "last_updated": "Last updated"
+    "last_updated": "Last updated",
+    "platform_title": "Integrated Communications Platform",
+    "sip_gateways": "SIP Gateways",
+    "add_gateway": "+ Add Gateway",
+    "service_monitoring": "Service Monitoring",
+    "inbound_numbers": "Inbound Numbers",
+    "outbound_routes_link": "Outbound Routes",
+    "not_configured": "Not Configured",
+    "hub_call_center_desc": "Agents · Queues · Wallboard",
+    "hub_telephony_desc": "Extensions · Numbers · Routes",
+    "hub_messages_desc": "SMS · Fax · Email",
+    "hub_crm_desc": "Contacts · Tickets",
+    "hub_billing_desc": "Pricing · Usage · Invoices",
+    "hub_collaboration_desc": "Conferences · WebRTC",
+    "hub_voice_ai_desc": "Voice Assistant",
+    "hub_system_desc": "Server · Permissions · Backups"
   },
   "auth": {
     "login": "Sign In",

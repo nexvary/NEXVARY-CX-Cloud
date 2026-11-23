@@ -9,8 +9,16 @@ export default function Login() {
         <Head title={t('auth.login')} />
         <div className="nx-card nx-setup-card mx-auto grid w-full max-w-md gap-5 p-5 sm:p-8">
             <div className="flex items-center gap-3">
-                <span className="nx-brand-mark" aria-hidden="true">N</span>
-                <span className="font-bold tracking-wide" dir="ltr">NEXVARY CX Cloud</span>
+                <img
+                    src="/images/seal.webp"
+                    alt="NEXVARY Inc."
+                    className="w-11 h-11 rounded-full object-cover shrink-0"
+                    style={{ boxShadow: '0 0 14px rgba(200,165,80,0.5)' }}
+                />
+                <div>
+                    <div className="font-bold tracking-wide leading-tight" dir="ltr">NEXVARY CX Cloud</div>
+                    <div className="text-xs" style={{ color: 'var(--nx-silver-dim)' }} dir="ltr">nexvary.com</div>
+                </div>
             </div>
             <h1 className="text-2xl font-semibold">{t('auth.login')}</h1>
             <form className="grid gap-4" onSubmit={event => {

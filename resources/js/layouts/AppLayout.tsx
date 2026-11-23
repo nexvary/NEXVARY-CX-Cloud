@@ -289,12 +289,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-black text-xs font-black"
-              style={{ background: 'var(--nx-green)', boxShadow: 'var(--nx-glow-green)' }}
-            >
-              N
-            </div>
+            <img
+              src="/images/seal.webp"
+              alt="NEXVARY Inc."
+              className="w-8 h-8 rounded-full object-cover shrink-0"
+              style={{ boxShadow: '0 0 10px rgba(200,165,80,0.4)' }}
+            />
             <span className="font-semibold text-sm tracking-wide" style={{ color: 'var(--nx-silver)' }}>
               NEXVARY <span style={{ color: 'var(--nx-green)' }}>CX</span>
             </span>
@@ -401,7 +401,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
         {/* Version + Logout */}
         <div className="px-4 pb-4 mt-4 border-t border-nx pt-4">
-          <div className="text-xs text-nx-muted mb-3">NEXVARY CX Cloud v1.0</div>
+          <div className="text-xs text-nx-muted mb-3 flex items-center gap-2">
+            <img src="/images/seal.webp" alt="" aria-hidden="true" className="w-5 h-5 rounded-full object-cover opacity-60" />
+            NEXVARY CX Cloud v1.0
+          </div>
           <Link
             href="/logout"
             method="post"
