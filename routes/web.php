@@ -177,12 +177,15 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::post('/devices/pair', [\App\Http\Controllers\API\MobileController::class, 'generatePairingToken'])
              ->name('devices.pair');
 
-        // MFA setup
-        Route::get('/mfa/enroll',                    [MfaSetupController::class, 'showEnroll'])->name('settings.mfa.enroll');
-        Route::post('/mfa/enroll',                   [MfaSetupController::class, 'enable'])->name('settings.mfa.enable');
-        Route::get('/mfa/recovery',                  [MfaSetupController::class, 'showRecoveryCodes'])->name('settings.mfa.recovery');
-        Route::post('/mfa/recovery/regenerate',      [MfaSetupController::class, 'regenerateCodes'])->name('settings.mfa.regenerate');
-        Route::post('/mfa/disable',                  [MfaSetupController::class, 'disable'])->name('settings.mfa.disable');
+    });
+
+    // ── MFA Self-Service (any authenticated user, not admin-only) ─────────
+    Route::prefix('settings/mfa')->name('settings.mfa.')->group(function () {
+        Route::get('/enroll',               [MfaSetupController::class, 'showEnroll'])->name('enroll');
+        Route::post('/enroll',              [MfaSetupController::class, 'enable'])->name('enable');
+        Route::get('/recovery',             [MfaSetupController::class, 'showRecoveryCodes'])->name('recovery');
+        Route::post('/recovery/regenerate', [MfaSetupController::class, 'regenerateCodes'])->name('regenerate');
+        Route::post('/disable',             [MfaSetupController::class, 'disable'])->name('disable');
     });
 
     // ── Info Pages ────────────────────────────────────────────────────────

@@ -123,7 +123,11 @@ it('a user without MFA proceeds directly to dashboard after login', function () 
 });
 
 it('/mfa is not accessible without an mfa_pending session flag', function () {
-    $this->get('/mfa')->assertNotFound();
+    // The /mfa route has auth middleware, so unauthenticated requests redirect to
+    // login. This test verifies the mfa_pending guard: an authenticated user who
+    // navigated directly to /mfa without going through the MFA login flow gets 404.
+    $user = User::factory()->create(['mfa_enabled' => false]);
+    $this->actingAs($user)->get('/mfa')->assertNotFound();
 });
 
 // ── Disable ───────────────────────────────────────────────────────────────────

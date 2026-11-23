@@ -55,11 +55,9 @@ class PasswordResetController extends Controller
             function ($user, string $password) {
                 $user->forceFill([
                     'password'       => Hash::make($password),
+                    // Regenerate remember_token to invalidate all remember-me cookies.
                     'remember_token' => Str::random(60),
                 ])->save();
-
-                // Invalidate all existing web sessions
-                $user->tokens()->where('name', 'not like', 'device-%')->delete();
 
                 event(new PasswordReset($user));
             }
