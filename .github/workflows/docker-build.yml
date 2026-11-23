@@ -1,8 +1,10 @@
-name: Docker — Build & Publish FreeSWITCH Image
+name: "Docker - Build and Publish FreeSWITCH Image"
 
 on:
   push:
-    branches: [feature/stage-1-foundation, main]
+    branches:
+      - feature/stage-1-foundation
+      - main
     paths:
       - 'docker/freeswitch/**'
       - '.github/workflows/docker-build.yml'
@@ -13,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       force_push:
-        description: 'Push to GHCR even on non-default branch (true/false)'
+        description: 'Push to GHCR even on PR (true/false)'
         required: false
         type: string
         default: 'false'
@@ -21,11 +23,11 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: nexvary/nexvary-cx-freeswitch
-  FS_VERSION: 1.10.11
+  FS_VERSION: "1.10.11"
 
 jobs:
   build-freeswitch:
-    name: Build FreeSWITCH ${{ env.FS_VERSION }}
+    name: "Build FreeSWITCH 1.10.11"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -43,11 +45,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: image=moby/buildkit:latest
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request' || github.event.inputs.force_push == 'true'
+        if: ${{ github.event_name != 'pull_request' || github.event.inputs.force_push == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -63,10 +63,6 @@ jobs:
             type=raw,value=${{ env.FS_VERSION }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
-          labels: |
-            org.opencontainers.image.title=NEXVARY CX — FreeSWITCH
-            org.opencontainers.image.description=FreeSWITCH ${{ env.FS_VERSION }} for NEXVARY CX Cloud
-            org.opencontainers.image.version=${{ env.FS_VERSION }}
 
       - name: Build and push FreeSWITCH image
         id: build-push
@@ -82,21 +78,16 @@ jobs:
           build-args: |
             FS_VERSION=${{ env.FS_VERSION }}
 
-      - name: Verify image (pull_request — local build test only)
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "Build succeeded. Image not pushed on PR (build validation only)."
-          echo "To push manually: re-run with push=true or merge to main."
+      - name: Confirm build (PR only - image not pushed)
+        if: ${{ github.event_name == 'pull_request' && github.event.inputs.force_push != 'true' }}
+        run: echo "Build succeeded. Image not pushed on PR."
 
       - name: Verify published image
-        if: github.event_name != 'pull_request'
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.FS_VERSION }}"
           docker pull "$IMAGE"
           docker run --rm "$IMAGE" freeswitch -version | grep -F "${{ env.FS_VERSION }}" \
             || { echo "ERROR: FreeSWITCH version mismatch"; exit 1; }
           echo "Published image verified: $IMAGE"
-
-      - name: Image digest
-        if: github.event_name != 'pull_request'
-        run: echo "Digest — ${{ steps.build-push.outputs.digest }}"
+          echo "Digest: ${{ steps.build-push.outputs.digest }}"
