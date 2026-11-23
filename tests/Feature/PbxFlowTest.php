@@ -259,7 +259,8 @@ it('admin can delete a ring group and its members are removed', function () {
         ->delete("/pbx/ring-groups/{$rg->id}")
         ->assertRedirect('/pbx/ring-groups');
 
-    $this->assertDatabaseMissing('ring_groups', ['id' => $rg->id]);
+    // RingGroup uses SoftDeletes — the row is soft-deleted, not physically removed.
+    $this->assertSoftDeleted('ring_groups', ['id' => $rg->id]);
     expect(\App\Models\RingGroupMember::where('ring_group_id', $rg->id)->count())->toBe(0);
 });
 
@@ -279,8 +280,8 @@ it('call records index returns only own tenant records', function () {
             'caller_id_name'      => 'Alice',
             'destination_number'  => '2001',
             'direction'           => 'inbound',
-            'duration'            => 30,
-            'billsec'             => 25,
+            'duration_seconds'    => 30,
+            'billable_seconds'    => 25,
             'hangup_cause'        => 'NORMAL_CLEARING',
             'started_at'          => now()->toDateTimeString(),
             'answered_at'         => now()->toDateTimeString(),
@@ -296,8 +297,8 @@ it('call records index returns only own tenant records', function () {
             'caller_id_name'      => 'Bob',
             'destination_number'  => '3001',
             'direction'           => 'outbound',
-            'duration'            => 60,
-            'billsec'             => 55,
+            'duration_seconds'    => 60,
+            'billable_seconds'    => 55,
             'hangup_cause'        => 'NORMAL_CLEARING',
             'started_at'          => now()->toDateTimeString(),
             'answered_at'         => now()->toDateTimeString(),
