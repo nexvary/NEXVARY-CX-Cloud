@@ -35,7 +35,7 @@ class CredentialStore @Inject constructor(
     }
 
     private val _credentials = MutableStateFlow(load())
-    val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
 
     private fun load(): SipCredentials? {
         val serverUrl = prefs.getString(KEY_SERVER_URL, null) ?: return null
@@ -45,7 +45,7 @@ class CredentialStore @Inject constructor(
         return SipCredentials(serverUrl, extension, sipPassword, deviceToken)
     }
 
-    fun save(credentials: SipCredentials) {
+    override fun save(credentials: SipCredentials) {
         prefs.edit()
             .putString(KEY_SERVER_URL, credentials.serverUrl)
             .putString(KEY_EXTENSION, credentials.extension)
@@ -55,12 +55,12 @@ class CredentialStore @Inject constructor(
         _credentials.value = credentials
     }
 
-    fun clear() {
+    override fun clear() {
         prefs.edit().clear().apply()
         _credentials.value = null
     }
 
-    fun isConfigured(): Boolean = _credentials.value != null
+    override fun isConfigured(): Boolean = _credentials.value != null
 
     companion object {
         private const val KEY_SERVER_URL = "server_url"
