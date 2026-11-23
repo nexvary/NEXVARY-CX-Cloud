@@ -80,11 +80,11 @@ try {
     await screenshot('reboot-03-dashboard-reload');
 
     // 5. Data created before restart is still present
-    await page.goto(base + '/pbx/extensions');
+    // Extension 1001 "QA Reception" was created via /admin/extensions during the installation scenario
+    await page.goto(base + '/admin/extensions');
     await page.locator('h1').waitFor();
-    // Extension 1001 (QA Reception) was created during the installation scenario
-    await page.locator('text=QA Reception').waitFor();
-    await screenshot('reboot-04-extensions-data-intact');
+    await page.getByText('QA Reception', { exact: true }).waitFor();
+    await screenshot('reboot-04-admin-extensions-data-intact');
 
     // 6. /setup still 404 after a fully authenticated session (not a redirect artifact)
     const setupAfterLogin = (await page.request.get(base + '/setup')).status();
