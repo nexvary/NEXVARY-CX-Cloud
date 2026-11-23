@@ -105,6 +105,7 @@ it('updates a trunk and rewrites the config when a new password is supplied', fu
             'name'         => 'Updated Trunk',
             'auth_mode'    => 'credential',
             'sip_host'     => 'new.example.com',
+            'username'     => 'updateduser',
             'sip_password' => 'new-secret',
         ]);
 
