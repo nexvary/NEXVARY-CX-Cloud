@@ -39,7 +39,9 @@ class TrunkController extends Controller
             'name'              => ['required', 'string', 'unique:trunks,name'],
             'preset_key'        => ['nullable', 'string', 'in:' . implode(',', SipProviderPresets::keys())],
             'auth_mode'         => ['required', 'string', 'in:credential,ip_acl'],
-            'sip_host'          => ['required', 'string', 'max:253'],
+            // SignalWire supplies space_name instead of sip_host — the host is derived below
+            'space_name'        => ['nullable', 'string', 'max:63', 'regex:/^[a-z0-9-]+$/'],
+            'sip_host'          => ['required_without:space_name', 'nullable', 'string', 'max:253'],
             'sip_port'          => ['integer', 'min:1', 'max:65535'],
             'transport'         => ['string', 'in:udp,tcp,tls'],
             'proxy'             => ['nullable', 'string', 'max:253'],
@@ -51,6 +53,12 @@ class TrunkController extends Controller
             'register'          => ['boolean'],
             'preset_version'    => ['nullable', 'string', 'max:20'],
         ]);
+
+        // SignalWire: derive sip_host from space_name
+        if (!empty($validated['space_name'])) {
+            $validated['sip_host'] = $validated['space_name'] . '.sip.signalwire.com';
+        }
+        unset($validated['space_name']);
 
         // New gateways are saved disabled until explicitly activated (security default)
         $validated['enabled'] = false;
@@ -130,7 +138,7 @@ class TrunkController extends Controller
 
     public function health(Trunk $trunk): JsonResponse
     {
-        $status = $this->pbx->api("sofia status gateway nexvary-trunk-{$trunk->id}");
+        $status = $this->pbx->api("sofia status gateway nexvary-{$trunk->id}");
 
         return response()->json(['raw' => $status]);
     }
