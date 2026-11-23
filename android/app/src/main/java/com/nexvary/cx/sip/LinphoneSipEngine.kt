@@ -113,6 +113,10 @@ class LinphoneSipEngine @Inject constructor(
         c.addAccount(account)
         c.setDefaultAccount(account)
 
+        // Enforce SRTP at the core level — calls that cannot negotiate SRTP are rejected
+        c.setMediaEncryption(MediaEncryption.SRTP)
+        c.setMediaEncryptionMandatory(true)
+
         if (c.globalState != GlobalState.On) c.start()
     }
 
