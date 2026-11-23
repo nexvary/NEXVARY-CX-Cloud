@@ -321,34 +321,54 @@ nx_configure_postgresql() {
 
   local db_user='nexvary_cx'
   local db_name='nexvary_cx'
+  local creds_file='/etc/nexvary/database.conf'
+  local db_pass=''
 
-  # Generate a strong password
-  local db_pass; db_pass="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
-
-  # Create user and database if they don't exist
   if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${db_user}'" | grep -q 1; then
+    # ── Fresh install: generate a new password, create role and database ─────
+    # db_pass is intentionally empty here and only set after the check so the
+    # random value is never generated for a path that does not use it.
+    db_pass="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
     sudo -u postgres psql -c "CREATE USER ${db_user} WITH PASSWORD '${db_pass}';"
     sudo -u postgres psql -c "CREATE DATABASE ${db_name} OWNER ${db_user} ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' TEMPLATE template0;"
     nx_ok "PostgreSQL user '$db_user' and database '$db_name' created"
   else
-    # Read the stored plaintext password from the secrets file.
+    # ── Existing role: recover or rotate credentials ──────────────────────────
+    # db_pass starts empty.  Generating a random value here (before checking
+    # the credentials file) was the original bug: if the file was missing,
+    # db_pass was non-empty so the [[ -z ]] guard never triggered and
+    # ALTER USER was never called, writing an unrecognized password to .env.
+
     # Never read pg_shadow.passwd — it stores an opaque hash verifier (md5 or
-    # scram-sha-256), not the original plaintext; writing that hash to
-    # DB_PASSWORD would break Laravel authentication.
-    local creds_file='/etc/nexvary/database.conf'
+    # scram-sha-256), not plaintext; writing that hash to DB_PASSWORD breaks
+    # Laravel authentication.
     if [[ -f "$creds_file" ]]; then
-      db_pass="$(grep '^DB_PASSWORD=' "$creds_file" 2>/dev/null | cut -d'=' -f2- | tr -d '[:space:]' || echo '')"
+      db_pass="$(grep '^DB_PASSWORD=' "$creds_file" 2>/dev/null \
+        | cut -d'=' -f2- | tr -d '[:space:]' || echo '')"
     fi
+
+    # Validate the recovered password actually authenticates before trusting it.
+    # A stale or corrupt credentials file must trigger rotation, not a silent
+    # write of a password that does not match what PostgreSQL holds.
+    if [[ -n "$db_pass" ]]; then
+      if ! PGPASSWORD="$db_pass" psql -h 127.0.0.1 -U "${db_user}" -d "${db_name}" -c '\q' 2>/dev/null; then
+        nx_warn "Stored credentials in ${creds_file} failed authentication — rotating password"
+        db_pass=''
+      fi
+    fi
+
     if [[ -z "$db_pass" ]]; then
-      # No stored password — generate a fresh one and update PostgreSQL.
+      # Credentials unavailable or invalid.  Rotate the password on the
+      # existing role; the database and its data are preserved.
       db_pass="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)"
       sudo -u postgres psql -c "ALTER USER ${db_user} WITH PASSWORD '${db_pass}';"
-      nx_info "New PostgreSQL password generated"
+      nx_info "PostgreSQL password rotated for existing role '${db_user}'"
     fi
+
     nx_ok "PostgreSQL database '$db_name' already exists"
   fi
 
-  # Update .env with database password
+  # Update .env with the confirmed credentials.
   local env_file="${NX_APP_DIR}/.env"
   if [[ -f "$env_file" ]]; then
     sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${db_pass}|" "$env_file"
@@ -356,14 +376,13 @@ nx_configure_postgresql() {
     sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${db_name}|" "$env_file"
   fi
 
-  # Save credentials
-  local creds_file='/etc/nexvary/database.conf'
+  # Persist credentials.
   printf 'DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_DATABASE=%s\nDB_USERNAME=%s\nDB_PASSWORD=%s\n' \
     "$db_name" "$db_user" "$db_pass" > "$creds_file"
   chmod 640 "$creds_file"
   chown "root:${NX_APP_USER}" "$creds_file" 2>/dev/null || true
 
-  # Prove the credentials work before proceeding — catches any mismatch early.
+  # Final authentication proof — catches any mismatch before the caller proceeds.
   if ! PGPASSWORD="${db_pass}" psql -h 127.0.0.1 -U "${db_user}" -d "${db_name}" -c '\q' 2>/dev/null; then
     nx_fatal "PostgreSQL authentication test failed for user '${db_user}' — check /etc/nexvary/database.conf"
   fi

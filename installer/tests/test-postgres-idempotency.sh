@@ -109,8 +109,7 @@ nx_configure_postgresql
 
 pass2="$(_read_stored_pass)"
 [[ "$pass1" == "$pass2" ]] \
-  || { printf '[FAIL] Password changed between run 1 (%s...) and run 2 (%s...)\n' \
-       "${pass1:0:6}" "${pass2:0:6}" >&2; exit 1; }
+  || { printf '[FAIL] Password changed between run 1 and run 2\n' >&2; exit 1; }
 printf '[OK] Password unchanged (truly idempotent)\n'
 
 PGPASSWORD="$pass2" psql -h 127.0.0.1 -U nexvary_cx -d nexvary_cx -c '\q' \
@@ -130,8 +129,7 @@ printf '\n[TEST 3] .env / database.conf consistency\n'
 env_pass="$(grep '^DB_PASSWORD=' /var/www/nexvary-cx/.env 2>/dev/null \
   | cut -d'=' -f2- | tr -d '[:space:]' || echo '')"
 [[ "$env_pass" == "$pass2" ]] \
-  || { printf '[FAIL] .env DB_PASSWORD (%s...) differs from database.conf (%s...)\n' \
-       "${env_pass:0:6}" "${pass2:0:6}" >&2; exit 1; }
+  || { printf '[FAIL] .env DB_PASSWORD differs from database.conf\n' >&2; exit 1; }
 printf '[OK] .env DB_PASSWORD matches database.conf\n'
 
 # ════════════════════════════════════════════════════════════════════════════════
