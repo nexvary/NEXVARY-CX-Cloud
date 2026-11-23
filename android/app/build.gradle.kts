@@ -77,9 +77,8 @@ dependencies {
     // Security
     implementation(libs.androidx.security.crypto)
 
-    // SIP — real linphone-sdk-android AAR must be substituted here for production builds;
-    // the stub module provides compile-time stubs only (no actual SIP over TLS/SRTP)
-    implementation(project(":linphone-stub"))
+    // SIP over TLS + SRTP via Linphone SDK
+    implementation(libs.linphone.sdk)
 
     // QR
     implementation(libs.zxing.core)

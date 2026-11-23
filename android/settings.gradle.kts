@@ -11,10 +11,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://linphone.org/maven_repository/")
+        maven("https://download.linphone.org/releases/android/maven_repository/")
     }
 }
 
 rootProject.name = "nexvary-cx"
 include(":app")
-include(":linphone-stub")
