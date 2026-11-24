@@ -33,8 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     # PostgreSQL (mod_pgsql, mod_cdr_pg)
     libpq-dev libpq5 \
-    # Audio codecs
-    libopus-dev libvpx-dev libspeex-dev libspeexdsp-dev \
+    # Audio codecs and sound file I/O (libsndfile1-dev needed for mod_sndfile)
+    libopus-dev libvpx-dev libspeex-dev libspeexdsp-dev libsndfile1-dev \
     # Command-line editing
     libedit-dev libncurses5-dev \
     # DNS (mod_lcr)

@@ -361,33 +361,40 @@ jobs:
       # ── SIP REGISTER test ─────────────────────────────────────────────────
       # FreeSWITCH's default profile listens on 5060 (host network).
       # Extensions 1001/1002 were written by artisan ci-setup above.
-      # Domain: ci-tenant-a.pbx.test  Password: $CI_SIP_PASSWORD
       #
-      # Note: The heredoc uses an UNQUOTED delimiter so bash expands
-      #   ${CI_SIP_DOMAIN}  →  ci-tenant-a.pbx.test
-      # SIPp keywords [local_ip] [branch] etc. use square brackets; bash
-      # does not expand those (not $-prefixed), so they pass through safely.
-      - name: Test — SIP REGISTER (ext 1001, tenant A)
+      # IMPORTANT — parameterized scenario:
+      #   The REGISTER scenario uses SIPp's [service] keyword for all SIP
+      #   identity fields (From, To, Contact, Digest username). The -s option
+      #   sets [service]. Hardcoding "1001" in the XML would mean that passing
+      #   -s 1002 only changes the Request-URI, not the From/To/Contact/auth,
+      #   resulting in a 403 when FreeSWITCH checks the Digest username against
+      #   the directory entry. The [service] substitution is authoritative.
+      #
+      #   [local_ip], [local_port], [branch], [call_id] etc. are SIPp keywords
+      #   that the tool substitutes at runtime; they are NOT bash variables.
+      #   The heredoc is unquoted so ${CI_SIP_DOMAIN} expands via bash while
+      #   the square-bracket keywords pass through to SIPp unchanged.
+      - name: Test — SIP REGISTER (ext 1001 and 1002, tenant A)
         run: |
           set -euo pipefail
           CI_SIP_DOMAIN="ci-tenant-a.pbx.test"
 
-          # Write scenario file with bash variable expansion for domain
-          # (single-quoted heredoc would NOT expand ${CI_SIP_DOMAIN})
-          cat > /tmp/register_1001.xml <<SIPP_EOF
+          # Write a REUSABLE scenario: all identity fields use [service], which
+          # sipp substitutes with the -s argument. Works for any extension number.
+          cat > /tmp/register_ext.xml <<SIPP_EOF
           <?xml version="1.0" encoding="iso-8859-1" ?>
-          <scenario name="REGISTER ext 1001">
+          <scenario name="REGISTER [service]">
 
-            <!-- Initial unauthenticated REGISTER — expect 401 challenge -->
+            <!-- Initial unauthenticated REGISTER — expect 401 Digest challenge -->
             <send retrans="500">
               <![CDATA[
           REGISTER sip:${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${CI_SIP_DOMAIN}>
+          From: "[service]" <sip:[service]@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${CI_SIP_DOMAIN}>
           Call-ID: [call_id]
           CSeq: 1 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
+          Contact: <sip:[service]@[local_ip]:[local_port]>
           Max-Forwards: 70
           User-Agent: SIPp CI Test
           Expires: 120
@@ -396,22 +403,22 @@ jobs:
               ]]>
             </send>
 
-            <!-- FreeSWITCH issues 401 with WWW-Authenticate Digest challenge -->
+            <!-- FreeSWITCH issues 401 WWW-Authenticate Digest challenge -->
             <recv response="401" auth="true">
             </recv>
 
-            <!-- Re-send REGISTER with computed Digest response -->
-            <!-- [authentication username=1001 password=[ap]] uses -ap value -->
+            <!-- Re-send REGISTER with Digest response computed by [authentication] -->
+            <!-- username=[service] ensures the Digest username matches the To header -->
             <send retrans="500">
               <![CDATA[
           REGISTER sip:${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${CI_SIP_DOMAIN}>
+          From: "[service]" <sip:[service]@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${CI_SIP_DOMAIN}>
           Call-ID: [call_id]
           CSeq: 2 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001 password=[ap]]
+          Contact: <sip:[service]@[local_ip]:[local_port]>
+          [authentication username=[service] password=[ap]]
           Max-Forwards: 70
           User-Agent: SIPp CI Test
           Expires: 120
@@ -420,7 +427,7 @@ jobs:
               ]]>
             </send>
 
-            <!-- 200 OK means registration accepted -->
+            <!-- 200 OK — registration accepted -->
             <recv response="200">
             </recv>
 
@@ -428,25 +435,15 @@ jobs:
           </scenario>
           SIPP_EOF
 
-          # Run sipp against FreeSWITCH's internal SIP profile (host network, port 5060)
-          # -ap: authentication password used by [authentication] macro
-          # -m 1: run exactly one scenario call
-          # -t u1: UDP transport (single socket)
-          # -timeout: abort after N seconds if scenario not complete
+          # Register 1001 (sipp -s 1001 substitutes [service]=1001 everywhere in XML)
           sipp 127.0.0.1:5060 \
-            -sf /tmp/register_1001.xml \
+            -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
-            -m 1 \
-            -t u1 \
-            -timeout 20 \
-            -trace_err \
-            2>&1 | grep -v "\[ap\]" | tee /tmp/sipp_register.log || {
-              echo ""
-              echo "FAIL: SIP REGISTER did not complete"
-              echo "--- sipp output ---"
-              cat /tmp/sipp_register.log
-              echo "--- FreeSWITCH sofia log ---"
+            -m 1 -t u1 -timeout 20 \
+            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_reg_1001.log || {
+              echo "FAIL: SIP REGISTER 1001 did not complete"
+              cat /tmp/sipp_reg_1001.log
               docker compose --env-file deploy/.env exec -T freeswitch \
                 fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
                 -x 'sofia status profile internal' 2>/dev/null || true
@@ -454,17 +451,48 @@ jobs:
             }
           echo "PASS: SIP REGISTER ext 1001@${CI_SIP_DOMAIN} → 200 OK"
 
-          # ESL verification: confirm the registration is live in FreeSWITCH
+          # Register 1002 (-s 1002 substitutes [service]=1002 in all fields)
+          sipp 127.0.0.1:5060 \
+            -sf /tmp/register_ext.xml \
+            -s 1002 \
+            -ap "${CI_SIP_PASS_A}" \
+            -m 1 -t u1 -timeout 20 \
+            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_reg_1002.log || {
+              echo "FAIL: SIP REGISTER 1002 did not complete"
+              cat /tmp/sipp_reg_1002.log
+              exit 1
+            }
+          echo "PASS: SIP REGISTER ext 1002@${CI_SIP_DOMAIN} → 200 OK"
+
+          # ESL verification: confirm BOTH registrations are live simultaneously
           sleep 1
           REG=$(docker compose --env-file deploy/.env exec -T freeswitch \
             fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
             -x 'sofia status profile internal reg' 2>/dev/null | tr -d '\r' || echo '')
+
           echo "$REG" | grep -q '1001' || {
-            echo "FAIL: ESL does not show 1001 as registered:"
-            echo "$REG"
+            echo "FAIL: ESL does not show 1001 as registered"
+            echo "Registration table: ${REG}"
             exit 1
           }
-          echo "PASS: ESL confirms 1001 is registered in internal profile"
+          echo "$REG" | grep -q '1002' || {
+            echo "FAIL: ESL does not show 1002 as registered"
+            echo "Registration table: ${REG}"
+            exit 1
+          }
+          echo "PASS: ESL confirms both 1001 and 1002 are registered in tenant A"
+
+          # Confirm each Contact points to the correct live endpoint
+          # 1001 registered via default sipp port (auto-assigned), 1002 also auto-assigned
+          CONTACT_1001=$(echo "$REG" | grep '1001' | grep -oP 'sip:[^@]+@\S+' | head -1 || echo '')
+          CONTACT_1002=$(echo "$REG" | grep '1002' | grep -oP 'sip:[^@]+@\S+' | head -1 || echo '')
+          echo "Contact for 1001: ${CONTACT_1001}"
+          echo "Contact for 1002: ${CONTACT_1002}"
+          [[ "${CONTACT_1001}" != "${CONTACT_1002}" ]] || {
+            echo "FAIL: 1001 and 1002 share the same Contact — indicates hardcoded extension bug"
+            exit 1
+          }
+          echo "PASS: 1001 and 1002 have distinct registered Contacts"
 
       # ── Negative auth test ────────────────────────────────────────────────
       - name: Test — SIP REGISTER rejected with wrong password
@@ -473,18 +501,24 @@ jobs:
           CI_SIP_DOMAIN="ci-tenant-a.pbx.test"
           WRONG_PASS="definitely-wrong-password-xyz"
 
-          cat > /tmp/register_bad_auth.xml <<SIPP_EOF
+          # Reuse the parameterized /tmp/register_ext.xml scenario (written by the
+          # REGISTER step above). The same [service]=1001 scenario with the wrong
+          # password (-ap WRONG_PASS) must result in 403 from FreeSWITCH.
+          # The register_ext.xml scenario expects 200 OK, so a 403 response will
+          # cause sipp to exit non-zero (unexpected response). We capture this
+          # differently: write a dedicated 403-expecting scenario.
+          cat > /tmp/register_expect_403.xml <<SIPP_EOF
           <?xml version="1.0" encoding="iso-8859-1" ?>
-          <scenario name="REGISTER wrong password - expect 403">
+          <scenario name="REGISTER [service] wrong password — expect 403">
             <send retrans="500">
               <![CDATA[
           REGISTER sip:${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${CI_SIP_DOMAIN}>
+          From: "[service]" <sip:[service]@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${CI_SIP_DOMAIN}>
           Call-ID: [call_id]
           CSeq: 1 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
+          Contact: <sip:[service]@[local_ip]:[local_port]>
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -496,26 +530,26 @@ jobs:
               <![CDATA[
           REGISTER sip:${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${CI_SIP_DOMAIN}>
+          From: "[service]" <sip:[service]@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${CI_SIP_DOMAIN}>
           Call-ID: [call_id]
           CSeq: 2 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001 password=[ap]]
+          Contact: <sip:[service]@[local_ip]:[local_port]>
+          [authentication username=[service] password=[ap]]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
 
               ]]>
             </send>
-            <!-- FreeSWITCH returns 403 Forbidden on bad Digest response -->
+            <!-- FreeSWITCH must return 403 when Digest response is wrong -->
             <recv response="403" />
             <ResponseTimeRepartition value="50, 100, 200, 500" />
           </scenario>
           SIPP_EOF
 
           sipp 127.0.0.1:5060 \
-            -sf /tmp/register_bad_auth.xml \
+            -sf /tmp/register_expect_403.xml \
             -s 1001 \
             -ap "${WRONG_PASS}" \
             -m 1 -t u1 -timeout 20 \
@@ -654,7 +688,7 @@ jobs:
 
           # Step 1: Register 1002 at :5090 (sipp exits after REGISTER success)
           sipp 127.0.0.1:5060 \
-            -sf /tmp/register_1001.xml \
+            -sf /tmp/register_ext.xml \
             -s 1002 \
             -ap "${CI_SIP_PASS_A}" \
             -lp 5090 -m 1 -t u1 -timeout 20 \
@@ -673,7 +707,7 @@ jobs:
 
           # Step 3: Register 1001 at :5091 (sipp exits after REGISTER success)
           sipp 127.0.0.1:5060 \
-            -sf /tmp/register_1001.xml \
+            -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -lp 5091 -m 1 -t u1 -timeout 20 \
@@ -727,7 +761,7 @@ jobs:
 
           # Step 1: Register 1001 at :5091 so FS knows its contact (127.0.0.1:5091)
           sipp 127.0.0.1:5060 \
-            -sf /tmp/register_1001.xml \
+            -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -lp 5091 -m 1 -t u1 -timeout 20 \
@@ -813,24 +847,26 @@ jobs:
           CI_DOMAIN_A="ci-tenant-a.pbx.test"
           CI_DOMAIN_B="ci-tenant-b.pbx.test"
 
-          # Cross-tenant REGISTER scenario: sends correct challenge response but with
-          # the WRONG tenant's password. FreeSWITCH computes Digest using the domain's
-          # own password record and rejects the mismatched response with 403.
+          # Cross-tenant REGISTER scenario: sends a correct Digest response computed
+          # from the WRONG tenant's password. FreeSWITCH computes the expected Digest
+          # using the domain's own stored password and rejects the mismatch with 403.
+          # Uses [service] for all SIP identity fields — same parameterization pattern
+          # as the main REGISTER scenario.
           write_cross_tenant_scenario() {
             local DOMAIN="$1"
             local FILE="$2"
             cat > "${FILE}" <<SIPP_EOF
             <?xml version="1.0" encoding="iso-8859-1" ?>
-            <scenario name="Cross-tenant REGISTER — expect 403">
+            <scenario name="Cross-tenant REGISTER [service] — expect 403">
               <send retrans="500">
                 <![CDATA[
           REGISTER sip:${DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${DOMAIN}>
+          From: "[service]" <sip:[service]@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${DOMAIN}>
           Call-ID: [call_id]
           CSeq: 1 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
+          Contact: <sip:[service]@[local_ip]:[local_port]>
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -842,32 +878,33 @@ jobs:
                 <![CDATA[
           REGISTER sip:${DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "1001" <sip:1001@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:1001@${DOMAIN}>
+          From: "[service]" <sip:[service]@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
+          To: <sip:[service]@${DOMAIN}>
           Call-ID: [call_id]
           CSeq: 2 REGISTER
-          Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001 password=[ap]]
+          Contact: <sip:[service]@[local_ip]:[local_port]>
+          [authentication username=[service] password=[ap]]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
 
                 ]]>
               </send>
-              <!-- Must receive 403: Digest response computed from wrong tenant's password -->
+              <!-- Must receive 403: Digest computed from wrong-tenant password doesn't match -->
               <recv response="403" />
               <ResponseTimeRepartition value="50, 100, 200, 500" />
             </scenario>
           SIPP_EOF
           }
 
-          # Test A: tenant A's password used against tenant B's domain → must get 403
+          # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
+          # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml
           sipp 127.0.0.1:5060 \
             -sf /tmp/cross_tenant_a_in_b.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
-            -lp 5092 -m 1 -t u1 -timeout 20 \
+            -m 1 -t u1 -timeout 20 \
             2>&1 | grep -v '\[ap\]' | tee /tmp/cross_a_in_b.log \
             || {
               echo "FAIL: Tenant A credential in tenant B domain was NOT rejected (expected 403)"
@@ -879,13 +916,14 @@ jobs:
             }
           echo "PASS: Tenant A password rejected for 1001@tenant-b domain → 403 (credential isolation)"
 
-          # Test B: tenant B's password used against tenant A's domain → must get 403
+          # Test B: tenant B's password (-ap CI_SIP_PASS_B) used against tenant A's domain
+          # Sipp sends REGISTER for 1001@tenant-a.pbx.test with tenant B's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml
           sipp 127.0.0.1:5060 \
             -sf /tmp/cross_tenant_b_in_a.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_B}" \
-            -lp 5093 -m 1 -t u1 -timeout 20 \
+            -m 1 -t u1 -timeout 20 \
             2>&1 | grep -v '\[ap\]' | tee /tmp/cross_b_in_a.log \
             || {
               echo "FAIL: Tenant B credential in tenant A domain was NOT rejected (expected 403)"
