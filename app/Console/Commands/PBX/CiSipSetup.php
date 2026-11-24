@@ -23,7 +23,8 @@ use Illuminate\Support\Str;
 class CiSipSetup extends Command
 {
     protected $signature = 'nexvary:pbx:ci-setup
-                            {--password= : SIP password to assign (default: random)}
+                            {--password-a= : SIP password for tenant A extensions (default: random)}
+                            {--password-b= : SIP password for tenant B extensions (default: random)}
                             {--domain-a=ci-tenant-a.pbx.test : SIP domain for tenant A}
                             {--domain-b=ci-tenant-b.pbx.test : SIP domain for tenant B}
                             {--reload : Reload FreeSWITCH dialplan after setup}';
@@ -44,16 +45,17 @@ class CiSipSetup extends Command
             return self::FAILURE;
         }
 
-        $password  = $this->option('password') ?: Str::random(20);
+        $passwordA = $this->option('password-a') ?: Str::random(20);
+        $passwordB = $this->option('password-b') ?: Str::random(20);
         $domainA   = $this->option('domain-a');
         $domainB   = $this->option('domain-b');
 
         $this->info("Setting up CI SIP tenants...");
 
-        DB::transaction(function () use ($password, $domainA, $domainB) {
+        DB::transaction(function () use ($passwordA, $passwordB, $domainA, $domainB) {
             foreach ([
-                ['domain' => $domainA, 'slug' => 'ci-tenant-a', 'exts' => ['1001', '1002']],
-                ['domain' => $domainB, 'slug' => 'ci-tenant-b', 'exts' => ['1001', '1002']],
+                ['domain' => $domainA, 'slug' => 'ci-tenant-a', 'exts' => ['1001', '1002'], 'password' => $passwordA],
+                ['domain' => $domainB, 'slug' => 'ci-tenant-b', 'exts' => ['1001', '1002'], 'password' => $passwordB],
             ] as $cfg) {
                 $tenant = Tenant::withoutGlobalScopes()
                     ->where('slug', $cfg['slug'])->first();
@@ -99,14 +101,14 @@ class CiSipSetup extends Command
                             'tenant_id'    => $tenant->id,
                             'number'       => $extNum,
                             'description'  => "CI ext {$extNum} in {$cfg['domain']}",
-                            'sip_password' => hash('sha256', $password),
+                            'sip_password' => hash('sha256', $cfg['password']),
                             'voicemail_pin'=> 1234,
                             'call_timeout' => 30,
                             'enabled'      => true,
                         ]);
                     }
 
-                    $this->config->writeExtensionConfig($ext, $password, $cfg['domain']);
+                    $this->config->writeExtensionConfig($ext, $cfg['password'], $cfg['domain']);
                     $this->line("  Wrote extension {$extNum}@{$cfg['domain']}");
                 }
             }
@@ -119,14 +121,13 @@ class CiSipSetup extends Command
             $this->fs->api('reloadxml');
         }
 
-        // Output machine-readable credentials for CI scripts
+        // Output domain names only — passwords are NOT echoed here (caller passes them in).
+        // Credentials must be masked at the CI layer before this command is invoked.
         $this->line('');
         $this->line('CI_SIP_DOMAIN_A=' . $domainA);
         $this->line('CI_SIP_DOMAIN_B=' . $domainB);
-        $this->line('CI_SIP_EXT_1001_PASS=' . $password);
-        $this->line('CI_SIP_EXT_1002_PASS=' . $password);
         $this->line('');
-        $this->info('Done. Test extensions: 1001, 1002 in each tenant.');
+        $this->info('Done. Test extensions: 1001, 1002 in each tenant (separate passwords per tenant).');
 
         return self::SUCCESS;
     }
