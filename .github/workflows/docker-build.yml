@@ -29,7 +29,9 @@ jobs:
   build-freeswitch:
     name: "Build FreeSWITCH 1.10.11"
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # spandsp3 + sofia-sip + FreeSWITCH from source takes ~50-60 min on a cold runner.
+    # 90 min to allow for GHA queue delay + full compile without false timeouts.
+    timeout-minutes: 90
 
     permissions:
       contents: read

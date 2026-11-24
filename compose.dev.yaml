@@ -1,0 +1,23 @@
+# compose.dev.yaml — Development and CI override for FreeSWITCH.
+#
+# Adds a build: section to the freeswitch service so it can be built locally.
+# Used for development and for CI integration tests that run before the GHCR
+# image is published (e.g. PR builds, first run on a new branch).
+#
+# Usage:
+#   Build only:
+#     docker compose -f compose.yaml -f compose.dev.yaml build freeswitch
+#   Full stack with local FS build:
+#     docker compose -f compose.yaml -f compose.dev.yaml up --build
+#
+# Production deployment ALWAYS uses the pre-built GHCR image via compose.yaml only.
+# This file must NEVER be used on the customer server.
+
+services:
+  freeswitch:
+    build:
+      context: docker/freeswitch
+      dockerfile: Dockerfile
+      args:
+        FS_VERSION: "${FS_VERSION:-1.10.11}"
+    image: ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION:-1.10.11}

@@ -50,9 +50,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     yasm nasm \
     && rm -rf /var/lib/apt/lists/*
 
-# Install spandsp3 from the builder stage
-COPY --from=spandsp-builder /usr/local/include/spandsp* /usr/local/include/
-COPY --from=spandsp-builder /usr/local/lib/libspandsp*  /usr/local/lib/
+# Install spandsp3 from the spandsp-builder stage.
+# IMPORTANT: the glob `spandsp*` only copies the top-level spandsp.h — it does NOT
+# recurse into the spandsp/ subdirectory that contains telephony.h, t38_core.h, etc.
+# Use two explicit COPY directives: one for the header file, one for the directory.
+COPY --from=spandsp-builder /usr/local/include/spandsp.h    /usr/local/include/
+COPY --from=spandsp-builder /usr/local/include/spandsp/     /usr/local/include/spandsp/
+COPY --from=spandsp-builder /usr/local/lib/libspandsp*       /usr/local/lib/
 COPY --from=spandsp-builder /usr/local/lib/pkgconfig/spandsp.pc /usr/local/lib/pkgconfig/
 RUN ldconfig
 
