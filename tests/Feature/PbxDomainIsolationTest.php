@@ -564,30 +564,28 @@ it('SEC: invalid dial pattern is rejected on create', function () {
     ])->assertSessionHasErrors('dial_pattern');
 });
 
-it('SEC: DID number uniqueness is scoped to tenant, not global', function () {
+it('SEC: DID number is globally unique across tenants', function () {
+    // A public telephone number must never be assigned to two tenants.
+    // The DB has a global unique constraint (dids_number_unique); the controller
+    // must validate before hitting it, returning a 422 with errors on 'number'.
     [$tenantA, $userA] = makeIsolatedTenant('a.did.sec.test');
     [$tenantB, $userB] = makeIsolatedTenant('b.did.sec.test');
     [$pbxA, $configA]  = mockExtServices();
 
-    // enabled:false → deleteInboundRoute (removes any stale config)
     $configA->shouldReceive('deleteInboundRoute')->once();
     $pbxA->shouldReceive('reloadDialplan')->once()->andReturn(true);
 
-    // Tenant A creates DID
     $this->actingAs($userA)->post('/pbx/dids', [
         'number'  => '+12125550000',
         'enabled' => false,
     ])->assertRedirect('/pbx/dids');
 
     [$pbxB, $configB] = mockExtServices();
-    $configB->shouldReceive('deleteInboundRoute')->once();
-    $pbxB->shouldReceive('reloadDialplan')->once()->andReturn(true);
-
-    // Tenant B can create the same DID number — different tenant
+    // Tenant B must NOT be allowed to claim the same number
     $this->actingAs($userB)->post('/pbx/dids', [
         'number'  => '+12125550000',
         'enabled' => false,
-    ])->assertRedirect('/pbx/dids');
+    ])->assertSessionHasErrors('number');
 });
 
 it('SEC: extension without tenant uses no-tenant domain, not shared default', function () {

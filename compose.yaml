@@ -35,7 +35,8 @@ x-app-common: &app-common
     # FreeSWITCH config volume shared with the freeswitch service.
     # FusionPbxConfigService writes per-tenant extension/dialplan/gateway
     # XML files here; FreeSWITCH reads them on reload.
-    # The freeswitch entrypoint sets o+w on the writable subdirectories.
+    # Directories are mode 2770 root:nexvary-pbx (GID 2000); the app user
+    # (uid 1001) is a member of nexvary-pbx so it can write without o+w.
     - fs_conf:/etc/freeswitch
   networks:
     - nexvary-net
@@ -59,6 +60,10 @@ services:
       - app_cache:/var/www/nexvary-cx/bootstrap/cache
       # Populate the shared public assets volume; nginx reads from it
       - app_public:/var/www/nexvary-cx-public
+      # YAML merge (<<:) does not merge sequence values — the anchor's volumes:
+      # list is completely replaced by the service's own list, so fs_conf must
+      # be declared here explicitly or FusionPbxConfigService cannot write configs.
+      - fs_conf:/etc/freeswitch
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
       interval: 20s

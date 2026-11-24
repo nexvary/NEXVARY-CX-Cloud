@@ -43,17 +43,15 @@ cat > "${FS_CONF}/vars.xml" <<VARS
 </include>
 VARS
 
-# ── Allow the app container (www-data) to write tenant-specific configs ───────
-# The app service mounts this same fs_conf volume and writes per-tenant
-# extension, dialplan and gateway files into these subdirectories.
-# FreeSWITCH reads all files in these directories; the app creates new ones.
-# chmod o+w on the directories (not files) allows writes by any container user.
-for _dir in \
-    "${FS_CONF}/directory" \
-    "${FS_CONF}/dialplan" \
-    "${FS_CONF}/sip_profiles/external"; do
-  mkdir -p "${_dir}"
-  find "${_dir}" -type d -exec chmod o+w {} \;
+# ── Secure group-based access for tenant config directories ──────────────────
+# The app container (uid 1001, member of nexvary-pbx GID 2000) writes per-tenant
+# extension, dialplan and gateway files. FreeSWITCH (root) reads them.
+# Mode 2770 (setgid): owner=root, group=nexvary-pbx, other=none.
+# Setgid ensures new files inherit the group so app-written files are readable.
+for _dir in directory dialplan sip_profiles/external; do
+  mkdir -p "${FS_CONF}/${_dir}"
+  chown -R root:nexvary-pbx "${FS_CONF}/${_dir}"
+  find "${FS_CONF}/${_dir}" -type d -exec chmod 2770 {} \;
 done
 
 # ── Ensure required directories exist ─────────────────────────────────────────

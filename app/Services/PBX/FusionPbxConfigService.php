@@ -434,9 +434,10 @@ XML;
     private function ensureDir(string $dir): void
     {
         if (!File::isDirectory($dir)) {
-            // 0777: the FreeSWITCH container (root) and app container (www-data)
-            // share the fs_conf volume; each creates subdirs the other must traverse.
-            File::makeDirectory($dir, 0777, true);
+            // 0770: group nexvary-pbx (GID 2000) shared between the app user (uid 1001)
+            // and the FreeSWITCH container (root). Setgid on the parent directory
+            // (set by docker-entrypoint.sh) propagates the group to new subdirs.
+            File::makeDirectory($dir, 0770, true);
         }
     }
 

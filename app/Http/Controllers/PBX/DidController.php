@@ -36,10 +36,10 @@ class DidController extends Controller
         $tenantId = $request->user()->tenant_id;
 
         $validated = $request->validate([
-            // DID numbers are unique per tenant, not globally
-            'number'           => ['required', 'string',
-                Rule::unique('dids', 'number')->where('tenant_id', $tenantId),
-            ],
+            // DID numbers are globally unique — a public telephone number must not
+            // be assigned to two tenants. The DB has a global unique constraint on
+            // dids.number; this validation gives a friendly 422 before it trips.
+            'number'           => ['required', 'string', 'unique:dids,number'],
             'description'      => ['nullable', 'string'],
             // Trunk must belong to the same tenant
             'trunk_id'         => ['nullable', 'uuid',
@@ -73,7 +73,7 @@ class DidController extends Controller
 
         $did->update($request->validate([
             'number'           => ['required', 'string',
-                Rule::unique('dids', 'number')->where('tenant_id', $tenantId)->ignore($did->id),
+                Rule::unique('dids', 'number')->ignore($did->id),
             ],
             'description'      => ['nullable', 'string'],
             'trunk_id'         => ['nullable', 'uuid',

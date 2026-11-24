@@ -61,7 +61,12 @@ COPY --from=composer-deps /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 COPY docker/app/conf/php.ini /usr/local/etc/php/conf.d/nexvary.ini
 COPY docker/app/conf/php-fpm.conf /usr/local/etc/php-fpm.d/nexvary-cx.conf
 
-RUN useradd --system --uid 1001 --no-create-home --shell /sbin/nologin nexvary
+RUN useradd --system --uid 1001 --no-create-home --shell /sbin/nologin nexvary \
+    # Shared GID 2000 (nexvary-pbx) must match docker/freeswitch/Dockerfile.
+    # Membership lets the nexvary user write to directories the FS container
+    # sets to mode 2770 root:nexvary-pbx — no world-writable dirs needed.
+    && groupadd -g 2000 nexvary-pbx \
+    && usermod -aG nexvary-pbx nexvary
 
 WORKDIR /var/www/nexvary-cx
 

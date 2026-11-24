@@ -125,6 +125,10 @@ COPY --from=builder /usr/local/etc/freeswitch    /usr/share/nexvary/freeswitch-d
 # Our configuration overrides (applied on top of the defaults)
 COPY conf/ /usr/share/nexvary/freeswitch-overrides/
 
+# Shared group for config dir access: app container (uid 1001 nexvary) writes,
+# FreeSWITCH (uid 0) owns. GID 2000 must match docker/app/Dockerfile.
+RUN groupadd -g 2000 nexvary-pbx
+
 # Runtime directories
 RUN mkdir -p \
         /etc/freeswitch \
