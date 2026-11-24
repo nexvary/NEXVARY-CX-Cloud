@@ -79,6 +79,11 @@ WORKDIR /usr/src/freeswitch
 
 COPY modules.conf /usr/src/freeswitch/modules.conf
 
+# automake 1.16.x (Debian bookworm) generates a malformed rebuild rule at
+# Makefile:730 when src/mod/Makefile.am has "-include modules.inc" and the
+# file does not yet exist. Creating it empty here prevents that bad rule.
+RUN touch /usr/src/freeswitch/src/mod/modules.inc
+
 RUN ./bootstrap.sh -j \
     && ./configure \
         --prefix=/usr/local \
