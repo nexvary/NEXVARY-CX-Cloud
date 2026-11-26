@@ -94,3 +94,18 @@ matching live Nexvary status, and a second successful call with Nexvary stopped.
 - [Composer audit](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45835853313/job/139964387189)
   failed independently of the Docker workflow. Resolve the audit findings and
   rerun the gate before release.
+
+## External calling comparison
+
+| Capability | FusionPBX | Nexvary in FusionPBX mode |
+| --- | --- | --- |
+| SIP gateways | Accounts → Gateways manages provider and registration settings | Settings → Integrations points administrators to FusionPBX. The legacy trunk editor is blocked. |
+| Outbound calls | Dialplan → Outbound Routes chooses a gateway and dialing rules | Independent test gateway and outbound route still require live acceptance. |
+| Inbound calls | Dialplan → Destinations maps a DID to an extension, IVR or another destination | Independent test DID and inbound route still require live acceptance. |
+| Extensions and registration | Accounts → Extensions and Status → Registrations | Android pairs with the Nexvary API. SIP setup and real registration still require verification. |
+| IVR, queues, ring groups, voicemail | Managed by FusionPBX | Existing local Nexvary editors are blocked in FusionPBX mode. End-to-end workflows remain to be verified. |
+
+Set the optional `FUSIONPBX_ADMIN_URL` to a trusted HTTPS administration URL
+reachable by the operator. The URL is shared only on the administrator's
+Integrations page. Keep FusionPBX administration restricted to authorized
+operators and retain the existing private ESL deployment.

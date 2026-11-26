@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Server;
 use App\Http\Controllers\Controller;
 use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\PbxMode;
+use App\Services\Telnyx\TelnyxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,6 +38,21 @@ class ServerController extends Controller
             'fusionPbx' => $fusionPbx,
             'pbx'     => $pbxStatus,
             'metrics' => $metrics,
+        ]);
+    }
+
+    public function integrations(): Response
+    {
+        $fusionPbx = PbxMode::fusionPbx();
+        $url = filter_var(config('nexvary.freeswitch.fusionpbx_admin_url'), FILTER_VALIDATE_URL);
+        $parts = $url ? parse_url($url) : [];
+
+        return Inertia::render('Settings/Integrations', [
+            'telnyx_configured' => TelnyxService::configured(),
+            'fusionPbx' => $fusionPbx,
+            'fusionPbxAdminUrl' => $fusionPbx && ($parts['scheme'] ?? null) === 'https'
+                && !isset($parts['user']) && !isset($parts['query']) && !isset($parts['fragment'])
+                ? $url : null,
         ]);
     }
 

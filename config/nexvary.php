@@ -9,6 +9,7 @@ return [
     // ── FreeSWITCH ────────────────────────────────────────────────────────
     'freeswitch' => [
         'fusionpbx'    => env('FREESWITCH_FUSIONPBX', false),
+        'fusionpbx_admin_url' => env('FUSIONPBX_ADMIN_URL'),
         'host'         => env('FREESWITCH_HOST', '127.0.0.1'),
         'esl_port'     => (int) env('FREESWITCH_ESL_PORT', 8021),
         'esl_password' => env('FREESWITCH_ESL_PASSWORD', 'ClueCon'),

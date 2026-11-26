@@ -147,3 +147,16 @@ it('lets paired devices check server status without touching ESL in FusionPBX mo
         ->assertJsonPath('pbx.active_calls', 0)
         ->assertJsonPath('pbx.registrations', 0);
 });
+
+it('shows FusionPBX integration navigation only to administrators with a safe admin URL', function () {
+    config(['nexvary.freeswitch.fusionpbx_admin_url' => 'https://pbx.example.test']);
+    $this->actingAs(User::factory()->create())->get('/settings/integrations')->assertForbidden();
+    $this->actingAs(fusionPbxAdministrator())->get('/settings/integrations')
+        ->assertInertia(fn ($page) => $page->component('Settings/Integrations')
+            ->where('fusionPbx', true)->where('fusionPbxAdminUrl', 'https://pbx.example.test'));
+    config(['nexvary.freeswitch.fusionpbx_admin_url' => 'https://user:password@pbx.example.test']);
+    $this->get('/settings/integrations')->assertInertia(fn ($page) => $page->where('fusionPbxAdminUrl', null));
+    config(['nexvary.freeswitch.fusionpbx' => false]);
+    $this->get('/settings/integrations')->assertInertia(fn ($page) => $page
+        ->where('fusionPbx', false)->where('fusionPbxAdminUrl', null));
+});

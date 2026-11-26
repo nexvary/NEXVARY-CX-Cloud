@@ -3,9 +3,13 @@ import { Head } from '@inertiajs/react';
 import { Package, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
-interface Props { telnyx_configured: boolean }
+interface Props {
+  telnyx_configured: boolean;
+  fusionPbx: boolean;
+  fusionPbxAdminUrl: string | null;
+}
 
-const IntegrationsSettings: React.FC<Props> = ({ telnyx_configured }) => (
+const IntegrationsSettings: React.FC<Props> = ({ telnyx_configured, fusionPbx, fusionPbxAdminUrl }) => (
   <AppLayout title="Integrations">
     <Head title="Integrations" />
     <div className="p-6 space-y-6">
@@ -13,6 +17,25 @@ const IntegrationsSettings: React.FC<Props> = ({ telnyx_configured }) => (
         <h1 className="text-xl font-bold" style={{ color: 'var(--nx-silver)' }}>Integrations</h1>
         <p className="text-sm text-nx-muted mt-0.5">Connect external service providers</p>
       </div>
+
+      {fusionPbx && (
+        <section className="nx-card p-6 space-y-3">
+          <h2 className="font-medium">الاتصالات الخارجية · FusionPBX</h2>
+          <ul className="space-y-2 text-sm text-nx-muted">
+            <li>بوابات الاتصال الخارجي — Accounts → Gateways</li>
+            <li>مسارات الاتصال الصادر — Dialplan → Outbound Routes</li>
+            <li>أرقام الاستقبال والوجهات — Dialplan → Destinations</li>
+            <li>حسابات SIP — Accounts → Extensions</li>
+          </ul>
+          {fusionPbxAdminUrl ? (
+            <a href={fusionPbxAdminUrl} target="_blank" rel="noopener noreferrer" className="nx-btn-primary">
+              فتح لوحة FusionPBX
+            </a>
+          ) : (
+            <p className="text-sm text-nx-muted">عنوان لوحة FusionPBX لم يُضبط في Nexvary.</p>
+          )}
+        </section>
+      )}
 
       <div className="nx-card p-6">
         <div className="flex items-center justify-between">
