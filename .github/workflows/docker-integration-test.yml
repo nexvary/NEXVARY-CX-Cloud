@@ -346,13 +346,56 @@ jobs:
           # Suppress any line that might echo a password value
           echo "$OUTPUT" | grep -vEi 'password' || true
 
-          # Reload FreeSWITCH XML after writing new config files
-          docker compose --env-file deploy/.env exec -T freeswitch \
-            fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
-            -x 'reloadxml' 2>/dev/null || true
+          # Stock FreeSWITCH loads top-level XML manifests. Each manifest
+          # activates only its own tenant directory and dialplan context.
+          for tenant in ci-tenant-a.pbx.test ci-tenant-b.pbx.test; do
+            docker compose --env-file deploy/.env exec -T freeswitch \
+              tee "/etc/freeswitch/directory/${tenant}.xml" >/dev/null <<XML
+          <include>
+            <domain name="${tenant}">
+              <params>
+                <param name="dial-string" value="\${sofia_contact(internal/\${dialed_user}@\${dialed_domain})}"/>
+              </params>
+              <users>
+                <X-PRE-PROCESS cmd="include" data="${tenant}/*.xml"/>
+              </users>
+            </domain>
+          </include>
+          XML
+            docker compose --env-file deploy/.env exec -T freeswitch \
+              tee "/etc/freeswitch/dialplan/${tenant}.xml" >/dev/null <<XML
+          <include>
+            <context name="${tenant}">
+              <extension name="ci-tenant-extension">
+                <condition field="destination_number" expression="^(1001|1002)\$">
+                  <action application="bridge" data="user/\$1@${tenant}"/>
+                </condition>
+              </extension>
+            </context>
+          </include>
+          XML
+          done
 
-          # Give FS a moment to reload
-          sleep 3
+          # Keep each tenant's registration realm and contact namespace.
+          # These changes apply only to the disposable Compose test volume.
+          docker compose --env-file deploy/.env exec -T freeswitch sed -i \
+            -e '/<param name="force-register-domain"/d' \
+            -e '/<param name="force-register-db-domain"/d' \
+            -e '/<param name="force-subscription-domain"/d' \
+            -e 's/<param name="inbound-codec-prefs"[^>]*>/<param name="inbound-codec-prefs" value="PCMU,PCMA"\/>/' \
+            -e 's/<param name="outbound-codec-prefs"[^>]*>/<param name="outbound-codec-prefs" value="PCMU,PCMA"\/>/' \
+            -e 's/<param name="auth-calls"[^>]*>/<param name="auth-calls" value="true"\/>/' \
+            /etc/freeswitch/sip_profiles/internal.xml
+          docker compose --env-file deploy/.env restart freeswitch
+          for attempt in $(seq 1 30); do
+            if docker compose --env-file deploy/.env exec -T freeswitch \
+              fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
+              -x 'sofia status profile internal' 2>/dev/null | grep 'SIP-IP' >/dev/null; then
+              break
+            fi
+            [[ "$attempt" != 30 ]] || exit 1
+            sleep 2
+          done
 
           # Verify configs written to the shared volume
           docker compose --env-file deploy/.env exec -T freeswitch \
@@ -447,7 +490,7 @@ jobs:
             </recv>
 
             <!-- Re-send REGISTER with Digest response computed by [authentication] -->
-            <!-- username=[service] ensures the Digest username matches the To header -->
+            <!-- SIPp takes the Digest username from -s and the password from -ap. -->
             <send retrans="500">
               <![CDATA[
           REGISTER sip:${CI_SIP_DOMAIN} SIP/2.0
@@ -457,7 +500,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=${CI_SIP_PASS_A}]
+          [authentication]
           Max-Forwards: 70
           User-Agent: SIPp CI Test
           Expires: 120
@@ -574,7 +617,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=${WRONG_PASS}]
+          [authentication]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -669,7 +712,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 INVITE
           Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001 password=${CI_SIP_PASS_A}]
+          [authentication]
           Max-Forwards: 70
           Content-Type: application/sdp
           Content-Length: [len]
@@ -761,7 +804,7 @@ jobs:
           # sipp exits 0 when all scenarios complete (200 OK + ACK + BYE received)
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/invite_auth.xml \
-            -s 1002 \
+            -s 1002 -au 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -p 5091 -m 1 -t u1 -timeout 40 \
             2>&1 | tee /tmp/sipp_invite.log \
@@ -824,7 +867,7 @@ jobs:
           # The tone_stream plays for 5 seconds, giving sipp time to echo packets back.
           ORIG_RESULT=$(docker compose --env-file deploy/.env exec -T freeswitch \
             fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
-            -x "originate sofia/internal/1001@${CI_SIP_DOMAIN} &playback(tone_stream://%(5000,0,350,440))" \
+            -x "originate user/1001@${CI_SIP_DOMAIN} &playback(tone_stream://%(5000,0,350,440))" \
             2>/dev/null | tr -d '\r' || echo '')
           echo "ESL originate result: ${ORIG_RESULT}"
 
@@ -849,8 +892,8 @@ jobs:
             fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
             -x "uuid_dump ${UUID}" 2>/dev/null | tr -d '\r' || echo '')
 
-          RTP_OUT=$(echo "${RTP_DUMP}" | grep 'variable_rtp_out_pkt' | awk -F': ' '{print $2}' | head -1 | tr -d ' ')
-          RTP_IN=$(echo "${RTP_DUMP}" | grep 'variable_rtp_in_pkt'  | awk -F': ' '{print $2}' | head -1 | tr -d ' ')
+          RTP_OUT=$(echo "${RTP_DUMP}" | grep 'variable_rtp_audio_out_packet_count' | awk -F': ' '{print $2}' | head -1 | tr -d ' ')
+          RTP_IN=$(echo "${RTP_DUMP}" | grep 'variable_rtp_audio_in_packet_count'  | awk -F': ' '{print $2}' | head -1 | tr -d ' ')
 
           echo "FS→sipp RTP packets sent:     ${RTP_OUT:-0}"
           echo "sipp→FS RTP packets received: ${RTP_IN:-0}"
@@ -894,7 +937,6 @@ jobs:
           write_cross_tenant_scenario() {
             local DOMAIN="$1"
             local FILE="$2"
-            local PASSWORD="$3"
             cat > "${FILE}" <<SIPP_EOF
             <?xml version="1.0" encoding="iso-8859-1" ?>
             <scenario name="Cross-tenant REGISTER [service] — expect 403">
@@ -923,7 +965,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=${PASSWORD}]
+          [authentication]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -936,6 +978,14 @@ jobs:
             </scenario>
           SIPP_EOF
           }
+
+          tenant_contact() {
+            docker compose --env-file deploy/.env exec -T freeswitch \
+              fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
+              -x "sofia_contact internal/1001@$1" | tr -d '\r'
+          }
+          contact_a_before=$(tenant_contact "$CI_DOMAIN_A")
+          contact_b_before=$(tenant_contact "$CI_DOMAIN_B")
 
           # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
           # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
@@ -971,23 +1021,9 @@ jobs:
             }
           echo "PASS: Tenant B password rejected for 1001@tenant-a domain → 403 (credential isolation)"
 
-          # ESL check: verify no cross-tenant registrations leaked through
-          REG_STATE=$(docker compose --env-file deploy/.env exec -T freeswitch \
-            fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
-            -x 'sofia status profile internal reg' 2>/dev/null | tr -d '\r' || echo '')
-          # Look for any registration where the user 1001 appears in the wrong domain
-          CROSS_A_IN_B=$(echo "${REG_STATE}" | grep '1001@ci-tenant-b' || echo '')
-          CROSS_B_IN_A=$(echo "${REG_STATE}" | grep '1001@ci-tenant-a' || echo '')
-          # Both should be empty (the cross-tenant REGISTERs were rejected with 403)
-          [[ -z "${CROSS_A_IN_B}" ]] || {
-            echo "FAIL: Tenant A's 1001 leaked into tenant-b registration table"
-            exit 1
-          }
-          [[ -z "${CROSS_B_IN_A}" ]] || {
-            echo "FAIL: Tenant B's 1001 leaked into tenant-a registration table"
-            exit 1
-          }
-          echo "PASS: ESL confirms no cross-tenant registrations — both rejection tests passed"
+          [[ "$(tenant_contact "$CI_DOMAIN_A")" == "$contact_a_before" ]]
+          [[ "$(tenant_contact "$CI_DOMAIN_B")" == "$contact_b_before" ]]
+          echo "PASS: Neither rejected REGISTER altered either tenant's contact"
 
       # ── Inbound/outbound routing verification ─────────────────────────────
       - name: Test — Dial pattern matching and routing via ESL

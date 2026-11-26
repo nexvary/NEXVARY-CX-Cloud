@@ -34,7 +34,7 @@ Update this file in the same commit as development work. Do not infer prior comp
 |------|--------|-----------------|
 | Extensions | Partial | CRUD UI + backend; disabled records only; no live provisioning |
 | SIP credentials | Partial | Stored encrypted; not activated in FreeSWITCH |
-| Registration | Partial | Docker run 45905082801 reached healthy Sofia but sent REGISTER to loopback instead of the bound SIP address. The runner now discovers the listener over ESL. End-to-end registration, wrong-password rejection, call establishment, RTP and cross-tenant credential isolation still require a passing Docker run on PR #1. |
+| Registration | Partial | Docker run 45905082801 reached healthy Sofia but sent REGISTER to loopback instead of the bound SIP address. Run 45906367631 confirmed transport recovery and exposed a 401 on the authenticated retry. CI now installs the tenant XML manifests required by stock FreeSWITCH. End-to-end registration, wrong-password rejection, call establishment, RTP and cross-tenant credential isolation still require a passing Docker run on PR #1. |
 | Gateways / trunks | Partial | `PBX/Trunks` UI + backend; 25 provider presets (CX13); disabled records |
 | Provider presets (Telnyx + generic SIP) | Partial | 25 documented presets; not live-tested |
 | DIDs | Partial | `PBX/DIDs` UI; assignment not provisioned |
