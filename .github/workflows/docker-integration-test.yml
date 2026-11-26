@@ -661,7 +661,7 @@ jobs:
           <?xml version="1.0" encoding="iso-8859-1" ?>
           <scenario name="UAC 1001 authenticated INVITE to 1002">
             <!-- Initial unauthenticated INVITE; FS always challenges with 407 -->
-            <send retrans="500">
+            <send retrans="500" start_txn="initial">
               <![CDATA[
           INVITE sip:[service]@${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
@@ -687,9 +687,9 @@ jobs:
             </send>
             <recv response="100" optional="true" />
             <!-- FreeSWITCH issues 407 Proxy-Auth-Required on the internal profile -->
-            <recv response="407" auth="true" />
+            <recv response="407" auth="true" response_txn="initial" />
             <!-- ACK to 407 (required by RFC 3261 §8.1.1.7) -->
-            <send>
+            <send ack_txn="initial">
               <![CDATA[
           ACK sip:[service]@${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
@@ -703,7 +703,7 @@ jobs:
               ]]>
             </send>
             <!-- Re-INVITE with Proxy-Authorization digest -->
-            <send retrans="500">
+            <send retrans="500" start_txn="authenticated">
               <![CDATA[
           INVITE sip:[service]@${CI_SIP_DOMAIN} SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
@@ -732,11 +732,11 @@ jobs:
             <recv response="180" optional="true" />
             <recv response="183" optional="true" />
             <!-- 200 OK from FS (relayed from sipp UAS 1002 at :5090) -->
-            <recv response="200" />
+            <recv response="200" response_txn="authenticated" rrs="true" />
             <!-- ACK to establish the dialog -->
-            <send>
+            <send ack_txn="authenticated">
               <![CDATA[
-          ACK sip:[service]@${CI_SIP_DOMAIN} SIP/2.0
+          ACK [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
           To: <sip:[service]@${CI_SIP_DOMAIN}>[peer_tag_param]
@@ -752,7 +752,7 @@ jobs:
             <!-- BYE to end the call -->
             <send retrans="500">
               <![CDATA[
-          BYE sip:[service]@${CI_SIP_DOMAIN} SIP/2.0
+          BYE [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
           To: <sip:[service]@${CI_SIP_DOMAIN}>[peer_tag_param]
@@ -778,14 +778,18 @@ jobs:
             || { echo "FAIL: 1002 REGISTER failed"; exit 1; }
           echo "1002 registered at :5090 (Contact points to :5090)"
 
-          # Step 2: Start sipp UAS on :5090 — waits for INVITE from FreeSWITCH
-          # Built-in 'uas' scenario: recv INVITE → 180+200 OK → recv ACK → recv BYE → 200
-          # -m 1: handle exactly one call then exit cleanly
+          # Keep the UAS as a shell job so CI can verify its result.
           sipp -sn uas -i "$SIP_TEST_IP" -bind_local \
-            -p 5090 -t u1 \
-            -m 1 -timeout 40 \
-            -bg -trace_screen -screen_file /tmp/sipp_uas_1002.log
-          echo "sipp UAS started on :5090 (waiting for INVITE from FreeSWITCH)"
+            -p 5090 -t u1 -m 1 -timeout 40 -nostdin \
+            >/tmp/sipp_uas_1002.log 2>&1 &
+          uas_pid=$!
+          trap 'kill "$uas_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            kill -0 "$uas_pid" || { cat /tmp/sipp_uas_1002.log; exit 1; }
+            if [[ -n "$(ss -Hlun 'sport = :5090')" ]]; then break; fi
+            [[ "$attempt" != 30 ]] || { cat /tmp/sipp_uas_1002.log; exit 1; }
+            sleep 0.1
+          done
 
           # Step 3: Register 1001 at :5091 (sipp exits after REGISTER success)
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
@@ -820,13 +824,16 @@ jobs:
               cat /tmp/sipp_uas_1002.log 2>/dev/null || true
               exit 1
             }
+          wait "$uas_pid" || { cat /tmp/sipp_uas_1002.log; exit 1; }
+          trap - EXIT
           echo "PASS: Real SIP call 1001 → 1002 via FreeSWITCH routing: INVITE + 407 auth + 200 OK + ACK + BYE"
 
           # Verify call record — FS CDR should show a completed call
           sleep 1
           CALL_COUNT=$(docker compose --env-file deploy/.env exec -T freeswitch \
             fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
-            -x 'show calls count' 2>/dev/null | tr -d '\r' | grep -oP '\d+ total' || echo '0 total')
+            -x 'show calls count' 2>/dev/null | tr -d '\r' | grep -oP '\d+ total')
+          [[ "$CALL_COUNT" == '0 total' ]]
           echo "Active calls after BYE: ${CALL_COUNT} (expected 0)"
 
       # ── Bidirectional RTP verification via registered SIP endpoint ──────────
@@ -834,7 +841,7 @@ jobs:
       # FreeSWITCH TO sipp's registered contact. FS generates and sends actual
       # RTP audio (350+440 Hz tone) to sipp's media port. Sipp's -rtp_echo flag
       # echoes received RTP back to FreeSWITCH. ESL uuid_dump then asserts that
-      # both rtp_out_pkt > 0 (FS→sipp) and rtp_in_pkt > 0 (sipp→FS echoed).
+      # both directions report positive audio RTP packet counts.
       # This proves bidirectional network RTP between FS and a registered endpoint.
       - name: Test — Bidirectional RTP with registered SIP endpoint (sipp -rtp_echo + ESL uuid_dump)
         run: |
@@ -851,16 +858,18 @@ jobs:
             || { echo "FAIL: 1001 REGISTER (RTP test) failed"; exit 1; }
           echo "1001 registered at :5091 for RTP test"
 
-          # Step 2: Start sipp UAS on :5091 with -rtp_echo
-          # When FS sends RTP audio to this port, sipp echoes it back.
-          # -sn uas: built-in answer scenario (recv INVITE → 200 OK → recv ACK → recv BYE → 200)
-          # -rtp_echo: echo all received RTP UDP packets back to sender
+          # Start the media echo endpoint and wait for its SIP socket.
           sipp -sn uas -i "$SIP_TEST_IP" -bind_local \
-            -p 5091 -t u1 \
-            -rtp_echo \
-            -m 1 -timeout 20 \
-            -bg -trace_screen -screen_file /tmp/sipp_rtp_uas.log
-          echo "sipp UAS with -rtp_echo started on :5091"
+            -p 5091 -t u1 -rtp_echo -m 1 -timeout 20 -nostdin \
+            >/tmp/sipp_rtp_uas.log 2>&1 &
+          uas_pid=$!
+          trap 'kill "$uas_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            kill -0 "$uas_pid" || { cat /tmp/sipp_rtp_uas.log; exit 1; }
+            if [[ -n "$(ss -Hlun 'sport = :5091')" ]]; then break; fi
+            [[ "$attempt" != 30 ]] || { cat /tmp/sipp_rtp_uas.log; exit 1; }
+            sleep 0.1
+          done
 
           # Step 3: ESL-originate a call FROM FS TO sipp's registered contact
           # &playback(tone_stream://...) generates audio regardless of received RTP.
@@ -886,6 +895,12 @@ jobs:
           # Step 4: Wait 3 seconds for RTP to accumulate
           # (tone_stream plays for 5s total; 3s wait leaves 2s before it auto-hangs up)
           sleep 3
+
+          # Snapshot live media counters before dumping channel variables.
+          media_stats=$(docker compose --env-file deploy/.env exec -T freeswitch \
+            fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
+            -x "uuid_set_media_stats ${UUID}" | tr -d '\r')
+          [[ "$media_stats" == +OK* ]]
 
           # Step 5: uuid_dump to read RTP packet counts while call is still active
           RTP_DUMP=$(docker compose --env-file deploy/.env exec -T freeswitch \
@@ -916,6 +931,8 @@ jobs:
             cat /tmp/sipp_rtp_uas.log 2>/dev/null || true
             exit 1
           }
+          wait "$uas_pid" || { cat /tmp/sipp_rtp_uas.log; exit 1; }
+          trap - EXIT
           echo "PASS: Bidirectional RTP verified — FS→sipp: ${RTP_OUT} pkts, sipp→FS: ${RTP_IN} pkts (echoed)"
 
       # ── Cross-tenant SIP isolation: negative authentication tests ───────────
