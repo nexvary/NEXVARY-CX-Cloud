@@ -685,7 +685,7 @@ jobs:
 
               ]]>
             </send>
-            <recv response="100" optional="true" />
+            <recv response="100" optional="true" response_txn="initial" />
             <!-- FreeSWITCH issues 407 Proxy-Auth-Required on the internal profile -->
             <recv response="407" auth="true" response_txn="initial" />
             <!-- ACK to 407 (required by RFC 3261 §8.1.1.7) -->
@@ -728,9 +728,9 @@ jobs:
 
               ]]>
             </send>
-            <recv response="100" optional="true" />
-            <recv response="180" optional="true" />
-            <recv response="183" optional="true" />
+            <recv response="100" optional="true" response_txn="authenticated" />
+            <recv response="180" optional="true" response_txn="authenticated" />
+            <recv response="183" optional="true" response_txn="authenticated" />
             <!-- 200 OK from FS (relayed from sipp UAS 1002 at :5090) -->
             <recv response="200" response_txn="authenticated" rrs="true" />
             <!-- ACK to establish the dialog -->
@@ -750,7 +750,7 @@ jobs:
             <!-- Hold for 3 seconds with call active -->
             <pause milliseconds="3000"/>
             <!-- BYE to end the call -->
-            <send retrans="500">
+            <send retrans="500" start_txn="hangup">
               <![CDATA[
           BYE [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
@@ -763,7 +763,7 @@ jobs:
 
               ]]>
             </send>
-            <recv response="200" />
+            <recv response="200" response_txn="hangup" />
             <ResponseTimeRepartition value="100, 200, 500, 1000, 2000, 3000" />
           </scenario>
           SIPP_EOF
