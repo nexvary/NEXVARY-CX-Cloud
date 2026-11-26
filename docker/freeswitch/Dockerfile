@@ -8,8 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev libtiff-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth=1 https://github.com/freeswitch/spandsp.git /usr/src/spandsp \
+# FreeSWITCH 1.10.11 calls the six-argument SpanDSP 3.0.0 V.18 API.
+ARG SPANDSP_REF=0d2e6ac65e0e8f53d652665a743015a88bf048d4
+RUN git init /usr/src/spandsp \
     && cd /usr/src/spandsp \
+    && git fetch --depth=1 https://github.com/freeswitch/spandsp.git "${SPANDSP_REF}" \
+    && git checkout --detach FETCH_HEAD \
     && ./bootstrap.sh \
     && ./configure --prefix=/usr/local \
     && make -j$(nproc) \
