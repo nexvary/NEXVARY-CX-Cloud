@@ -174,7 +174,9 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/security',      fn() => inertia('Settings/Security'))->name('security');
         Route::get('/users', [UserController::class, 'index'])->name('users');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
-        Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
+        Route::get('/integrations',  fn() => inertia('Settings/Integrations', [
+            'telnyx_configured' => \App\Services\Telnyx\TelnyxService::configured(),
+        ]))->name('integrations');
         Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
         // Mobile device pairing — generates a one-time QR pairing token (web session auth)
         // GET renders the Inertia pairing page (generates token + server-side QR SVG)
