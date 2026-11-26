@@ -457,6 +457,7 @@ jobs:
       #   The heredoc is unquoted so ${CI_SIP_DOMAIN} expands via bash while
       #   the square-bracket keywords pass through to SIPp unchanged.
       - name: Test — SIP REGISTER (ext 1001 and 1002, tenant A)
+        id: sip-registration
         run: |
           set -euo pipefail
           CI_SIP_DOMAIN="ci-tenant-a.pbx.test"
@@ -743,7 +744,7 @@ jobs:
           ACK [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: [$dialog_to]
+          To: [\$dialog_to]
           Call-ID: [call_id]
           CSeq: 2 ACK
           Max-Forwards: 70
@@ -760,7 +761,7 @@ jobs:
           BYE [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: [$dialog_to]
+          To: [\$dialog_to]
           Call-ID: [call_id]
           CSeq: 3 BYE
           Max-Forwards: 70
@@ -852,6 +853,7 @@ jobs:
       # both directions report positive audio RTP packet counts.
       # This proves bidirectional network RTP between FS and a registered endpoint.
       - name: Test — Bidirectional RTP with registered SIP endpoint (sipp -rtp_echo + ESL uuid_dump)
+        if: ${{ !cancelled() && steps.sip-registration.outcome == 'success' }}
         run: |
           set -euo pipefail
           CI_SIP_DOMAIN="ci-tenant-a.pbx.test"
@@ -949,6 +951,7 @@ jobs:
       # Test B: use tenant B's password to register 1001 in tenant A's domain → must fail (403).
       # These are real SIP authentication attempts; we assert rejection, not just domain separation.
       - name: Test — Cross-tenant SIP isolation (wrong credentials rejected with 403)
+        if: ${{ !cancelled() && steps.sip-registration.outcome == 'success' }}
         run: |
           set -euo pipefail
           CI_DOMAIN_A="ci-tenant-a.pbx.test"
