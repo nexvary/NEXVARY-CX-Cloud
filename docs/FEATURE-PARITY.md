@@ -1,0 +1,274 @@
+# NEXVARY CX Cloud — Feature Parity Matrix
+
+Track each CX milestone individually. Status: **Verified** | **Partial** | **Missing** | **Blocked**
+
+Routes, static screens, mock data, disabled draft records and README claims do not establish Verified status.
+Update this file in the same commit as development work. Do not infer prior completion without evidence.
+
+---
+
+## CX01 — Installation
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Reproducible Debian/Ubuntu installer | Partial | `INSTALL-NEXVARY.sh` exists; CI installer tests pass (SiteOS installer gate) |
+| Existing-install detection | Missing | Not implemented |
+| Safe upgrades | Missing | Not implemented |
+| HTTPS domain access | Partial | Web wizard step checks domain |
+| Setup wizard | Partial | `Install/Wizard.tsx` page; `installer/index.php` backend |
+| Initial administrator creation | Partial | Wizard creates admin; CI-tested |
+| Database / Redis / ESL connectivity checks | Partial | Wizard checks; CI-tested with live PostgreSQL/Redis |
+| Certificate reuse | Missing | Not implemented |
+| Rollback | Missing | Not implemented |
+| Migration and recovery | Missing | Not implemented |
+| Clean install test | Partial | CI: `installer-syntax`, `installer-security`, visual QA jobs |
+| Failed-install recovery test | Missing | Not tested |
+
+**Next action:** Implement existing-install detection and rollback; add failed-install recovery test.
+
+---
+
+## CX02 — Core PBX
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Extensions | Partial | CRUD UI + backend; disabled records only; no live provisioning |
+| SIP credentials | Partial | Stored encrypted; not activated in FreeSWITCH |
+| Registration | Missing | No live FreeSWITCH registration tested |
+| Gateways / trunks | Partial | `PBX/Trunks` UI + backend; 25 provider presets (CX13); disabled records |
+| Provider presets (Telnyx + generic SIP) | Partial | 25 documented presets; not live-tested |
+| DIDs | Partial | `PBX/DIDs` UI; assignment not provisioned |
+| Inbound / outbound routing | Partial | `PBX/Routes` UI + backend; `Routes/Form.tsx` added |
+| Caller ID / privacy | Missing | Not implemented |
+| Number translation | Missing | Not implemented |
+| Codecs | Missing | Not configured |
+| SIP profiles | Missing | Not implemented |
+| NAT | Missing | Not configured |
+| TLS / SRTP | Missing | Not configured |
+| Device provisioning | Missing | Not implemented |
+| Dialplan editor | Missing | Not implemented |
+| Validation | Missing | Not implemented |
+| Configuration activation and rollback | Missing | Not implemented |
+
+**Next action:** Implement live FreeSWITCH gateway registration and configuration activation.
+
+---
+
+## CX03 — Call Features
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Transfer | Missing | — |
+| Hold / resume | Missing | — |
+| Call waiting | Missing | — |
+| Parking | Missing | — |
+| Pickup | Missing | — |
+| DND | Missing | — |
+| Forwarding / Follow Me | Missing | — |
+| Blacklist | Missing | — |
+| Business hours / holidays | Missing | — |
+| Day / night mode | Missing | — |
+| Dial by name | Missing | — |
+| Hot desking | Missing | — |
+| Feature codes | Missing | — |
+| Music on hold | Missing | — |
+| Announcements and audio management | Missing | — |
+
+**Next action:** Implement after CX02 live provisioning is established.
+
+---
+
+## CX04 — Contact Center
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| IVR | Partial | `PBX/IVR` CRUD UI; not provisioned |
+| Ring groups | Partial | `PBX/RingGroups` CRUD UI; not provisioned |
+| Queues | Partial | `PBX/Queues` CRUD UI; not provisioned |
+| Agents | Missing | No agent management UI |
+| Distribution strategies | Missing | Not implemented |
+| Operator panel / live calls | Partial | `CallCenter/Live.tsx` page exists; mock data only |
+| Authorized hangup | Missing | Not implemented |
+| CDR | Partial | `CallCenter/Records.tsx` page; no live data |
+| Consent-aware recording | Partial | `CallCenter/Recordings.tsx` page; no live recording |
+| Recording access and retention | Missing | Not implemented |
+| Audio / video conferences | Missing | Not implemented |
+| Voicemail | Partial | `PBX/Voicemail/Index.tsx`; no live delivery |
+| Voicemail-to-email | Missing | Not implemented |
+
+---
+
+## CX05 — Fax
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Fax extensions | Missing | — |
+| PDF send / receive | Missing | — |
+| Inbox / outbox | Missing | — |
+| Delivery status and retry | Missing | — |
+| Fax-to-email | Missing | — |
+| T.38 and G.711 fallback | Missing | — |
+| Authorized downloads | Missing | — |
+| Interoperability tests | Missing | — |
+
+---
+
+## CX06 — Messaging and Email
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| SMS / MMS provider integration | Partial | `SMS/Index.tsx` page; Telnyx SMS service skeleton |
+| Inbound signature-verified webhooks | Missing | Not implemented |
+| Outbound messaging | Missing | Not implemented |
+| Conversations UI | Partial | `SMS/Index.tsx` stub |
+| Delivery status | Missing | Not implemented |
+| Consent and rate limits | Missing | Not implemented |
+| SMTP / IMAP integration | Missing | Service skeleton only |
+| Email management | Missing | Not implemented |
+
+---
+
+## CX07 — Administration
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Tenants / domains | Partial | Multi-tenant model; admin UI for tenants |
+| Users / groups | Partial | RBAC with admin/superadmin/agent; `Settings/` pages |
+| Granular RBAC / ACLs | Partial | Spatie roles; not all routes gate-tested |
+| MFA / recovery | Partial | 2FA with pragmarx/google2fa; recovery codes page exists |
+| Device management | Missing | — |
+| System variables | Missing | — |
+| FreeSWITCH modules | Missing | — |
+| Menu configuration | Missing | — |
+| Service health | Partial | Health endpoint; no dashboard |
+| Authorized service restart | Missing | — |
+| Audit | Partial | spatie/laravel-activitylog wired |
+| Logs | Missing | No log viewer |
+| Backup / restore | Partial | `Settings/Backup.tsx` stub |
+| Updates | Missing | — |
+| Monitoring / alerts | Missing | — |
+| Fraud controls / destination restrictions | Missing | `Admin/CallFreeze.tsx` exists; spending limits not implemented |
+| Emergency call freeze | Partial | `Admin/CallFreeze.tsx` page exists |
+
+---
+
+## CX08 — CRM and Billing
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Contacts | Partial | `CRM/Contacts/Index.tsx`; basic CRUD |
+| Tickets | Partial | `CRM/Tickets/Index.tsx`; basic CRUD |
+| Call / message linkage | Missing | — |
+| Rate tables | Partial | `Billing/Rates/Index.tsx`; no active rating |
+| Billing / balances / invoices | Partial | `Billing/Accounts` and `Billing/Invoices` pages; mock data |
+| Usage reports | Partial | `Billing/Reports.tsx`; mock data |
+| Reconciliation | Missing | — |
+| Configurable plans | Missing | — |
+
+---
+
+## CX09 — WebRTC and Optional Voice AI
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Browser calling | Partial | WebRTC bridge exists (`rtc-bridge/`); no live call test |
+| Secure signaling / media | Partial | Node.js WebSocket bridge; TLS not verified |
+| Opt-in transcription / translation | Missing | AI service skeleton only |
+| Voice assistance and analytics | Missing | — |
+| Consent / retention controls | Missing | — |
+| Provider abstraction | Partial | Pluggable adapter pattern; not implemented |
+| Core PBX without AI | Partial | Architecture supports; not live-tested |
+
+---
+
+## CX10 — Android Full Administration
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Native Android app | Missing | No Android project in this repository |
+| Versioned mobile API | Missing | — |
+| All web admin functions via mobile | Missing | — |
+| Multi-server profiles | Missing | — |
+| QR pairing | Missing | — |
+| Secure manual connection | Missing | — |
+| Android Keystore token storage | Missing | — |
+| Arabic RTL / English LTR | Missing | — |
+| Notifications | Missing | — |
+
+---
+
+## CX11 — Visual PBX Builder
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Web graphical workflow editor | Missing | — |
+| Android workflow editor | Missing | — |
+| Reusable templates | Missing | — |
+| Trigger / condition / time rules | Missing | — |
+| IVR / queue / destination nodes | Missing | — |
+| Preview / simulation | Missing | — |
+| Schema validation / loop detection | Missing | — |
+| Revision history | Missing | — |
+| Safe publish and rollback | Missing | — |
+| Compile to PBX configuration | Missing | — |
+
+---
+
+## CX12 — Product UX
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| Glossy deep black / metallic silver | Partial | Nexvary CSS design system; partial implementation |
+| Meaningful multicolor icons | Missing | lucide-react (monochrome); multicolor SVG icons not implemented |
+| Neon green / red status accents | Missing | Not verified |
+| Accessible contrast | Missing | Not audited |
+| Responsive desktop / mobile | Partial | Tailwind; not fully verified |
+| Bilingual Arabic / English RTL / LTR | Partial | i18next; layout not fully RTL-verified |
+| Guided setup | Partial | Install wizard |
+| Contextual help | Partial | `Info/Help.tsx` stub |
+| About System page | Partial | `Info/About.tsx` page |
+| About Developer page | Partial | `Info/Developer.tsx` page |
+| Contact Developer function | Partial | `Info/Developer.tsx` page; form without working transport |
+| Day / Night UI themes | Missing | Single theme only; theme switch not implemented |
+| Real operational data in dashboard | Missing | Mock data throughout |
+| Empty / loading / error states | Missing | Not consistently implemented |
+
+**Next action:** Implement Day/Night theme toggle; replace monochrome icons with multicolor SVG/licensed assets.
+
+---
+
+## CX13 — Provider Ecosystem and Advanced Operations
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| 25 documented provider presets | **Verified** | All 25 presets in `SipProviderPresets.php`; `documented()` returns 25; tested in `SipProviderPresetsTest.php` |
+| Generic custom SIP | **Verified** | `generic` preset covers custom SIP, credential/IP, all transports |
+| Encrypted credentials | Partial | defuse/php-encryption used for SIP credentials; presets store no credentials |
+| Provider-specific capabilities documented | Partial | Each preset has `docs_url`, `instructions` EN/AR, `auth_modes`; not live-tested |
+| Gateway Center (health, reconnect, stats) | Missing | — |
+| Call Quality Analyzer | Missing | — |
+| SIP Diagnostic Center | Missing | — |
+| Fraud Protection Center | Partial | `Admin/CallFreeze.tsx`; full fraud controls missing |
+| Legacy PBX Migration Wizard | Missing | — |
+| Disaster Recovery Center | Partial | `Settings/Backup.tsx` stub |
+| SIP QR Provisioning | Missing | — |
+| Multi-Server Control Center | Missing | — |
+| Nexvary Update Center | Missing | — |
+| Nexvary Academy | Missing | — |
+| Web / mobile admin parity for CX13 | Missing | — |
+
+---
+
+## Independent Branding
+
+| Item | Status | Evidence / Notes |
+|------|--------|-----------------|
+| NEXVARY CX Cloud branding in UI | **Verified** | No competitor PBX names in UI code or navigation |
+| README product table | **Verified** | Changed "FusionPBX-compatible XML" → "FreeSWITCH XML" |
+| Provider preset docs_url (branding) | **Verified** | FusionPBX-specific URLs removed from Telnyx and VoiceTel presets |
+| FusionPBX attribution preserved | **Verified** | `docs/OPEN_SOURCE_COMPONENTS.md` legal attribution unchanged |
+| Internal config service comments | Partial | `FusionPbxConfigService.php` retains technical reference comments; not user-facing |
+
+---
+
+*Last updated: 2026-11-26 | Branch: feature/stage-1-foundation*

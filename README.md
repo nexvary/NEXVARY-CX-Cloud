@@ -43,7 +43,7 @@ Administration supports adding customers, reading system and audit status, and s
 | Web Management | Laravel 12 / PHP 8.3 | ✅ Stage 1 |
 | Frontend UI | React 18 + TypeScript + Inertia.js | ✅ Stage 1 |
 | Telephony Engine | FreeSWITCH | ✅ Stage 1 |
-| PBX Config | FusionPBX-compatible XML | ✅ Stage 1 |
+| PBX Config | FreeSWITCH XML | ✅ Stage 1 |
 | Database | PostgreSQL 16 | ✅ Stage 1 |
 | Cache / Queue | Redis | ✅ Stage 1 |
 | WebRTC Bridge | Node.js WebSocket | ✅ Stage 1 |
@@ -109,7 +109,7 @@ nexvary-cx-cloud/
 │   ├── Http/Controllers/     # Laravel controllers (Auth, PBX, CRM, Billing…)
 │   ├── Models/               # Eloquent models
 │   └── Services/
-│       ├── PBX/              # FreeSWITCH ESL + FusionPBX config
+│       ├── PBX/              # FreeSWITCH ESL + PBX config
 │       ├── Billing/          # Rating engine
 │       ├── SMS/              # Telnyx SMS
 │       ├── Email/            # IMAP/SMTP integration
