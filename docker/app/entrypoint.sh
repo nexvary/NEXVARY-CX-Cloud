@@ -21,6 +21,9 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# A pre-existing storage volume can hide directories from the image.
+mkdir -p "${APP_DIR}/storage/framework/cache"   "${APP_DIR}/storage/framework/sessions" "${APP_DIR}/storage/framework/views"
+
 # ── First-run initialisation ──────────────────────────────────────────────────
 if [[ ! -f "${APP_DIR}/storage/.nexvary-initialized" ]]; then
   printf '[APP] First-run initialization...\n'

@@ -80,7 +80,7 @@ COPY --chown=nexvary:nexvary --from=node-build /build/public/build ./public/buil
 COPY --chown=nexvary:nexvary --from=composer-deps /var/www/nexvary-cx/vendor ./vendor
 
 # Storage directories (must be writable; actual data lives in named volume)
-RUN mkdir -p storage/app/public storage/framework/{cache,sessions,views} \
+RUN mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views \
         storage/logs bootstrap/cache \
     && chown -R nexvary:nexvary storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
