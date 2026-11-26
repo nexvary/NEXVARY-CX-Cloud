@@ -1,5 +1,20 @@
 # NEXVARY CX Cloud — development log
 
+## 2026-11-27 — Docker Integration Tests: SIPp authentication fix
+
+**Milestone/CX IDs:** CX02 (Docker SIP integration), CI
+
+**Root cause:** `[authentication username=[service] password=[ap]]` in SIPp XML scenario files caused "Unsupported keyword 'ap' in xml scenario file" on the sip-tester package (Ubuntu 24.04). The `[ap]` construct is not a portable SIPp scenario keyword; the `-ap <password>` command-line argument is applied automatically to any `[authentication username=X]` block without requiring `password=` to be specified.
+
+**Changes:**
+- `.github/workflows/docker-integration-test.yml`: removed `password=[ap]` from all four `[authentication]` blocks in the inline SIPp scenarios: `register_ext.xml`, `register_expect_403.xml`, `invite_auth.xml`, and the `write_cross_tenant_scenario` function.
+
+**Commit:** 349609d  
+**Branch:** feature/stage-1-foundation  
+**CI expected:** all 7 workflows pass
+
+**Remaining gaps:** None for Docker SIP registration flow. Full RTP + call establishment and cross-tenant isolation exercises will run on next CI trigger.
+
 ## 2026-11-26 — Product requirements update
 - Scope: CX12 navigation, day/night UI themes, multicolor cards/icons, developer contact; mandatory milestone ledger.
 - Status: documentation only; implementation and tests not verified in this entry.
