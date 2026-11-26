@@ -957,55 +957,18 @@ jobs:
           CI_DOMAIN_A="ci-tenant-a.pbx.test"
           CI_DOMAIN_B="ci-tenant-b.pbx.test"
 
-          # Cross-tenant REGISTER scenario: sends a correct Digest response computed
-          # from the WRONG tenant's password. FreeSWITCH computes the expected Digest
-          # using the domain's own stored password and rejects the mismatch with 403.
-          # Uses [service] for all SIP identity fields — same parameterization pattern
-          # as the main REGISTER scenario.
-          write_cross_tenant_scenario() {
-            local DOMAIN="$1"
-            local FILE="$2"
-            cat > "${FILE}" <<SIPP_EOF
-            <?xml version="1.0" encoding="iso-8859-1" ?>
-            <scenario name="Cross-tenant REGISTER [service] — expect 403">
-              <send retrans="500">
-                <![CDATA[
-          REGISTER sip:${DOMAIN} SIP/2.0
-          Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "[service]" <sip:[service]@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:[service]@${DOMAIN}>
-          Call-ID: [call_id]
-          CSeq: 1 REGISTER
-          Contact: <sip:[service]@[local_ip]:[local_port]>
-          Max-Forwards: 70
-          Expires: 60
-          Content-Length: 0
+          # Reuse the tested 401 → 403 scenario for both tenants. Only
+          # the target SIP domain changes; -ap supplies the other credential.
+          sed 's/ci-tenant-a\.pbx\.test/ci-tenant-b.pbx.test/g' \
+            /tmp/register_expect_403.xml > /tmp/register_tenant_b_expect_403.xml
+          sed 's/ci-tenant-a\.pbx\.test/ci-tenant-b.pbx.test/g' \
+            /tmp/register_ext.xml > /tmp/register_tenant_b.xml
 
-                ]]>
-              </send>
-              <recv response="401" auth="true" />
-              <send retrans="500">
-                <![CDATA[
-          REGISTER sip:${DOMAIN} SIP/2.0
-          Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
-          From: "[service]" <sip:[service]@${DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:[service]@${DOMAIN}>
-          Call-ID: [call_id]
-          CSeq: 2 REGISTER
-          Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication]
-          Max-Forwards: 70
-          Expires: 60
-          Content-Length: 0
-
-                ]]>
-              </send>
-              <!-- Must receive 403: Digest computed from wrong-tenant password doesn't match -->
-              <recv response="403" />
-              <ResponseTimeRepartition value="50, 100, 200, 500" />
-            </scenario>
-          SIPP_EOF
-          }
+          # Establish a positive control so a missing tenant B directory
+          # cannot make a cross-tenant rejection look like a passing test.
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
+            -sf /tmp/register_tenant_b.xml -s 1001 -ap "$CI_SIP_PASS_B" \
+            -p 5092 -m 1 -t u1 -timeout 20
 
           tenant_contact() {
             docker compose --env-file deploy/.env exec -T freeswitch \
@@ -1014,12 +977,13 @@ jobs:
           }
           contact_a_before=$(tenant_contact "$CI_DOMAIN_A")
           contact_b_before=$(tenant_contact "$CI_DOMAIN_B")
+          [[ "$contact_a_before" == *"sip:1001@"* && "$contact_b_before" == *"sip:1001@${SIP_TEST_IP}:5092"* ]]
 
           # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
           # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml "${CI_SIP_PASS_A}"
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
-            -sf /tmp/cross_tenant_a_in_b.xml \
+            -sf /tmp/register_tenant_b_expect_403.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -m 1 -t u1 -timeout 20 \
@@ -1038,7 +1002,7 @@ jobs:
           # Sipp sends REGISTER for 1001@tenant-a.pbx.test with tenant B's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml "${CI_SIP_PASS_B}"
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
-            -sf /tmp/cross_tenant_b_in_a.xml \
+            -sf /tmp/register_expect_403.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_B}" \
             -m 1 -t u1 -timeout 20 \
