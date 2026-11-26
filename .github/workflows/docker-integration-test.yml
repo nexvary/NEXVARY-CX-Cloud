@@ -981,7 +981,6 @@ jobs:
 
           # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
           # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
-          write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml "${CI_SIP_PASS_A}"
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_tenant_b_expect_403.xml \
             -s 1001 \
@@ -1000,7 +999,6 @@ jobs:
 
           # Test B: tenant B's password (-ap CI_SIP_PASS_B) used against tenant A's domain
           # Sipp sends REGISTER for 1001@tenant-a.pbx.test with tenant B's Digest → 403
-          write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml "${CI_SIP_PASS_B}"
           sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_expect_403.xml \
             -s 1001 \
