@@ -145,6 +145,8 @@ jobs:
           FS_IMAGE="ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION}"
           if docker pull "${FS_IMAGE}" \
             && docker run --rm --network none --entrypoint freeswitch "${FS_IMAGE}" -version \
+            && docker run --rm --network none --entrypoint test "${FS_IMAGE}" \
+              -s /usr/local/lib/freeswitch/mod/mod_event_socket.so \
             && docker run --rm --network none --entrypoint cat "${FS_IMAGE}" \
               /usr/share/nexvary/freeswitch-overrides/autoload_configs/event_socket.conf.xml \
               | cmp -s docker/freeswitch/conf/autoload_configs/event_socket.conf.xml -; then

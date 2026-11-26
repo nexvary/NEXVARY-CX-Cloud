@@ -92,6 +92,9 @@ RUN ./bootstrap.sh -j \
         --without-sctp \
         --enable-core-libedit-support \
         --disable-static \
+    && rm src/mod/modules.inc \
+    && make src/mod/modules.inc \
+    && test -s src/mod/modules.inc \
     && make -j$(nproc) \
     && make install \
     && make sounds-install moh-install
@@ -148,7 +151,12 @@ RUN mkdir -p \
         /var/lib/freeswitch/storage \
         /var/lib/freeswitch/db \
     && ldconfig \
-    && freeswitch -version
+    && freeswitch -version \
+    && for module in mod_sofia mod_event_socket mod_dialplan_xml mod_spandsp; do \
+        path="/usr/local/lib/freeswitch/mod/${module}.so"; \
+        test -s "$path" || exit 1; \
+        if ldd "$path" | grep -q 'not found'; then ldd "$path"; exit 1; fi; \
+    done
 
 VOLUME ["/etc/freeswitch", "/var/log/freeswitch", "/var/lib/freeswitch/recordings"]
 
