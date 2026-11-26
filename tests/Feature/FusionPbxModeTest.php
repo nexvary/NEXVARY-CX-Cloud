@@ -118,3 +118,32 @@ it('preserves the existing restart path in the default mode', function () {
     $this->actingAs(fusionPbxAdministrator())->post('/settings/server/freeswitch/restart')
         ->assertRedirect('/settings/server');
 });
+
+it('lets paired devices check server status without touching ESL in FusionPBX mode', function () {
+    $service = $this->mock(FreeSwitchService::class);
+    $service->shouldNotReceive('healthCheck');
+    $service->shouldNotReceive('connect');
+
+    $this->getJson('/api/mobile/v1/status')->assertUnauthorized();
+
+    $user = User::factory()->create();
+    $pair = $user->createToken('qr', ['mobile.pair'], now()->addMinutes(10))->plainTextToken;
+    $response = $this->withToken($pair)->postJson('/api/mobile/v1/pair/exchange', [
+        'device_name' => 'Test Android',
+        'device_id' => 'test-device',
+    ])->assertOk();
+
+    app('auth')->forgetGuards();
+    $this->withToken($response->json('token'))->getJson('/api/mobile/v1/status')
+        ->assertOk()
+        ->assertJsonPath('services.freeswitch', 'managed')
+        ->assertJsonPath('services.freeswitch_version', null)
+        ->assertExactJsonStructure([
+            'server' => ['ram_percent', 'disk_percent', 'load_avg', 'uptime'],
+            'services' => ['postgresql', 'freeswitch', 'freeswitch_version'],
+            'pbx' => ['active_calls', 'registrations'],
+            'checked_at',
+        ])
+        ->assertJsonPath('pbx.active_calls', 0)
+        ->assertJsonPath('pbx.registrations', 0);
+});

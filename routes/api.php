@@ -25,7 +25,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 // Privileged operations additionally require the 'mobile.admin' ability.
 Route::prefix('mobile/v1')->name('mobile.')->middleware(['auth:sanctum', 'mobile.token:mobile'])->group(function () {
     // Server and service health
-    Route::get('/status',       [MobileController::class, 'serverStatus'])->middleware(RequireLocalPbx::class)->name('status');
+    Route::get('/status',       [MobileController::class, 'serverStatus'])->name('status');
     Route::get('/alerts',       [MobileController::class, 'alerts'])->middleware(RequireLocalPbx::class)->name('alerts');
 
     // PBX
