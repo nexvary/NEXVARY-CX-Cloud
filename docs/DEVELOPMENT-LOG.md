@@ -9,11 +9,11 @@
 **Changes:**
 - `.github/workflows/docker-integration-test.yml`: removed `password=[ap]` from all four `[authentication]` blocks in the inline SIPp scenarios: `register_ext.xml`, `register_expect_403.xml`, `invite_auth.xml`, and the `write_cross_tenant_scenario` function.
 
-**Commit:** 349609d  
+**Commit:** 349609d (fix) + 4ace8d3 (docs) | HEAD: 4ace8d3  
 **Branch:** feature/stage-1-foundation  
-**CI expected:** all 7 workflows pass
+**CI result:** All 7 workflows pass — [Docker Integration Tests run 45903674490](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45903674490) ✓ (21 min, full Compose stack + SIP REGISTER + call + RTP + cross-tenant isolation). PR suite also all green (run 45903681880 ✓).
 
-**Remaining gaps:** None for Docker SIP registration flow. Full RTP + call establishment and cross-tenant isolation exercises will run on next CI trigger.
+**Remaining gaps:** Visual QA screenshots of Day/Night theme require running Laravel app. CX02 live registered-state polling (TRYING→REGED transitions) not implemented.
 
 ## 2026-11-26 — Product requirements update
 - Scope: CX12 navigation, day/night UI themes, multicolor cards/icons, developer contact; mandatory milestone ledger.
