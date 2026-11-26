@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePoll } from '@inertiajs/react';
 import {
   Server, Cpu, HardDrive, Database, Activity, RefreshCw,
   CheckCircle, XCircle
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/layouts/AppLayout';
 
 interface Metrics {
@@ -28,9 +29,11 @@ interface PbxStatus {
   version?: string;
   current_sessions?: number;
   peak_sessions?: number;
+  active_calls?: number | null;
 }
 
 interface Props {
+  fusionPbx: boolean;
   pbx: PbxStatus;
   metrics: Metrics;
 }
@@ -74,7 +77,9 @@ const StatusChip: React.FC<{ ok: boolean; label: string }> = ({ ok, label }) => 
   </div>
 );
 
-const ServerHealth: React.FC<Props> = ({ pbx, metrics }) => {
+const ServerHealth: React.FC<Props> = ({ fusionPbx, pbx, metrics }) => {
+  const { t } = useTranslation();
+  usePoll(5000, { only: ['pbx', 'metrics'] }, { autoStart: fusionPbx });
   const [restarting, setRestarting] = useState(false);
 
   const handleRestart = () => {
@@ -169,9 +174,15 @@ const ServerHealth: React.FC<Props> = ({ pbx, metrics }) => {
               <div className="flex justify-between">
                 <span className="text-nx-muted">Status</span>
                 <span className={pbx.connected ? 'text-green-400' : 'text-red-400'}>
-                  {pbx.connected ? 'Connected' : 'Unreachable'}
+                  {fusionPbx ? t(pbx.connected ? 'fusionpbx.connected' : 'fusionpbx.unreachable') : (pbx.connected ? 'Connected' : 'Unreachable')}
                 </span>
               </div>
+              {fusionPbx && (
+                <div className="flex justify-between">
+                  <span className="text-nx-muted">{t('fusionpbx.active_calls')}</span>
+                  <span className="text-nx-primary">{pbx.active_calls ?? t('fusionpbx.count_unavailable')}</span>
+                </div>
+              )}
               {pbx.version && (
                 <div className="flex justify-between">
                   <span className="text-nx-muted">Version</span>
@@ -191,16 +202,20 @@ const ServerHealth: React.FC<Props> = ({ pbx, metrics }) => {
                 </div>
               )}
             </div>
-            <div className="mt-4 pt-4 border-t border-nx">
-              <button
-                onClick={handleRestart}
-                disabled={restarting}
-                className="nx-btn-danger w-full text-xs py-1.5"
-              >
-                {restarting ? <span className="nx-spinner me-2" /> : null}
-                Restart FreeSWITCH
-              </button>
-            </div>
+            {fusionPbx ? (
+              <p className="mt-4 pt-4 border-t border-nx text-sm text-nx-muted">{t('fusionpbx.managed')}</p>
+            ) : (
+              <div className="mt-4 pt-4 border-t border-nx">
+                <button
+                  onClick={handleRestart}
+                  disabled={restarting}
+                  className="nx-btn-danger w-full text-xs py-1.5"
+                >
+                  {restarting ? <span className="nx-spinner me-2" /> : null}
+                  Restart FreeSWITCH
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

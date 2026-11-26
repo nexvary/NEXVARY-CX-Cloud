@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Services\PBX\PbxMode;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,10 @@ class ConfigurationController extends Controller
     public function store(Request $request, string $module): RedirectResponse
     {
         abort_unless(isset(self::FIELDS[$module]), 404);
+
+        if ($module !== 'billing') {
+            PbxMode::requireLocalManagement();
+        }
 
         $tenantId = $this->resolveEffectiveTenantId();
 

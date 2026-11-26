@@ -34,6 +34,12 @@ class FreeSwitchService
 
     public function connect(): bool
     {
+        if (PbxMode::fusionPbx() && (
+            $this->password === '' || $this->password === 'ClueCon' || preg_match('/[\r\n]/', $this->password)
+        )) {
+            return false;
+        }
+
         try {
             $this->socket = @fsockopen(
                 hostname: $this->host,
@@ -100,6 +106,10 @@ class FreeSwitchService
 
     public function api(string $command): string|false
     {
+        if (PbxMode::fusionPbx() && !in_array($command, ['status', 'show calls count'], true)) {
+            return false;
+        }
+
         if (!$this->ensureConnected()) {
             return false;
         }
@@ -110,7 +120,7 @@ class FreeSwitchService
 
     public function bgapi(string $command): string|false
     {
-        if (!$this->ensureConnected()) {
+        if (PbxMode::fusionPbx() || !$this->ensureConnected()) {
             return false;
         }
 
@@ -161,11 +171,17 @@ class FreeSwitchService
     public function getActiveCallCount(): int
     {
         $raw = $this->api('show calls count');
-        if (!$raw) {
-            return 0;
-        }
-        preg_match('/(\d+)\s+total/', $raw, $m);
-        return isset($m[1]) ? (int) $m[1] : 0;
+
+        return $raw && preg_match('/(\d+)\s+total/', $raw, $matches) ? (int) $matches[1] : 0;
+    }
+
+    public function readActiveCallCount(): ?int
+    {
+        $raw = $this->api('show calls count');
+
+        return $raw !== false && preg_match('/^\s*(\d+)\s+total\.?\s*$/iD', $raw, $matches)
+            ? (int) $matches[1]
+            : null;
     }
 
     public function getRegistrations(): array

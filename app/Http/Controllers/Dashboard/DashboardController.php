@@ -9,6 +9,7 @@ use App\Models\SmsConversation;
 use App\Models\Ticket;
 use App\Models\Trunk;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\PbxMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -21,8 +22,8 @@ class DashboardController extends Controller
 
     public function index(): Response
     {
-        $pbxStatus = $this->pbx->getStatus();
-        $activeCalls = count($this->pbx->getActiveCalls());
+        $pbxStatus = PbxMode::fusionPbx() ? ['connected' => false] : $this->pbx->getStatus();
+        $activeCalls = PbxMode::fusionPbx() ? 0 : count($this->pbx->getActiveCalls());
 
         $totalExtensions = Extension::count();
         $totalTrunks     = Trunk::count();
@@ -144,7 +145,7 @@ class DashboardController extends Controller
     {
         return response()->json([
             'active_calls' => count($this->pbx->getActiveCalls()),
-            'pbx_status'   => $this->pbx->getStatus(),
+            'pbx_status'   => PbxMode::fusionPbx() ? null : $this->pbx->getStatus(),
             'calls_1h'     => CallRecord::where('started_at', '>=', now()->subHour())->count(),
         ]);
     }

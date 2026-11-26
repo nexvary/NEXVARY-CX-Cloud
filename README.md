@@ -36,6 +36,8 @@ Administration supports adding customers, reading system and audit status, and s
 
 ---
 
+For an existing FusionPBX-managed switch, see the [FusionPBX integration and lab acceptance guide](docs/FUSIONPBX-LAB.md).
+
 ## Platform Components
 
 | Component | Technology | Status |

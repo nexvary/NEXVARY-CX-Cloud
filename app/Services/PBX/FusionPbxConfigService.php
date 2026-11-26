@@ -54,6 +54,8 @@ class FusionPbxConfigService
      */
     public function writeExtensionConfig(Extension $extension, string $sipPassword, string $domain = 'default'): void
     {
+        PbxMode::requireLocalManagement();
+
         $dir = "{$this->confDir}/directory/{$domain}";
         $this->ensureDir($dir);
 
@@ -66,6 +68,8 @@ class FusionPbxConfigService
 
     public function deleteExtensionConfig(Extension $extension, string $domain = 'default'): void
     {
+        PbxMode::requireLocalManagement();
+
         $path = "{$this->confDir}/directory/{$domain}/{$extension->number}.xml";
         if (File::exists($path)) {
             File::delete($path);
@@ -81,6 +85,8 @@ class FusionPbxConfigService
 
     public function updateExtensionVariable(Extension $extension, string $key, string $value, string $domain = 'default'): void
     {
+        PbxMode::requireLocalManagement();
+
         $path = "{$this->confDir}/directory/{$domain}/{$extension->number}.xml";
         if (!File::exists($path)) {
             return;
@@ -113,6 +119,8 @@ class FusionPbxConfigService
      */
     public function ensureDomainDialplanDir(string $domain): void
     {
+        PbxMode::requireLocalManagement();
+
         $this->ensureDir("{$this->confDir}/dialplan/{$domain}");
     }
 
@@ -124,6 +132,8 @@ class FusionPbxConfigService
      */
     public function writeTrunkConfig(Trunk $trunk, string $password = ''): void
     {
+        PbxMode::requireLocalManagement();
+
         $dir = "{$this->confDir}/sip_profiles/external";
         $this->ensureDir($dir);
 
@@ -136,6 +146,8 @@ class FusionPbxConfigService
 
     public function deleteTrunkConfig(Trunk $trunk): void
     {
+        PbxMode::requireLocalManagement();
+
         $path = "{$this->confDir}/sip_profiles/external/nexvary-trunk-{$trunk->id}.xml";
         if (File::exists($path)) {
             File::delete($path);
@@ -158,6 +170,8 @@ class FusionPbxConfigService
      */
     public function writeInboundRoute(array $route): void
     {
+        PbxMode::requireLocalManagement();
+
         $dir = "{$this->confDir}/dialplan/public";
         $this->ensureDir($dir);
 
@@ -169,6 +183,8 @@ class FusionPbxConfigService
 
     public function deleteInboundRoute(array $route): void
     {
+        PbxMode::requireLocalManagement();
+
         $path = "{$this->confDir}/dialplan/public/nexvary-inbound-{$route['id']}.xml";
         if (File::exists($path)) {
             File::delete($path);
@@ -184,6 +200,8 @@ class FusionPbxConfigService
      */
     public function writeOutboundRoute(array $route): void
     {
+        PbxMode::requireLocalManagement();
+
         $domain = $route['domain'] ?? 'default';
         $dir    = "{$this->confDir}/dialplan/{$domain}";
         $this->ensureDir($dir);
@@ -196,6 +214,8 @@ class FusionPbxConfigService
 
     public function deleteOutboundRoute(array $route): void
     {
+        PbxMode::requireLocalManagement();
+
         $domain = $route['domain'] ?? 'default';
         $path   = "{$this->confDir}/dialplan/{$domain}/nexvary-outbound-{$route['id']}.xml";
         if (File::exists($path)) {
@@ -219,6 +239,8 @@ class FusionPbxConfigService
      */
     public function writeCdrConfig(string $appUrl, string $secret): void
     {
+        PbxMode::requireLocalManagement();
+
         $url     = rtrim($appUrl, '/') . '/webhooks/freeswitch/cdr';
         $encoded = base64_encode('nexvary:' . $secret);
 
@@ -250,6 +272,8 @@ XML;
 
     public function writeIvrMenu(array $menu): void
     {
+        PbxMode::requireLocalManagement();
+
         $dir  = "{$this->confDir}/autoload_configs";
         $xml  = $this->renderIvrMenuXml($menu);
         $path = "{$dir}/ivr.conf.d/nexvary-ivr-{$menu['id']}.xml";

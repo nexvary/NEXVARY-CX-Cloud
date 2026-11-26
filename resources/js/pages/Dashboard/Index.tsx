@@ -11,6 +11,7 @@ interface Trunk { id: string; name: string; host: string; enabled: boolean }
 interface Services { freeswitch: boolean; database: boolean; redis: boolean }
 
 interface Props {
+    fusionPbx?: boolean;
     stats: {
         extensions: number; trunks: number; calls_today: number; open_tickets: number;
         active_calls: number; available_trunks: number; unread_sms: number; today_call_minutes: number;
@@ -287,7 +288,7 @@ const ModuleCard: React.FC<{
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
-export default function Dashboard({ stats, pbx_health, trunks = [], services }: Props) {
+export default function Dashboard({ fusionPbx, stats, pbx_health, trunks = [], services }: Props) {
     const { t } = useTranslation();
     const modules = useModules();
 
@@ -299,14 +300,16 @@ export default function Dashboard({ stats, pbx_health, trunks = [], services }: 
                     {t('dashboard.platform_title')}
                 </h1>
                 <div className="flex flex-wrap gap-4 mt-2 text-xs" style={{ color: 'var(--nx-text-muted)' }}>
-                    <span>
-                        <span style={{ color: pbx_health.connected ? 'var(--nx-green)' : 'var(--nx-error)' }}>●</span>
-                        {' '}FreeSWITCH{pbx_health.version ? ` ${pbx_health.version}` : ''}
-                    </span>
-                    <span>
-                        <span style={{ color: 'var(--nx-blue)' }}>●</span>
-                        {' '}{stats.active_calls} {t('dashboard.active_calls')}
-                    </span>
+                    {!fusionPbx && <>
+                        <span>
+                            <span style={{ color: pbx_health.connected ? 'var(--nx-green)' : 'var(--nx-error)' }}>●</span>
+                            {' '}FreeSWITCH{pbx_health.version ? ` ${pbx_health.version}` : ''}
+                        </span>
+                        <span>
+                            <span style={{ color: 'var(--nx-blue)' }}>●</span>
+                            {' '}{stats.active_calls} {t('dashboard.active_calls')}
+                        </span>
+                    </>}
                     <span>
                         <span style={{ color: 'var(--nx-pink)' }}>●</span>
                         {' '}{stats.unread_sms} {t('dashboard.unread_sms')}
@@ -321,11 +324,11 @@ export default function Dashboard({ stats, pbx_health, trunks = [], services }: 
             {/* Two-column body */}
             <div className="flex gap-4 items-start">
                 {/* LEFT: SIP + Services panel */}
-                <SipPanel trunks={trunks} services={services ?? { freeswitch: pbx_health.connected, database: true, redis: true }} />
+                {!fusionPbx && <SipPanel trunks={trunks} services={services ?? { freeswitch: pbx_health.connected, database: true, redis: true }} />}
 
                 {/* RIGHT: Module cards grid */}
                 <div className="flex-1 min-w-0 grid grid-cols-2 gap-3">
-                    {modules.map(m => (
+                    {modules.filter(m => !fusionPbx || (!m.href.startsWith('/pbx/') && m.href !== '/call-center/live')).map(m => (
                         <ModuleCard
                             key={m.key}
                             title={m.title}

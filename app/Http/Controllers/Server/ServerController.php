@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Server;
 
 use App\Http\Controllers\Controller;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\PbxMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,16 +19,28 @@ class ServerController extends Controller
 
     public function index(): Response
     {
-        $pbxStatus = $this->pbx->getStatus();
-        $metrics   = $this->collectMetrics();
+        $fusionPbx = PbxMode::fusionPbx();
+
+        try {
+            $pbxStatus = $this->pbx->getStatus();
+            if ($fusionPbx) {
+                unset($pbxStatus['raw']);
+                $pbxStatus['active_calls'] = $pbxStatus['connected'] ? $this->pbx->readActiveCallCount() : null;
+            }
+        } finally {
+            $this->pbx->disconnect();
+        }
+
+        $metrics = $this->collectMetrics($pbxStatus['connected']);
 
         return Inertia::render('Settings/Server', [
+            'fusionPbx' => $fusionPbx,
             'pbx'     => $pbxStatus,
             'metrics' => $metrics,
         ]);
     }
 
-    private function collectMetrics(): array
+    private function collectMetrics(bool $pbxConnected): array
     {
         $isWindows = PHP_OS_FAMILY === 'Windows';
 
@@ -100,7 +113,7 @@ class ServerController extends Controller
             'disk_percent'  => $diskPercent,
             'postgresql'    => $pgOk,
             'redis'         => $redisOk,
-            'freeswitch'    => $pbxStatus['connected'] ?? false,
+            'freeswitch'    => $pbxConnected,
             'php_version'   => PHP_VERSION,
             'os'            => php_uname('s') . ' ' . php_uname('r'),
             'timestamp'     => now()->toIso8601String(),

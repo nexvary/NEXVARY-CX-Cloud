@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\PBX;
 
+use App\Services\PBX\PbxMode;
 use App\Models\Domain;
 use App\Models\Extension;
 use App\Models\Tenant;
@@ -40,6 +41,12 @@ class CiSipSetup extends Command
 
     public function handle(): int
     {
+        if (PbxMode::fusionPbx()) {
+            $this->error('PBX management is delegated to FusionPBX.');
+
+            return self::FAILURE;
+        }
+
         if (! in_array(app()->environment(), ['testing', 'local', 'ci'], true)) {
             $this->error('This command must not run in production (APP_ENV=' . app()->environment() . ')');
             return self::FAILURE;
