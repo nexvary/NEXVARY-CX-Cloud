@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +32,38 @@ fun ServerScreen(
     val sipState by viewModel.sipState.collectAsState()
     val credentials by viewModel.credentials.collectAsState()
     var scanMode by remember { mutableStateOf(ScanMode.None) }
+
+    var showSipSetup by remember { mutableStateOf(false) }
+    val pairedCredentials = credentials
+    if (showSipSetup && pairedCredentials != null) {
+        var host by remember { mutableStateOf(pairedCredentials.sipHost) }
+        var port by remember { mutableStateOf(pairedCredentials.sipPort.toString()) }
+        var extension by remember { mutableStateOf(pairedCredentials.extension) }
+        var password by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showSipSetup = false },
+            title = { Text("إعداد حساب SIP") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(host, { host = it }, label = { Text("خادم SIP") }, singleLine = true)
+                    OutlinedTextField(port, { port = it }, label = { Text("منفذ TLS") }, singleLine = true)
+                    OutlinedTextField(extension, { extension = it }, label = { Text("الامتداد") }, singleLine = true)
+                    OutlinedTextField(password, { password = it }, label = { Text("كلمة مرور SIP") },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    error?.let { Text(it, color = NxError) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    error = viewModel.saveSipAccount(host, port, extension, password)
+                    if (error == null) showSipSetup = false
+                }) { Text("حفظ وتسجيل") }
+            },
+            dismissButton = { TextButton(onClick = { showSipSetup = false }) { Text("إلغاء") } },
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -101,6 +134,12 @@ fun ServerScreen(
         )
 
         Spacer(Modifier.height(24.dp))
+
+        if (pairedCredentials != null) {
+            OutlinedButton(onClick = { showSipSetup = true }, enabled = !sipState.inCall,
+                modifier = Modifier.fillMaxWidth()) { Text("إعداد حساب SIP") }
+            Spacer(Modifier.height(12.dp))
+        }
 
         // QR Pairing button
         Button(

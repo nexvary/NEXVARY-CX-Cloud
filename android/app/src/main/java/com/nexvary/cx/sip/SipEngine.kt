@@ -1,6 +1,7 @@
 package com.nexvary.cx.sip
 
 import kotlinx.coroutines.flow.StateFlow
+import com.nexvary.cx.data.SipCredentials
 
 data class SipConfig(
     val serverUrl: String,
@@ -8,6 +9,13 @@ data class SipConfig(
     val password: String,
     val port: Int = 5061,
 )
+
+fun SipCredentials.toSipConfig(): SipConfig? {
+    if (extension.isBlank() || sipPassword.isEmpty()) return null
+    val host = sipHost.ifBlank { runCatching { java.net.URI(serverUrl).host }.getOrNull().orEmpty() }
+    if (host.isBlank()) return null
+    return SipConfig(host, extension, sipPassword, sipPort)
+}
 
 data class SipState(
     val registered: Boolean = false,

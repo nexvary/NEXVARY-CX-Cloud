@@ -99,6 +99,7 @@ class LinphoneSipEngine @Inject constructor(
 
     override fun configure(config: SipConfig) {
         val c = ensureCore()
+        _state.value = _state.value.copy(registered = false)
         c.clearAccounts()
         c.clearAllAuthInfo()
 
@@ -120,7 +121,7 @@ class LinphoneSipEngine @Inject constructor(
         params.setPublishEnabled(false)
 
         val account = c.createAccount(params)
-        c.addAccount(account)
+        check(c.addAccount(account) == 0)
         c.setDefaultAccount(account)
 
         // Enforce SRTP at the core level — calls that cannot negotiate SRTP are rejected

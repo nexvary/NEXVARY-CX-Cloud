@@ -149,6 +149,32 @@ class ServerViewModelTest {
     )
 
     @Test
+    fun `manual SIP setup preserves the paired API credentials`() {
+        val paired = SipCredentials("https://cx.example.com", "", "", "device-token")
+        val store = FakeCredentialRepository(paired)
+        val engine = FakeSipEngine()
+        val vm = makeVm(credentialStore = store, sipEngine = engine)
+
+        assertNull(vm.saveSipAccount("sip.example.net", "5062", "1001", "test-sip-password"))
+        assertTrue(engine.configured)
+        assertTrue(store.credentials.value == paired.copy(
+            extension = "1001", sipPassword = "test-sip-password", sipHost = "sip.example.net", sipPort = 5062,
+        ))
+    }
+
+    @Test
+    fun `invalid SIP setup leaves stored credentials and engine unchanged`() {
+        val paired = SipCredentials("https://cx.example.com", "", "", "device-token")
+        val store = FakeCredentialRepository(paired)
+        val engine = FakeSipEngine()
+        val vm = makeVm(credentialStore = store, sipEngine = engine)
+
+        assertTrue(vm.saveSipAccount("https://sip.example.net/path", "5061", "1001", "test-sip-password") != null)
+        assertTrue(!engine.configured)
+        assertTrue(store.credentials.value == paired)
+    }
+
+    @Test
     fun `Server tab does not crash when no credentials are stored`() {
         // Regression: previously, Retrofit.Builder().baseUrl("null/") was called
         // when no server was configured, causing an IllegalArgumentException on
