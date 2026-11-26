@@ -1,5 +1,9 @@
 package com.nexvary.cx.ui.server
 
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +36,77 @@ fun ServerScreen(
     val sipState by viewModel.sipState.collectAsState()
     val credentials by viewModel.credentials.collectAsState()
     var scanMode by remember { mutableStateOf(ScanMode.None) }
+
+    var showSipSetup by remember { mutableStateOf(false) }
+    val pairedCredentials = credentials
+    if (showSipSetup && pairedCredentials != null) {
+        var host by remember { mutableStateOf(pairedCredentials.sipHost) }
+        var port by remember { mutableStateOf(pairedCredentials.sipPort.toString()) }
+        var extension by remember { mutableStateOf(pairedCredentials.extension) }
+        var password by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showSipSetup = false },
+            title = { Text("إعداد حساب SIP") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(host, { host = it }, label = { Text("خادم SIP") }, singleLine = true)
+                    OutlinedTextField(port, { port = it }, label = { Text("منفذ TLS") }, singleLine = true)
+                    OutlinedTextField(extension, { extension = it }, label = { Text("الامتداد") }, singleLine = true)
+                    OutlinedTextField(password, { password = it }, label = { Text("كلمة مرور SIP") },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    error?.let { Text(it, color = NxError) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    error = viewModel.saveSipAccount(host, port, extension, password)
+                    if (error == null) showSipSetup = false
+                }) { Text("حفظ وتسجيل") }
+            },
+            dismissButton = { TextButton(onClick = { showSipSetup = false }) { Text("إلغاء") } },
+        )
+    }
+
+    val context = LocalContext.current
+    var showAdmin by remember { mutableStateOf(false) }
+    var portalError by remember { mutableStateOf<String?>(null) }
+    if (showAdmin && pairedCredentials != null) {
+        AlertDialog(
+            onDismissRequest = { showAdmin = false },
+            title = { Text("إدارة الخادم") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("تُفتح لوحة الإدارة في المتصفح باستخدام تسجيل دخول المشرف المعتاد.")
+                    listOf(
+                        AdminPage.Dashboard to "لوحة Nexvary",
+                        AdminPage.Users to "مستخدمو Nexvary",
+                        AdminPage.Telephony to "إدارة السنترال والامتدادات",
+                    ).forEach { (page, label) ->
+                        OutlinedButton(
+                            onClick = {
+                                val url = adminPortalUrl(pairedCredentials.serverUrl, page)
+                                if (url == null) {
+                                    portalError = "عنوان لوحة الإدارة غير صالح"
+                                } else {
+                                    try {
+                                        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                                        showAdmin = false
+                                    } catch (_: ActivityNotFoundException) {
+                                        portalError = "لا يوجد متصفح متاح لفتح لوحة الإدارة"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(label) }
+                    }
+                    portalError?.let { Text(it, color = NxError) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAdmin = false }) { Text("إغلاق") } },
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -79,9 +155,12 @@ fun ServerScreen(
         InfoCard(
             icon = Icons.Default.Cable,
             iconTint = if (sipState.registered) NxGreen else NxSilver,
-            title = "الاتصال",
-            value = if (sipState.registered) "متصل" else "غير متصل",
-            badgeText = if (sipState.registered) "متصل" else null,
+            title = "تسجيل SIP",
+            value = when {
+                sipState.registered -> "مسجّل"
+                credentials?.extension.isNullOrBlank() -> "الامتداد غير مهيأ"
+                else -> "غير مسجّل"
+            },
             badgeColor = NxGreen,
         )
 
@@ -92,12 +171,27 @@ fun ServerScreen(
             icon = Icons.Default.Phone,
             iconTint = if (sipState.registered) NxGreen else NxSilver,
             title = "الامتداد",
-            value = credentials?.extension ?: "---",
+            value = credentials?.extension?.takeIf { it.isNotBlank() } ?: "غير مهيأ",
             badgeText = if (sipState.registered) "مسجّل" else null,
             badgeColor = NxGreen,
         )
 
         Spacer(Modifier.height(24.dp))
+
+        if (pairedCredentials != null) {
+            OutlinedButton(onClick = { showSipSetup = true }, enabled = !sipState.inCall,
+                modifier = Modifier.fillMaxWidth()) { Text("إعداد حساب SIP") }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (pairedCredentials != null) {
+            OutlinedButton(
+                onClick = { portalError = null
+                    showAdmin = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("إدارة الخادم") }
+            Spacer(Modifier.height(12.dp))
+        }
 
         // QR Pairing button
         Button(
@@ -131,8 +225,8 @@ fun ServerScreen(
         when (val s = serverState) {
             is ServerUiState.Success -> {
                 Spacer(Modifier.height(16.dp))
-                ServiceStatusRow("FreeSWITCH", s.status.services.freeswitch == "up")
-                ServiceStatusRow("PostgreSQL", s.status.services.postgresql == "up")
+                ServiceStatusRow("FreeSWITCH", s.status.services.freeswitch)
+                ServiceStatusRow("PostgreSQL", s.status.services.postgresql)
             }
             is ServerUiState.Error -> {
                 Spacer(Modifier.height(8.dp))
@@ -216,7 +310,14 @@ private fun InfoCard(
 }
 
 @Composable
-private fun ServiceStatusRow(name: String, up: Boolean) {
+private fun ServiceStatusRow(name: String, status: String) {
+    val (label, color) = when (status) {
+        "up" -> "يعمل" to NxGreen
+        "down" -> "متوقف" to NxError
+        "managed" -> "تديره FusionPBX" to NxSilver
+        else -> "الحالة غير متاحة" to NxSilver
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,12 +327,12 @@ private fun ServiceStatusRow(name: String, up: Boolean) {
         Box(
             modifier = Modifier
                 .size(8.dp)
-                .background(if (up) NxGreen else NxError, CircleShape),
+                .background(color, CircleShape),
         )
         Spacer(Modifier.width(10.dp))
         Text(name, color = NxSilver, fontSize = 14.sp)
         Spacer(Modifier.weight(1f))
-        Text(if (up) "يعمل" else "متوقف", color = if (up) NxGreen else NxError, fontSize = 13.sp)
+        Text(label, color = color, fontSize = 13.sp)
     }
 }
 

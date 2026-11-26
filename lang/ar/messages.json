@@ -1,4 +1,11 @@
 {
+    "fusionpbx": {
+        "connected": "متصل",
+        "unreachable": "تعذّر الاتصال بـ ESL",
+        "active_calls": "المكالمات النشطة",
+        "count_unavailable": "غير متاح",
+        "managed": "تُدار إعدادات السنترال من FusionPBX"
+    },
   "management": {
     "field_destination": "التحويلة الوجهة",
     "field_enabled": "الحالة",

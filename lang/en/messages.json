@@ -1,4 +1,11 @@
 {
+    "fusionpbx": {
+        "connected": "Connected",
+        "unreachable": "ESL unreachable",
+        "active_calls": "Active calls",
+        "count_unavailable": "Unavailable",
+        "managed": "Managed by FusionPBX"
+    },
   "management": {
     "field_destination": "Destination extension",
     "field_enabled": "Status",

@@ -10,7 +10,7 @@ import com.nexvary.cx.data.PairingException
 import com.nexvary.cx.data.SipCredentials
 import com.nexvary.cx.data.StorageUnavailableException
 import com.nexvary.cx.data.model.ServerStatus
-import com.nexvary.cx.sip.SipConfig
+import com.nexvary.cx.sip.toSipConfig
 import com.nexvary.cx.sip.SipEngine
 import com.nexvary.cx.sip.SipState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,6 +66,32 @@ class ServerViewModel @Inject constructor(
      */
     fun clearForRecovery() {
         credentialStore.clearForRecovery()
+    }
+
+    fun saveSipAccount(host: String, port: String, extension: String, password: String): String? {
+        val current = credentials.value ?: return "اربط التطبيق بالخادم أولًا"
+        if (sipState.value.inCall) return "أنهِ المكالمة قبل تغيير حساب SIP"
+        val sipHost = host.trim()
+        val sipPort = port.trim().toIntOrNull()
+        val number = extension.trim()
+        if (!Regex("[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?").matches(sipHost)) {
+            return "أدخل اسم خادم SIP أو عنوان IPv4 دون رابط أو منفذ"
+        }
+        if (sipPort == null || sipPort !in 1..65535 || !Regex("[0-9]{1,20}").matches(number) || password.isEmpty()) {
+            return "أدخل امتدادًا رقميًا وكلمة المرور ومنفذ TLS صالحًا"
+        }
+        val updated = current.copy(extension = number, sipPassword = password, sipHost = sipHost, sipPort = sipPort)
+        return try {
+            sipEngine.configure(checkNotNull(updated.toSipConfig()))
+            credentialStore.save(updated)
+            null
+        } catch (_: Exception) {
+            runCatching {
+                sipEngine.reset()
+                current.toSipConfig()?.let(sipEngine::configure)
+            }
+            PairingErrors.SIP_CONFIG_ERROR
+        }
     }
 
     fun refresh() {
@@ -131,26 +157,6 @@ class ServerViewModel @Inject constructor(
                 credentialStore.save(newCreds)
                 sipEngine.reset()
 
-                // ── SIP registration ──────────────────────────────────────────────
-                // Only configure Linphone when we actually have SIP credentials for
-                // this server. A fresh cross-server pairing leaves extension empty;
-                // the user will supply SIP settings via the manual setup flow.
-                if (newCreds.extension.isNotEmpty() && newCreds.sipPassword.isNotEmpty()) {
-                    try {
-                        sipEngine.configure(
-                            SipConfig(
-                                serverUrl = serverUrl,
-                                extension = newCreds.extension,
-                                password  = newCreds.sipPassword,
-                            )
-                        )
-                    } catch (e: Exception) {
-                        // API pairing succeeded — report SIP failure separately so the
-                        // UI shows the correct paired-but-sip-error state.
-                        _serverState.value = ServerUiState.Error(PairingErrors.SIP_CONFIG_ERROR)
-                        return@launch
-                    }
-                }
                 refresh()
 
             } catch (e: PairingException.MalformedPayload) {

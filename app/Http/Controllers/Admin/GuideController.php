@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Services\PBX\PbxMode;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Services\PBX\FreeSwitchService;
@@ -127,7 +128,8 @@ class GuideController extends Controller
             'modules'          => array_keys(self::MODULES),
             'module'           => $module,
             'columns'          => $columns,
-            'draftFields'      => ConfigurationController::FIELDS[$module] ?? [],
+            'draftFields'      => PbxMode::fusionPbx() && $module !== 'billing'
+                ? [] : (ConfigurationController::FIELDS[$module] ?? []),
             'records'          => $records,
             'checks'           => $checks,
             'noTenantSelected' => $noTenantSelected,

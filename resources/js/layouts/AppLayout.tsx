@@ -14,6 +14,7 @@ interface PageProps {
     user: { id?: string; name: string; email?: string; role?: string };
     roles?: string[];
   };
+  fusionPbx?: boolean;
   pbxStatus?: {
     connected: boolean;
     active_calls: number;
@@ -97,7 +98,7 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
       label: t('nav.email'),
       href: '/email',
       icon: Mail,
-      badge: unread.email,
+      roles: ['superadmin', 'admin'],
     },
     {
       label: t('nav.crm'),
@@ -257,6 +258,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const pbxStatus = rawProps.pbxStatus ?? { connected: false, active_calls: 0 };
   const unread = rawProps.unread ?? { sms: 0, email: 0, tickets: 0 };
   const navItems = useNavItems(unread);
+  const visibleNavItems = rawProps.fusionPbx
+    ? navItems.filter(item => !['#pbx', '/admin/call-freeze'].includes(item.href)).map(item => ({
+        ...item,
+        children: item.children?.filter(child => !['/call-center/live', '/call-center/agents'].includes(child.href)),
+      }))
+    : navItems;
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
@@ -310,7 +317,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
         {/* PBX Status */}
         <div className="hidden md:flex">
-          <PbxStatusChip status={pbxStatus} />
+          {!rawProps.fusionPbx && <PbxStatusChip status={pbxStatus} />}
         </div>
 
         {/* Spacer */}
@@ -401,7 +408,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
         className={`nx-sidebar overflow-y-auto transition-transform ${sidebarOpen ? '' : '-translate-x-full rtl:translate-x-full'}`}
       >
         <nav className="py-3">
-          {navItems.map(item => (
+          {visibleNavItems.map(item => (
             <NavItemComp key={item.href} item={item} />
           ))}
         </nav>

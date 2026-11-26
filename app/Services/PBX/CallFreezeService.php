@@ -74,6 +74,8 @@ class CallFreezeService
 
     public function activateTenantFreeze(string $tenantId, string $activatedBy, string $reason): CallFreeze
     {
+        PbxMode::requireLocalManagement();
+
         $freeze = CallFreeze::create([
             'scope'        => 'tenant',
             'tenant_id'    => $tenantId,
@@ -92,6 +94,8 @@ class CallFreezeService
 
     public function activateGatewayFreeze(string $trunkId, string $activatedBy, string $reason): CallFreeze
     {
+        PbxMode::requireLocalManagement();
+
         $trunk = Trunk::findOrFail($trunkId);
 
         $freeze = CallFreeze::create([
@@ -114,6 +118,8 @@ class CallFreezeService
 
     public function deactivate(string $freezeId, string $deactivatedBy): CallFreeze
     {
+        PbxMode::requireLocalManagement();
+
         $freeze = CallFreeze::active()->findOrFail($freezeId);
 
         $freeze->update([

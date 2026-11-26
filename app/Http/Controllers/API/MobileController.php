@@ -10,6 +10,7 @@ use App\Models\SmsMessage;
 use App\Models\Ticket;
 use App\Models\Trunk;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\PbxMode;
 use App\Services\Telnyx\TelnyxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class MobileController extends Controller
 
     public function serverStatus(): JsonResponse
     {
-        $pbxHealth = $this->pbx->healthCheck();
+        $pbxHealth = PbxMode::fusionPbx() ? ['status' => 'managed'] : $this->pbx->healthCheck();
 
         $ram_percent = 0;
         $disk_percent = 0;

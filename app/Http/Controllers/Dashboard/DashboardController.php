@@ -9,6 +9,7 @@ use App\Models\SmsConversation;
 use App\Models\Ticket;
 use App\Models\Trunk;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\PbxMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -21,8 +22,8 @@ class DashboardController extends Controller
 
     public function index(): Response
     {
-        $pbxStatus = $this->pbx->getStatus();
-        $activeCalls = count($this->pbx->getActiveCalls());
+        $pbxStatus = PbxMode::fusionPbx() ? ['connected' => false] : $this->pbx->getStatus();
+        $activeCalls = PbxMode::fusionPbx() ? 0 : count($this->pbx->getActiveCalls());
 
         $totalExtensions = Extension::count();
         $totalTrunks     = Trunk::count();
@@ -142,10 +143,15 @@ class DashboardController extends Controller
 
     public function metrics(): JsonResponse
     {
-        return response()->json([
-            'active_calls' => count($this->pbx->getActiveCalls()),
-            'pbx_status'   => $this->pbx->getStatus(),
-            'calls_1h'     => CallRecord::where('started_at', '>=', now()->subHour())->count(),
-        ]);
+        $metrics = [
+            'calls_1h' => CallRecord::where('started_at', '>=', now()->subHour())->count(),
+        ];
+
+        if (!PbxMode::fusionPbx()) {
+            $metrics['active_calls'] = count($this->pbx->getActiveCalls());
+            $metrics['pbx_status'] = $this->pbx->getStatus();
+        }
+
+        return response()->json($metrics);
     }
 }

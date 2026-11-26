@@ -16,6 +16,8 @@ data class SipCredentials(
     val extension: String,
     val sipPassword: String,
     val deviceToken: String,
+    val sipHost: String = "",
+    val sipPort: Int = 5061,
 )
 
 @Singleton
@@ -61,7 +63,8 @@ class CredentialStore @Inject constructor(
             val extension   = p.getString(KEY_EXTENSION,    null) ?: return null
             val sipPassword = p.getString(KEY_SIP_PASSWORD, null) ?: return null
             val deviceToken = p.getString(KEY_DEVICE_TOKEN, null) ?: return null
-            SipCredentials(serverUrl, extension, sipPassword, deviceToken)
+            SipCredentials(serverUrl, extension, sipPassword, deviceToken,
+                p.getString("sip_host", "").orEmpty(), p.getInt("sip_port", 5061))
         } catch (_: Exception) {
             // Key may have been invalidated by a security event mid-session;
             // return null so the caller treats this as NotConfigured.
@@ -77,6 +80,8 @@ class CredentialStore @Inject constructor(
                 .putString(KEY_EXTENSION,    credentials.extension)
                 .putString(KEY_SIP_PASSWORD, credentials.sipPassword)
                 .putString(KEY_DEVICE_TOKEN, credentials.deviceToken)
+                .putString("sip_host", credentials.sipHost)
+                .putInt("sip_port", credentials.sipPort)
                 .apply()
             _credentials.value = credentials
         } catch (_: Exception) {

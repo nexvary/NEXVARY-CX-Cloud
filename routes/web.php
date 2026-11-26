@@ -22,6 +22,8 @@ use App\Http\Controllers\PBX\TrunkController;
 use App\Http\Controllers\PBX\VoicemailController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
+use App\Http\Controllers\Settings\UserController;
+use App\Http\Middleware\RequireLocalPbx;
 use Illuminate\Support\Facades\Route;
 
 // ── Setup Wizard (pre-install) ────────────────────────────────────────────
@@ -67,14 +69,14 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
         // Emergency Call Freeze
         Route::get('/call-freeze',                           [CallFreezeController::class, 'index'])->name('call_freeze');
-        Route::post('/call-freeze/tenant',                   [CallFreezeController::class, 'activateTenant'])->name('call_freeze.tenant');
-        Route::post('/call-freeze/gateway',                  [CallFreezeController::class, 'activateGateway'])->name('call_freeze.gateway');
-        Route::post('/call-freeze/{freeze}/deactivate',      [CallFreezeController::class, 'deactivate'])->name('call_freeze.deactivate');
+        Route::post('/call-freeze/tenant',                   [CallFreezeController::class, 'activateTenant'])->middleware(RequireLocalPbx::class)->name('call_freeze.tenant');
+        Route::post('/call-freeze/gateway',                  [CallFreezeController::class, 'activateGateway'])->middleware(RequireLocalPbx::class)->name('call_freeze.gateway');
+        Route::post('/call-freeze/{freeze}/deactivate',      [CallFreezeController::class, 'deactivate'])->middleware(RequireLocalPbx::class)->name('call_freeze.deactivate');
     });
 
     // ── PBX ───────────────────────────────────────────────────────────────
 
-    Route::prefix('pbx')->name('pbx.')->middleware('nexvary.admin')->group(function () {
+    Route::prefix('pbx')->name('pbx.')->middleware(['nexvary.admin', RequireLocalPbx::class])->group(function () {
         // Extensions
         Route::resource('extensions', ExtensionController::class);
         Route::post('extensions/{extension}/enabled', [ExtensionController::class, 'setEnabled'])->name('extensions.enabled');
@@ -129,11 +131,15 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
     // ── Call Center ───────────────────────────────────────────────────────
 
     Route::prefix('call-center')->name('call_center.')->group(function () {
-        Route::get('/live',       [CallRecordController::class, 'live'])->name('live');
-        Route::delete('/live/{uuid}', [CallRecordController::class, 'hangup'])->name('hangup');
+        Route::get('/live',       [CallRecordController::class, 'live'])->middleware(RequireLocalPbx::class)->name('live');
+        Route::delete('/live/{uuid}', [CallRecordController::class, 'hangup'])->middleware(RequireLocalPbx::class)->name('hangup');
+        Route::get('/records/export', [CallRecordController::class, 'export'])->name('records.export');
         Route::get('/records',   [CallRecordController::class, 'index'])->name('records');
         Route::get('/recordings',[CallRecordController::class, 'recordings'])->name('recordings');
     });
+
+    Route::redirect('/reports', '/call-center/records')->name('reports');
+    Route::get('/email', [ServerController::class, 'email'])->middleware('nexvary.admin')->name('email');
 
     // ── SMS ───────────────────────────────────────────────────────────────
 
@@ -166,12 +172,13 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
     Route::prefix('settings')->name('settings.')->middleware('nexvary.admin')->group(function () {
         Route::get('/server', [ServerController::class, 'index'])->name('server');
-        Route::post('/server/freeswitch/restart', [ServerController::class, 'restartFreeswitch'])->name('server.fs_restart');
+        Route::post('/server/freeswitch/restart', [ServerController::class, 'restartFreeswitch'])->middleware(RequireLocalPbx::class)->name('server.fs_restart');
         Route::get('/organization', fn() => inertia('Settings/Organization'))->name('organization');
         Route::post('/organization', [ServerController::class, 'saveOrganization'])->name('organization.save');
         Route::get('/security',      fn() => inertia('Settings/Security'))->name('security');
-        Route::get('/users',         fn() => inertia('Settings/Users'))->name('users');
-        Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
+        Route::get('/users', [UserController::class, 'index'])->name('users');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::get('/integrations', [ServerController::class, 'integrations'])->name('integrations');
         Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
         // Mobile device pairing — generates a one-time QR pairing token (web session auth)
         // GET renders the Inertia pairing page (generates token + server-side QR SVG)
