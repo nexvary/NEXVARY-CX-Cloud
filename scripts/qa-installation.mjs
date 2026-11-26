@@ -34,6 +34,17 @@ const record = async (name, result = 'pass') => {
     ].join('\t') + '\n');
 };
 
+const checkDashboardCards = async () => {
+    const headings = page.getByTestId('dashboard-modules').getByRole('heading', { level: 2 });
+    assert.equal(await headings.count(), 8, 'Dashboard module titles are missing');
+    const clipped = await headings.evaluateAll(items => items.filter(heading => {
+        const description = heading.nextElementSibling;
+        return heading.clientWidth === 0 || heading.scrollWidth > heading.clientWidth + 1
+            || !description || description.scrollWidth > description.clientWidth + 1;
+    }).map(heading => heading.textContent));
+    assert.deepEqual(clipped, [], 'Dashboard module text is clipped');
+};
+
 const submit = () => page.locator('form button[type=submit]').click();
 const field = (name, value) => page.locator(`form [name="${name}"]`).fill(value);
 const waitForResult = ok => page.locator(`[data-testid="result"][data-ok="${ok}"]`).waitFor();
@@ -135,12 +146,14 @@ try {
     const switchToDay = page.getByRole('button', { name: locale === 'ar' ? 'التبديل إلى المظهر النهاري' : 'Switch to day theme', exact: true });
     const switchToNight = page.getByRole('button', { name: locale === 'ar' ? 'التبديل إلى المظهر الليلي' : 'Switch to night theme', exact: true });
     await page.locator('html[data-nx-theme="night"]').waitFor();
+    await checkDashboardCards();
     await record('18-authenticated-dashboard');
     await switchToDay.click();
     await page.locator('html[data-nx-theme="day"]').waitFor();
     await page.reload();
     await page.locator('html[data-nx-theme="day"]').waitFor();
     assert.equal(path(), '/dashboard', 'Session was lost after reload');
+    await checkDashboardCards();
     await record('18-authenticated-dashboard-day');
     await switchToNight.click();
     await page.locator('html[data-nx-theme="night"]').waitFor();

@@ -128,10 +128,7 @@ const SipPanel: React.FC<{ trunks: Trunk[]; services: Services }> = ({ trunks, s
     const NavArrow = isRtl ? ArrowLeft : ArrowRight;
 
     return (
-        <aside
-            className="shrink-0 flex flex-col gap-3"
-            style={{ width: '260px' }}
-        >
+        <aside className="flex min-w-0 flex-col gap-3">
             {/* SIP Gateways */}
             <div className="nx-card overflow-hidden">
                 <div
@@ -268,13 +265,13 @@ const ModuleCard: React.FC<{
 
         {/* Text */}
         <div className="relative z-10 flex-1 min-w-0">
-            <p
-                className="text-sm font-semibold leading-tight truncate transition-colors group-hover:text-white"
+            <h2
+                className="text-sm font-semibold leading-tight wrap-break-word transition-colors"
                 style={{ color: 'var(--nx-text-primary)' }}
             >
                 {title}
-            </p>
-            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--nx-text-muted)' }}>{desc}</p>
+            </h2>
+            <p className="text-xs mt-0.5 wrap-break-word" style={{ color: 'var(--nx-text-muted)' }}>{desc}</p>
         </div>
 
         {/* Arrow */}
@@ -294,7 +291,7 @@ export default function Dashboard({ stats, pbx_health, trunks = [], services }: 
     return (
         <AppLayout title={t('dashboard.title')}>
             {/* Platform title */}
-            <div className="mb-5">
+            <div className="mx-4 mt-4 mb-5 sm:mx-6 sm:mt-6">
                 <h1 className="text-xl font-bold" style={{ color: 'var(--nx-silver)' }}>
                     {t('dashboard.platform_title')}
                 </h1>
@@ -319,12 +316,12 @@ export default function Dashboard({ stats, pbx_health, trunks = [], services }: 
             </div>
 
             {/* Two-column body */}
-            <div className="flex gap-4 items-start">
+            <div className="mx-4 mb-6 grid grid-cols-1 items-start gap-4 sm:mx-6 xl:grid-cols-[260px_minmax(0,1fr)]">
                 {/* LEFT: SIP + Services panel */}
                 <SipPanel trunks={trunks} services={services ?? { freeswitch: pbx_health.connected, database: true, redis: true }} />
 
                 {/* RIGHT: Module cards grid */}
-                <div className="flex-1 min-w-0 grid grid-cols-2 gap-3">
+                <div data-testid="dashboard-modules" className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     {modules.map(m => (
                         <ModuleCard
                             key={m.key}

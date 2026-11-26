@@ -87,9 +87,10 @@ jobs:
       - name: Verify published image
         if: ${{ github.event_name != 'pull_request' }}
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.FS_VERSION }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}"
           docker pull "$IMAGE"
-          docker run --rm "$IMAGE" freeswitch -version | grep -F "${{ env.FS_VERSION }}" \
+          set -o pipefail
+          docker run --rm --network none --entrypoint freeswitch "$IMAGE" -version | grep -F "${{ env.FS_VERSION }}" \
             || { echo "ERROR: FreeSWITCH version mismatch"; exit 1; }
           echo "Published image verified: $IMAGE"
           echo "Digest: ${{ steps.build-push.outputs.digest }}"

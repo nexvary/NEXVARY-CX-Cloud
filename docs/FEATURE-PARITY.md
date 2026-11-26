@@ -22,7 +22,7 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Rollback | Missing | Not implemented |
 | Migration and recovery | Missing | Not implemented |
 | Clean install test | Partial | CI covers browser setup, sign-in and an application restart. Docker Compose startup is a separate gate. See the development log for run evidence. |
-| Failed-install recovery test | Partial | Browser suite exercises recovery from rejected PostgreSQL credentials and Redis connection failure. OS-level failed-install rollback remains unverified. |
+| Failed-install recovery test | Partial | Browser QA passed recovery from rejected PostgreSQL credentials and Redis connection failure. OS-level failed-install rollback remains unverified. |
 
 **Next action:** Implement existing-install detection and rollback; add failed-install recovery test.
 
@@ -222,14 +222,14 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Meaningful multicolor icons | Missing | lucide-react (monochrome); multicolor SVG icons not implemented |
 | Neon green / red status accents | Missing | Not verified |
 | Accessible contrast | Missing | Not audited |
-| Responsive desktop / mobile | Partial | Tailwind; not fully verified |
+| Responsive desktop / mobile | Partial | Actual dashboard cards verified without clipped text at 390×844 and 1440×900, in Arabic and English. Broader screen coverage remains partial. |
 | Bilingual Arabic / English RTL / LTR | Partial | i18next; layout not fully RTL-verified |
 | Guided setup | Partial | Install wizard |
 | Contextual help | Partial | `Info/Help.tsx` stub |
 | About System page | Partial | `Info/About.tsx` page |
 | About Developer page | Partial | `Info/Developer.tsx` page |
 | Contact Developer function | Partial | `Info/Developer.tsx` page; form without working transport |
-| Day / Night UI themes | Partial | Browser scenarios exercise the localized toggle, desktop and mobile layouts, and theme persistence after reload. See the development log for run evidence. Full contrast and Android theme parity remain unverified. |
+| Day / Night UI themes | Partial | Browser scenarios passed the localized web toggle, card layout in both themes, and theme persistence after reload. Full contrast and Android theme parity remain unverified. |
 | Real operational data in dashboard | Missing | Mock data throughout |
 | Empty / loading / error states | Missing | Not consistently implemented |
 

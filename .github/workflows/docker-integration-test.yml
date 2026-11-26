@@ -41,10 +41,12 @@ jobs:
     # Timeout is generous: on first run (no GHCR image) we build FS locally (~50 min)
     timeout-minutes: 90
 
-    # For workflow_run triggers only run when the upstream workflow succeeded
+    # A successful PR build does not publish an image.
     if: >
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     permissions:
       contents: read
@@ -58,19 +60,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for attempt in 1 2 3; do
+            if printf '%s' "$GHCR_TOKEN" | timeout 30s docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin; then
+              exit 0
+            fi
+            [[ "$attempt" == 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::GHCR login unavailable. The next step will try the public image and build locally if needed."
 
       # ── Generate test secrets ──────────────────────────────────────────────
       - name: Generate test secrets and deploy/.env
+        id: compose-env
         run: |
           set -euo pipefail
 
@@ -134,11 +144,14 @@ jobs:
         run: |
           FS_IMAGE="ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION}"
           if docker pull "${FS_IMAGE}" \
-            && docker run --rm --network none --entrypoint freeswitch "${FS_IMAGE}" -version; then
+            && docker run --rm --network none --entrypoint freeswitch "${FS_IMAGE}" -version \
+            && docker run --rm --network none --entrypoint cat "${FS_IMAGE}" \
+              /usr/share/nexvary/freeswitch-overrides/autoload_configs/event_socket.conf.xml \
+              | cmp -s docker/freeswitch/conf/autoload_configs/event_socket.conf.xml -; then
             echo "PASS: Pulled ${FS_IMAGE} from GHCR"
             echo "FS_IMAGE_SOURCE=ghcr" >> "$GITHUB_ENV"
           else
-            echo "INFO: GHCR image unavailable or unusable — building locally using compose.dev.yaml"
+            echo "INFO: GHCR image unavailable, stale, or unusable — building locally using compose.dev.yaml"
             docker compose \
               -f compose.yaml \
               -f compose.dev.yaml \
@@ -282,7 +295,7 @@ jobs:
       - name: Test — Redis connection
         run: |
           RESULT=$(docker compose --env-file deploy/.env exec -T app \
-            php artisan tinker --no-interaction --execute="echo (string) Redis::connection()->ping() === 'PONG' ? 'REDIS_OK' : 'REDIS_FAIL';" \
+            php artisan tinker --no-interaction --execute="echo (string) app('redis')->connection()->ping() === 'PONG' ? 'REDIS_OK' : 'REDIS_FAIL';" \
             2>&1 | tr -d '\r')
           echo "$RESULT" | grep -q 'REDIS_OK' || { echo "FAIL: Redis connection failed"; echo "$RESULT"; exit 1; }
           echo "PASS: Laravel → Redis OK"
@@ -1056,7 +1069,7 @@ jobs:
 
       # ── Summary ───────────────────────────────────────────────────────────
       - name: Container status summary
-        if: always()
+        if: always() && steps.compose-env.outcome == 'success'
         run: |
           echo "=== FreeSWITCH version ==="
           docker compose --env-file deploy/.env exec -T freeswitch \
@@ -1073,11 +1086,11 @@ jobs:
           echo "FS_IMAGE_SOURCE=${FS_IMAGE_SOURCE}"
 
       - name: Collect logs on failure
-        if: failure()
+        if: failure() && steps.compose-env.outcome == 'success'
         run: |
           docker compose --env-file deploy/.env logs --tail=100 2>&1 | \
             grep -v 'password\|PASSWORD\|secret\|SECRET\|key\|KEY' || true
 
       - name: Tear down Compose stack
-        if: always()
+        if: always() && steps.compose-env.outcome == 'success'
         run: docker compose --env-file deploy/.env down --volumes --remove-orphans

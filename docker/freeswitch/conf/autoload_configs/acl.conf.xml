@@ -1,6 +1,12 @@
 <!-- Access Control Lists — adds Docker bridge subnet for ESL/API access -->
 <configuration name="acl.conf" description="Network Lists">
   <network-lists>
+    <list name="nexvary-esl" default="deny">
+      <node type="allow" cidr="127.0.0.0/8"/>
+      <node type="allow" cidr="10.0.0.0/8"/>
+      <node type="allow" cidr="172.16.0.0/12"/>
+      <node type="allow" cidr="192.168.0.0/16"/>
+    </list>
 
     <list name="loopback.auto" default="allow">
       <node type="allow" cidr="127.0.0.1/8"/>
