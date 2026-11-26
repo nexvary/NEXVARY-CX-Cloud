@@ -9,3 +9,8 @@
 Date | Milestone/CX IDs | Changes | Test evidence | Commit/PR | Merge status | Remaining gaps | Next task
 
 Append entries; preserve history. Do not infer prior completion without evidence.
+
+## 2026-11-26 — CX13 and independent identity
+- Approved 25-provider target and advanced operations modules; independent Nexvary branding required.
+- Status: specification updated only; implementation and live interoperability not verified.
+- Next: audit existing references, preserve required legal notices, reconcile feature matrix and implement in dependency order.
