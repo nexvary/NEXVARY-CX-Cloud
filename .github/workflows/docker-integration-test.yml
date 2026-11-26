@@ -442,7 +442,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=[ap]]
+          [authentication username=[service]]
           Max-Forwards: 70
           User-Agent: SIPp CI Test
           Expires: 120
@@ -559,7 +559,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=[ap]]
+          [authentication username=[service]]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -654,7 +654,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 INVITE
           Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001 password=[ap]]
+          [authentication username=1001]
           Max-Forwards: 70
           Content-Type: application/sdp
           Content-Length: [len]
@@ -907,7 +907,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service] password=[ap]]
+          [authentication username=[service]]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
