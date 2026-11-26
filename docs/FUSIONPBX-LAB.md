@@ -85,3 +85,12 @@ a failed count query, the count displays as unavailable.
 
 The acceptance gate for Telnyx is a real call with bidirectional RTP,
 matching live Nexvary status, and a second successful call with Nexvary stopped.
+
+## Open release blockers
+
+- [Bundled Docker integration](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45835913025)
+  failed at **Start Compose stack**. Run FusionPBX acceptance on the independent
+  VM described above.
+- [Composer audit](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45835853313/job/139964387189)
+  failed independently of the Docker workflow. Resolve the audit findings and
+  rerun the gate before release.

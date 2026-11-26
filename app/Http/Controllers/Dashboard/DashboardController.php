@@ -143,10 +143,15 @@ class DashboardController extends Controller
 
     public function metrics(): JsonResponse
     {
-        return response()->json([
-            'active_calls' => count($this->pbx->getActiveCalls()),
-            'pbx_status'   => PbxMode::fusionPbx() ? null : $this->pbx->getStatus(),
-            'calls_1h'     => CallRecord::where('started_at', '>=', now()->subHour())->count(),
-        ]);
+        $metrics = [
+            'calls_1h' => CallRecord::where('started_at', '>=', now()->subHour())->count(),
+        ];
+
+        if (!PbxMode::fusionPbx()) {
+            $metrics['active_calls'] = count($this->pbx->getActiveCalls());
+            $metrics['pbx_status'] = $this->pbx->getStatus();
+        }
+
+        return response()->json($metrics);
     }
 }

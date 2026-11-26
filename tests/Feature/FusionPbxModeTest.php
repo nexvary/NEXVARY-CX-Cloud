@@ -33,6 +33,30 @@ it('restricts engine status to verified administrators', function () {
         ->get('/settings/server')->assertRedirect('/mfa');
 });
 
+it('keeps dashboard metrics available without exposing or querying live PBX data', function () {
+    $service = $this->mock(FreeSwitchService::class);
+    foreach (['getStatus', 'getActiveCalls', 'readActiveCallCount', 'api', 'connect'] as $method) {
+        $service->shouldNotReceive($method);
+    }
+
+    $this->actingAs(User::factory()->create())
+        ->getJson('/dashboard/metrics')
+        ->assertOk()
+        ->assertExactJson(['calls_1h' => 0]);
+});
+
+it('preserves the live dashboard metrics in the default mode', function () {
+    config(['nexvary.freeswitch.fusionpbx' => false]);
+    $service = $this->mock(FreeSwitchService::class);
+    $service->shouldReceive('getActiveCalls')->once()->andReturn([['uuid' => 'sample-call']]);
+    $service->shouldReceive('getStatus')->once()->andReturn(['connected' => true]);
+
+    $this->actingAs(User::factory()->create())
+        ->getJson('/dashboard/metrics')
+        ->assertOk()
+        ->assertExactJson(['calls_1h' => 0, 'active_calls' => 1, 'pbx_status' => ['connected' => true]]);
+});
+
 it('blocks direct management requests before controllers can change the PBX', function () {
     $this->mock(FreeSwitchService::class)->shouldNotReceive('bgapi');
     $this->actingAs(fusionPbxAdministrator());
