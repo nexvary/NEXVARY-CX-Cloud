@@ -56,6 +56,13 @@ class ServerController extends Controller
         ]);
     }
 
+    public function email(): Response
+    {
+        return Inertia::render('Settings/Email', [
+            'fusionPbx' => PbxMode::fusionPbx(),
+        ]);
+    }
+
     private function collectMetrics(bool $pbxConnected): array
     {
         $isWindows = PHP_OS_FAMILY === 'Windows';

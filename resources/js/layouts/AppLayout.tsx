@@ -2,7 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  LayoutDashboard, Phone, Users, MessageSquare, Ticket,
+  LayoutDashboard, Phone, Users, MessageSquare, Mail, Ticket,
   CreditCard, BarChart3, Settings, Shield, Server, ChevronDown,
   Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
@@ -93,6 +93,12 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
       href: '/sms',
       icon: MessageSquare,
       badge: unread.sms,
+    },
+    {
+      label: t('nav.email'),
+      href: '/email',
+      icon: Mail,
+      roles: ['superadmin', 'admin'],
     },
     {
       label: t('nav.crm'),

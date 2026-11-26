@@ -133,9 +133,13 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
     Route::prefix('call-center')->name('call_center.')->group(function () {
         Route::get('/live',       [CallRecordController::class, 'live'])->middleware(RequireLocalPbx::class)->name('live');
         Route::delete('/live/{uuid}', [CallRecordController::class, 'hangup'])->middleware(RequireLocalPbx::class)->name('hangup');
+        Route::get('/records/export', [CallRecordController::class, 'export'])->name('records.export');
         Route::get('/records',   [CallRecordController::class, 'index'])->name('records');
         Route::get('/recordings',[CallRecordController::class, 'recordings'])->name('recordings');
     });
+
+    Route::redirect('/reports', '/call-center/records')->name('reports');
+    Route::get('/email', [ServerController::class, 'email'])->middleware('nexvary.admin')->name('email');
 
     // ── SMS ───────────────────────────────────────────────────────────────
 

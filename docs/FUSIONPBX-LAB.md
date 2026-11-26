@@ -109,3 +109,12 @@ Set the optional `FUSIONPBX_ADMIN_URL` to a trusted HTTPS administration URL
 reachable by the operator. The URL is shared only on the administrator's
 Integrations page. Keep FusionPBX administration restricted to authorized
 operators and retain the existing private ESL deployment.
+
+## Reports and notifications
+
+| Function | Nexvary status in FusionPBX mode |
+| --- | --- |
+| Call detail records | Reports opens the Nexvary call history with caller/date filters and CSV export. The page uses records already ingested by Nexvary. Live FusionPBX CDR delivery and reconciliation remain unverified. |
+| PBX email notifications | Email opens an administrator guide to FusionPBX SMTP settings and its delivery queue. SMTP setup, voicemail and missed-call delivery tests are pending on the server. |
+| Call routing and provisioning | FusionPBX controls the operational configuration. Direct management from Nexvary would need an authenticated, audited integration. |
+| Advanced telephony | Transfers, call waiting, DND, Follow Me, parking, queues, ring groups and IVR need acceptance testing per feature. Fax, operator panel and music on hold need separate scope and implementation review. |

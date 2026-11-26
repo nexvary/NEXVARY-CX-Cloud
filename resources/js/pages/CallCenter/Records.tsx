@@ -77,10 +77,10 @@ const CDRPage: React.FC<Props> = ({ records, filters }) => {
           <h1 className="nx-page-title">Call Detail Records</h1>
           <p className="nx-page-subtitle">{records.total.toLocaleString()} total records</p>
         </div>
-        <button className="nx-btn-secondary gap-2">
+        <a className="nx-btn-secondary gap-2" href={`/call-center/records/export?${new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))}`}>
           <Download className="w-4 h-4" />
           Export CSV
-        </button>
+        </a>
       </div>
 
       <div className="p-6 space-y-4 nx-animate-in">
