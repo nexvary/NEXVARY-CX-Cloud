@@ -122,6 +122,9 @@ COPY --from=builder /usr/local/bin/fs_cli        /usr/local/bin/fs_cli
 COPY --from=builder /usr/local/lib/freeswitch    /usr/local/lib/freeswitch
 COPY --from=builder /usr/local/share/freeswitch  /usr/local/share/freeswitch
 
+# The executable links against the core library in the prefix lib directory.
+COPY --from=builder /usr/local/lib/libfreeswitch.so* /usr/local/lib/
+
 # spandsp3 runtime library (built from source, not in Debian)
 COPY --from=spandsp-builder /usr/local/lib/libspandsp* /usr/local/lib/
 
@@ -146,7 +149,8 @@ RUN mkdir -p \
         /var/lib/freeswitch/recordings \
         /var/lib/freeswitch/storage \
         /var/lib/freeswitch/db \
-    && ldconfig
+    && ldconfig \
+    && /usr/local/bin/freeswitch -version
 
 VOLUME ["/etc/freeswitch", "/var/log/freeswitch", "/var/lib/freeswitch/recordings"]
 

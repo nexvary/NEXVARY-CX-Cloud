@@ -129,12 +129,12 @@ jobs:
       - name: Pull or build FreeSWITCH image
         run: |
           FS_IMAGE="ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION}"
-          if docker pull "${FS_IMAGE}" 2>/dev/null; then
+          if docker pull "${FS_IMAGE}" 2>/dev/null \
+            && docker run --rm --network none --entrypoint freeswitch "${FS_IMAGE}" -version; then
             echo "PASS: Pulled ${FS_IMAGE} from GHCR"
             echo "FS_IMAGE_SOURCE=ghcr" >> "$GITHUB_ENV"
           else
-            echo "INFO: GHCR image not yet published — building locally using compose.dev.yaml"
-            echo "INFO: This is expected on first push to a new branch before docker-build.yml completes."
+            echo "INFO: GHCR image unavailable or failed the runtime version check; building from checkout"
             docker compose \
               -f compose.yaml \
               -f compose.dev.yaml \
@@ -151,6 +151,12 @@ jobs:
         timeout-minutes: 15
 
       # ── Start the stack ────────────────────────────────────────────────────
+      - name: Restrict ESL access to the test runner and Docker bridge
+        run: |
+          sudo iptables -I INPUT -p tcp --dport 8021 ! -i lo -j DROP
+          sudo iptables -I INPUT -i br-+ -p tcp --dport 8021 -j ACCEPT
+          sudo ip6tables -I INPUT -p tcp --dport 8021 ! -i lo -j DROP
+
       - name: Start Compose stack
         run: |
           docker compose --env-file deploy/.env up --detach --remove-orphans
