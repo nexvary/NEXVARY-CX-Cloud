@@ -59,7 +59,7 @@ COPY --from=composer-deps /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 
 # PHP config
 COPY docker/app/conf/php.ini /usr/local/etc/php/conf.d/nexvary.ini
-COPY docker/app/conf/php-fpm.conf /usr/local/etc/php-fpm.d/nexvary-cx.conf
+COPY docker/app/conf/php-fpm.conf /usr/local/etc/php-fpm.d/zzz-nexvary-cx.conf
 
 RUN useradd --system --uid 1001 --no-create-home --shell /sbin/nologin nexvary \
     # Shared GID 2000 (nexvary-pbx) must match docker/freeswitch/Dockerfile.
@@ -80,7 +80,7 @@ COPY --chown=nexvary:nexvary --from=node-build /build/public/build ./public/buil
 COPY --chown=nexvary:nexvary --from=composer-deps /var/www/nexvary-cx/vendor ./vendor
 
 # Storage directories (must be writable; actual data lives in named volume)
-RUN mkdir -p storage/app/public storage/framework/{cache,sessions,views} \
+RUN mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views \
         storage/logs bootstrap/cache \
     && chown -R nexvary:nexvary storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache

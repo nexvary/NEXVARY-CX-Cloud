@@ -16,7 +16,7 @@ const browser = await chromium.launch(QA_CHROMIUM_PATH ? {
     args: ['--no-sandbox', '--no-zygote', '--single-process', '--disable-breakpad', '--disable-software-rasterizer'],
 } : {});
 
-const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
+const page = await browser.newPage({ viewport, reducedMotion: 'reduce', colorScheme: 'dark' });
 page.setDefaultTimeout(15_000);
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -132,10 +132,18 @@ try {
     await field('password', password);
     await submit();
     await page.waitForURL('**/dashboard');
+    const switchToDay = page.getByRole('button', { name: locale === 'ar' ? 'التبديل إلى المظهر النهاري' : 'Switch to day theme', exact: true });
+    const switchToNight = page.getByRole('button', { name: locale === 'ar' ? 'التبديل إلى المظهر الليلي' : 'Switch to night theme', exact: true });
+    await page.locator('html[data-nx-theme="night"]').waitFor();
     await record('18-authenticated-dashboard');
+    await switchToDay.click();
+    await page.locator('html[data-nx-theme="day"]').waitFor();
     await page.reload();
-    await page.locator('h1').waitFor();
+    await page.locator('html[data-nx-theme="day"]').waitFor();
     assert.equal(path(), '/dashboard', 'Session was lost after reload');
+    await record('18-authenticated-dashboard-day');
+    await switchToNight.click();
+    await page.locator('html[data-nx-theme="night"]').waitFor();
 
     if (view === 'mobile') {
         await page.locator('button[aria-controls="app-navigation"]').click();

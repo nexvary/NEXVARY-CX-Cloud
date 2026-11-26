@@ -106,7 +106,7 @@ LABEL org.opencontainers.image.vendor="NEXVARY"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 libcurl4 libpcre3 libsqlite3-0 \
     libpq5 \
-    libopus0 libvpx7 libspeex1 libspeexdsp1 \
+    libopus0 libvpx7 libspeex1 libspeexdsp1 libsndfile1 \
     libedit2 libncurses6 \
     libldns3 \
     liblua5.4-0 \
@@ -120,6 +120,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/bin/freeswitch    /usr/local/bin/freeswitch
 COPY --from=builder /usr/local/bin/fs_cli        /usr/local/bin/fs_cli
 COPY --from=builder /usr/local/lib/freeswitch    /usr/local/lib/freeswitch
+COPY --from=builder /usr/local/lib/libfreeswitch.so* /usr/local/lib/
 COPY --from=builder /usr/local/share/freeswitch  /usr/local/share/freeswitch
 
 # spandsp3 runtime library (built from source, not in Debian)
@@ -146,7 +147,8 @@ RUN mkdir -p \
         /var/lib/freeswitch/recordings \
         /var/lib/freeswitch/storage \
         /var/lib/freeswitch/db \
-    && ldconfig
+    && ldconfig \
+    && freeswitch -version
 
 VOLUME ["/etc/freeswitch", "/var/log/freeswitch", "/var/lib/freeswitch/recordings"]
 

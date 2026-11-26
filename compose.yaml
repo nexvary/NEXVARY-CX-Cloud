@@ -125,7 +125,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/up 2>/dev/null | grep -q ok || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/up"]
       interval: 20s
       timeout: 5s
       start_period: 30s
@@ -148,7 +148,7 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health 2>/dev/null | grep -q ok || exit 1"]
+      test: ["CMD", "node", "/app/healthcheck.mjs"]
       interval: 20s
       timeout: 5s
       start_period: 20s

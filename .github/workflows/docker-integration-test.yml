@@ -6,6 +6,8 @@ on:
     paths:
       - 'compose.yaml'
       - 'compose.dev.yaml'
+      - 'composer.json'
+      - 'composer.lock'
       - 'docker/**'
       - 'rtc-bridge/**'
       - 'app/**'
@@ -16,6 +18,8 @@ on:
     paths:
       - 'compose.yaml'
       - 'compose.dev.yaml'
+      - 'composer.json'
+      - 'composer.lock'
       - 'docker/**'
       - 'rtc-bridge/**'
       - 'app/**'
@@ -129,12 +133,12 @@ jobs:
       - name: Pull or build FreeSWITCH image
         run: |
           FS_IMAGE="ghcr.io/nexvary/nexvary-cx-freeswitch:${FS_VERSION}"
-          if docker pull "${FS_IMAGE}" 2>/dev/null; then
+          if docker pull "${FS_IMAGE}" \
+            && docker run --rm --network none --entrypoint freeswitch "${FS_IMAGE}" -version; then
             echo "PASS: Pulled ${FS_IMAGE} from GHCR"
             echo "FS_IMAGE_SOURCE=ghcr" >> "$GITHUB_ENV"
           else
-            echo "INFO: GHCR image not yet published — building locally using compose.dev.yaml"
-            echo "INFO: This is expected on first push to a new branch before docker-build.yml completes."
+            echo "INFO: GHCR image unavailable or unusable — building locally using compose.dev.yaml"
             docker compose \
               -f compose.yaml \
               -f compose.dev.yaml \
@@ -270,7 +274,7 @@ jobs:
       - name: Test — PostgreSQL connection
         run: |
           RESULT=$(docker compose --env-file deploy/.env exec -T app \
-            php artisan tinker --no-interaction -- "echo DB::connection()->getPdo() ? 'PDO_OK' : 'PDO_FAIL';" \
+            php artisan tinker --no-interaction --execute="echo DB::connection()->getPdo() ? 'PDO_OK' : 'PDO_FAIL';" \
             2>&1 | tr -d '\r')
           echo "$RESULT" | grep -q 'PDO_OK' || { echo "FAIL: DB connection failed"; echo "$RESULT"; exit 1; }
           echo "PASS: Laravel → PostgreSQL OK"
@@ -278,7 +282,7 @@ jobs:
       - name: Test — Redis connection
         run: |
           RESULT=$(docker compose --env-file deploy/.env exec -T app \
-            php artisan tinker --no-interaction -- "echo Redis::connection()->ping() === true ? 'REDIS_OK' : 'REDIS_FAIL';" \
+            php artisan tinker --no-interaction --execute="echo (string) Redis::connection()->ping() === 'PONG' ? 'REDIS_OK' : 'REDIS_FAIL';" \
             2>&1 | tr -d '\r')
           echo "$RESULT" | grep -q 'REDIS_OK' || { echo "FAIL: Redis connection failed"; echo "$RESULT"; exit 1; }
           echo "PASS: Laravel → Redis OK"
@@ -1041,9 +1045,9 @@ jobs:
       # ── RTC bridge ────────────────────────────────────────────────────────
       - name: Test — RTC bridge responds to health check
         run: |
-          HTTP_STATUS=$(curl -so /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/rtc/health" \
+          HTTP_STATUS=$(curl -so /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/health" \
                         2>/dev/null || echo '000')
-          [[ "$HTTP_STATUS" =~ ^(200|404)$ ]] || {
+          [[ "$HTTP_STATUS" == '200' ]] || {
             echo "FAIL: RTC bridge health returned ${HTTP_STATUS}"
             docker compose --env-file deploy/.env logs rtc-bridge
             exit 1

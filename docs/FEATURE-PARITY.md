@@ -15,14 +15,14 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Existing-install detection | Missing | Not implemented |
 | Safe upgrades | Missing | Not implemented |
 | HTTPS domain access | Partial | Web wizard step checks domain |
-| Setup wizard | Partial | `Install/Wizard.tsx` page; `installer/index.php` backend |
+| Setup wizard | Partial | Laravel and Inertia wizard exercised by `scripts/qa-installation.sh` against PostgreSQL and Redis. See the development log for run evidence. |
 | Initial administrator creation | Partial | Wizard creates admin; CI-tested |
 | Database / Redis / ESL connectivity checks | Partial | Wizard checks; CI-tested with live PostgreSQL/Redis |
 | Certificate reuse | Missing | Not implemented |
 | Rollback | Missing | Not implemented |
 | Migration and recovery | Missing | Not implemented |
-| Clean install test | Partial | CI: `installer-syntax`, `installer-security`, visual QA jobs |
-| Failed-install recovery test | Missing | Not tested |
+| Clean install test | Partial | CI covers browser setup, sign-in and an application restart. Docker Compose startup is a separate gate. See the development log for run evidence. |
+| Failed-install recovery test | Partial | Browser suite exercises recovery from rejected PostgreSQL credentials and Redis connection failure. OS-level failed-install rollback remains unverified. |
 
 **Next action:** Implement existing-install detection and rollback; add failed-install recovery test.
 
@@ -229,11 +229,11 @@ Update this file in the same commit as development work. Do not infer prior comp
 | About System page | Partial | `Info/About.tsx` page |
 | About Developer page | Partial | `Info/Developer.tsx` page |
 | Contact Developer function | Partial | `Info/Developer.tsx` page; form without working transport |
-| Day / Night UI themes | **Verified** | `useTheme` hook + `[data-nx-theme="day"]` CSS tokens; toggle button in AppLayout header; persisted in localStorage; respects system `prefers-color-scheme` |
+| Day / Night UI themes | Partial | Browser scenarios exercise the localized toggle, desktop and mobile layouts, and theme persistence after reload. See the development log for run evidence. Full contrast and Android theme parity remain unverified. |
 | Real operational data in dashboard | Missing | Mock data throughout |
 | Empty / loading / error states | Missing | Not consistently implemented |
 
-**Next action:** Implement Day/Night theme toggle; replace monochrome icons with multicolor SVG/licensed assets.
+**Next action:** Verify theme contrast and replace monochrome icons with multicolor SVG or licensed assets.
 
 ---
 

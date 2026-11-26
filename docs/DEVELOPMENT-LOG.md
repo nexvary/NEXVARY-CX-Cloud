@@ -84,3 +84,11 @@ Append entries; preserve history. Do not infer prior completion without evidence
 - Approved 25-provider target and advanced operations modules; independent Nexvary branding required.
 - Status: specification updated only; implementation and live interoperability not verified.
 - Next: audit existing references, preserve required legal notices, reconcile feature matrix and implement in dependency order.
+
+## 2026-11-26 — CX01/CX12 and CI recovery
+
+- Diagnosis: `91bbe57` failed dependency installation in Backend, Security Audit, Installation and visual QA, and Docker Integration because `composer.lock` still contained older Symfony versions. The preceding Docker run also reported a missing Laravel compiled-view directory, a missing FreeSWITCH shared library, and an unhealthy RTC bridge.
+- Changes: locked Symfony HttpFoundation, HttpKernel, Mailer and Routing to 7.4.24 with the existing PHP 8.3 platform target. CI validates and audits the checked-in lock and runs Docker integration on dependency changes. The Docker changes create Laravel runtime directories, configure one PHP-FPM pool, package the FreeSWITCH runtime library, and exercise the actual application and RTC health endpoints. Browser QA now checks the localized Day/Night toggle and persistence after reload.
+- Local evidence: strict Composer validation, locked Composer audit, dependency installation, platform checks, frontend build, type check, lint and translation completeness passed. The frontend audit passed the existing high-severity gate and reported a moderate i18next advisory.
+- Branch and PR: `feature/stage-1-foundation`, [PR #1](https://github.com/nexvary/NEXVARY-CX-Cloud/pull/1), open and unmerged. GitHub Actions evidence to be recorded once the runs complete.
+- Remaining scope: complete the Docker/SIP regression, browser installation and security checks on GitHub. OS-level rollback, carrier interoperability and full theme contrast remain outside this verification.
