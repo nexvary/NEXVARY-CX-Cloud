@@ -154,6 +154,48 @@ class TrunkController extends Controller
     }
 
     /**
+     * Enable a gateway and register it with the SIP provider.
+     *
+     * Writes the config (in case it was removed), instructs FreeSWITCH to
+     * start the gateway, then returns the registration status so the UI can
+     * show REGED / NOREG / TRYING immediately.
+     */
+    public function activate(Request $request, Trunk $trunk): JsonResponse
+    {
+        $this->config->writeTrunkConfig($trunk);
+        $this->pbx->reloadGateway("nexvary-{$trunk->id}");
+
+        $trunk->update(['enabled' => true]);
+
+        $raw    = $this->pbx->api("sofia status gateway nexvary-{$trunk->id}") ?: '';
+        $status = $this->parseGatewayStatus($raw);
+
+        return response()->json(['ok' => true, 'status' => $status, 'raw' => $raw]);
+    }
+
+    /**
+     * Disable a gateway: kill the registration and mark the trunk disabled.
+     */
+    public function deactivate(Request $request, Trunk $trunk): JsonResponse
+    {
+        $this->pbx->api("sofia profile external killgw nexvary-{$trunk->id}");
+
+        $trunk->update(['enabled' => false]);
+
+        return response()->json(['ok' => true, 'status' => 'DISABLED']);
+    }
+
+    /** Extract the state token from a "sofia status gateway" response. */
+    private function parseGatewayStatus(string $raw): string
+    {
+        if (preg_match('/\b(REGED|NOREG|TRYING|FAILED|TIMEOUT|UNREGED)\b/i', $raw, $m)) {
+            return strtoupper($m[1]);
+        }
+
+        return 'UNKNOWN';
+    }
+
+    /**
      * Return all built-in provider presets for the frontend picker.
      * This endpoint requires no specific provider knowledge on the client side.
      */

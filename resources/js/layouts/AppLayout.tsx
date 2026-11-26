@@ -1,12 +1,13 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Phone, Users, MessageSquare, Mail, Ticket,
   CreditCard, BarChart3, Settings, Shield, Server, ChevronDown,
   Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
-  Bot, FileText, Package, Hash, HelpCircle, Info, Code2, Smartphone
+  Bot, FileText, Package, Hash, HelpCircle, Info, Code2, Smartphone,
+  Sun, Moon
 } from 'lucide-react';
 
 interface PageProps {
@@ -39,6 +40,32 @@ interface NavItem {
   roles?: string[];
   children?: NavItem[];
 }
+
+// ── Theme Hook (CX12) ────────────────────────────────────────────────────────
+// Night = default glossy black; Day = light surfaces + silver accents
+type Theme = 'night' | 'day';
+
+const STORAGE_KEY = 'nx-theme';
+
+const getInitialTheme = (): Theme => {
+  if (typeof window === 'undefined') return 'night';
+  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+  if (stored === 'day' || stored === 'night') return stored;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night';
+};
+
+const useTheme = (): [Theme, () => void] => {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-nx-theme', theme);
+    localStorage.setItem(STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggle = useCallback(() => setTheme(t => t === 'night' ? 'day' : 'night'), []);
+
+  return [theme, toggle];
+};
 
 // ── Navigation Config ─────────────────────────────────────────────────────
 
@@ -261,6 +288,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
 
   // Set document direction from locale
   useEffect(() => {
@@ -336,6 +364,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
               style={{ background: 'var(--nx-error)' }}
             />
           )}
+        </button>
+
+        {/* Day / Night theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="nx-btn-ghost p-2"
+          aria-label={theme === 'night' ? t('common.switch_to_day') : t('common.switch_to_night')}
+          title={theme === 'night' ? t('common.switch_to_day') : t('common.switch_to_night')}
+        >
+          {theme === 'night' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Language */}

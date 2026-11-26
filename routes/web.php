@@ -84,9 +84,11 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
         // SIP Trunks
         Route::resource('trunks', TrunkController::class);
-        Route::post('trunks/{trunk}/reload', [TrunkController::class, 'reload'])->name('trunks.reload');
-        Route::get('trunks/{trunk}/health',  [TrunkController::class, 'health'])->name('trunks.health');
-        Route::get('trunks/presets/all',     [TrunkController::class, 'presets'])->name('trunks.presets');
+        Route::post('trunks/{trunk}/reload',     [TrunkController::class, 'reload'])->name('trunks.reload');
+        Route::post('trunks/{trunk}/activate',   [TrunkController::class, 'activate'])->name('trunks.activate');
+        Route::post('trunks/{trunk}/deactivate', [TrunkController::class, 'deactivate'])->name('trunks.deactivate');
+        Route::get('trunks/{trunk}/health',      [TrunkController::class, 'health'])->name('trunks.health');
+        Route::get('trunks/presets/all',         [TrunkController::class, 'presets'])->name('trunks.presets');
 
         // DIDs
         Route::resource('dids', DidController::class);

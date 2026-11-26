@@ -185,6 +185,86 @@ it('reload uses the correct FreeSWITCH gateway name nexvary-{uuid}', function ()
         ->assertJson(['ok' => true]);
 });
 
+// ── Activate / Deactivate (CX02) ─────────────────────────────────────────────
+
+it('activate writes config, reloads gateway, marks trunk enabled, returns status', function () {
+    [$tenant, $user] = makeTrunkAdmin();
+    [$pbx, $config]  = mockPbxServices();
+
+    $trunk = Trunk::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'Activate Me',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'activate.example.com',
+        'enabled'   => false,
+    ]);
+
+    $config->shouldReceive('writeTrunkConfig')
+           ->once()
+           ->withArgs(fn ($t) => $t->id === $trunk->id);
+    $pbx->shouldReceive('reloadGateway')
+        ->once()
+        ->with("nexvary-{$trunk->id}");
+    $pbx->shouldReceive('api')
+        ->once()
+        ->with("sofia status gateway nexvary-{$trunk->id}")
+        ->andReturn("nexvary-{$trunk->id}\tREGED\t");
+
+    $this->actingAs($user)
+        ->post("/pbx/trunks/{$trunk->id}/activate")
+        ->assertOk()
+        ->assertJsonFragment(['ok' => true, 'status' => 'REGED']);
+
+    $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => true]);
+});
+
+it('activate returns UNKNOWN when FreeSWITCH gives no recognizable status token', function () {
+    [$tenant, $user] = makeTrunkAdmin();
+    [$pbx, $config]  = mockPbxServices();
+
+    $trunk = Trunk::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'Unknown Status',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'unknown.example.com',
+        'enabled'   => false,
+    ]);
+
+    $config->shouldReceive('writeTrunkConfig')->once();
+    $pbx->shouldReceive('reloadGateway')->once();
+    $pbx->shouldReceive('api')->once()->andReturn(false);
+
+    $this->actingAs($user)
+        ->post("/pbx/trunks/{$trunk->id}/activate")
+        ->assertOk()
+        ->assertJsonFragment(['status' => 'UNKNOWN']);
+});
+
+it('deactivate kills gateway, marks trunk disabled, returns DISABLED', function () {
+    [$tenant, $user] = makeTrunkAdmin();
+    [$pbx, $config]  = mockPbxServices();
+
+    $trunk = Trunk::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'Kill Me',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'kill.example.com',
+        'enabled'   => true,
+    ]);
+
+    $pbx->shouldReceive('api')
+        ->once()
+        ->with("sofia profile external killgw nexvary-{$trunk->id}")
+        ->andReturn('+OK');
+
+    $this->actingAs($user)
+        ->post("/pbx/trunks/{$trunk->id}/deactivate")
+        ->assertOk()
+        ->assertJson(['ok' => true, 'status' => 'DISABLED']);
+
+    $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => false]);
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 it('health uses the correct FreeSWITCH gateway name nexvary-{uuid}', function () {

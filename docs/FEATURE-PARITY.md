@@ -48,9 +48,9 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Device provisioning | Missing | Not implemented |
 | Dialplan editor | Missing | Not implemented |
 | Validation | Missing | Not implemented |
-| Configuration activation and rollback | Missing | Not implemented |
+| Configuration activation and rollback | **Partial** | `activate`/`deactivate` endpoints in TrunkController; tested in TrunkLifecycleTest |
 
-**Next action:** Implement live FreeSWITCH gateway registration and configuration activation.
+**Next action:** Implement configuration rollback; add live FreeSWITCH integration test in Docker CI.
 
 ---
 
@@ -229,7 +229,7 @@ Update this file in the same commit as development work. Do not infer prior comp
 | About System page | Partial | `Info/About.tsx` page |
 | About Developer page | Partial | `Info/Developer.tsx` page |
 | Contact Developer function | Partial | `Info/Developer.tsx` page; form without working transport |
-| Day / Night UI themes | Missing | Single theme only; theme switch not implemented |
+| Day / Night UI themes | **Verified** | `useTheme` hook + `[data-nx-theme="day"]` CSS tokens; toggle button in AppLayout header; persisted in localStorage; respects system `prefers-color-scheme` |
 | Real operational data in dashboard | Missing | Mock data throughout |
 | Empty / loading / error states | Missing | Not consistently implemented |
 
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-26 | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-26 (CX02 activate/deactivate + CX12 Day/Night theme) | Branch: feature/stage-1-foundation*

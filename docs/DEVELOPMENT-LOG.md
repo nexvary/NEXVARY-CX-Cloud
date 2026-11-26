@@ -34,6 +34,29 @@ Append entries; preserve history. Do not infer prior completion without evidence
 
 **Next task:** Implement Day/Night UI theme toggle (CX12) and Gateway Center health check (CX13 Partial), or proceed to CX02 live FreeSWITCH configuration activation — confirm priority with owner.
 
+## 2026-11-26 — CX02 gateway activation + CX12 Day/Night theme
+
+**Milestone/CX IDs:** CX02, CX12
+
+**Changes:**
+- `app/Http/Controllers/PBX/TrunkController.php`: added `activate()` — writes config, calls `reloadGateway()`, sets `enabled = true`, returns parsed registration status (REGED/NOREG/TRYING/FAILED/TIMEOUT/UNKNOWN); added `deactivate()` — kills gateway via ESL, sets `enabled = false`; added `parseGatewayStatus()` private helper.
+- `routes/web.php`: added `POST trunks/{trunk}/activate` and `POST trunks/{trunk}/deactivate` routes.
+- `tests/Feature/TrunkLifecycleTest.php`: added 3 tests — activate marks enabled + returns REGED status, activate returns UNKNOWN on no-status ESL response, deactivate kills gateway + marks disabled.
+- `resources/css/nexvary.css`: added `[data-nx-theme="day"]` token overrides (light surfaces + silver accents + accessible contrast); day-mode header and sidebar overrides.
+- `resources/js/layouts/AppLayout.tsx`: added `useTheme` hook (localStorage persistence + `prefers-color-scheme` detection); added Sun/Moon toggle button in header; sets `data-nx-theme` on `<html>`.
+
+**Test evidence:** `TrunkLifecycleTest.php` — 3 Pest tests covering activate/deactivate gateway lifecycle with mocked ESL and config services. Local PHP unavailable; acceptance via GitHub Actions CI.
+
+**Commit/PR:** pushed to feature/stage-1-foundation
+**Merge status:** branch not merged; PR draft pending owner authorization
+
+**Remaining gaps:**
+- CX02: activation rollback, live ESL integration test in Docker CI container.
+- CX12: multicolor SVG icons (lucide-react is monochrome), neon status accents, full RTL Day-mode verification, accessible contrast audit.
+- CX02/CX13: Gateway Center (health, reconnect, stats dashboard) — Missing.
+
+**Next task:** Multicolor icon implementation (CX12) or Gateway Center health dashboard (CX13).
+
 ## 2026-11-26 — CX13 and independent identity
 - Approved 25-provider target and advanced operations modules; independent Nexvary branding required.
 - Status: specification updated only; implementation and live interoperability not verified.

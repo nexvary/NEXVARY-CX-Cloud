@@ -77,6 +77,45 @@
   --nx-transition-slow:300ms cubic-bezier(0.4,0,0.2,1);
 }
 
+/* ── Day Theme (CX12) ──────────────────────────────────────────────────────── */
+/* Applied when <html data-nx-theme="day"> */
+[data-nx-theme="day"] {
+  --nx-bg-base:        #f0f2f8;
+  --nx-bg-surface:     #ffffff;
+  --nx-bg-card:        #f8f9fc;
+  --nx-bg-card-hover:  #eef1f8;
+  --nx-bg-elevated:    #e8ecf5;
+  --nx-bg-input:       #ffffff;
+  --nx-bg-modal:       #ffffff;
+
+  --nx-border:         #d0d6e8;
+  --nx-border-active:  #a8b2cc;
+  --nx-border-focus:   #5050a0;
+  --nx-silver:         #3a4060;
+  --nx-silver-dim:     #6a7490;
+
+  --nx-text-primary:   #1a1d2e;
+  --nx-text-secondary: #4a4f6a;
+  --nx-text-muted:     #8a8fa8;
+  --nx-text-inverse:   #f0f2f8;
+
+  --nx-green-muted:    rgba(0,180,80,0.12);
+  --nx-green-glow:     rgba(0,180,80,0.20);
+  --nx-glow-green:     0 0 20px rgba(0,180,80,0.25);
+  --nx-glow-silver:    0 0 15px rgba(100,120,180,0.10);
+}
+
+[data-nx-theme="day"] .nx-app-header {
+  background: rgba(240,242,248,0.96);
+  border-bottom-color: var(--nx-border);
+  box-shadow: 0 1px 12px rgba(0,0,0,0.08);
+}
+
+[data-nx-theme="day"] .nx-sidebar {
+  background: var(--nx-bg-surface);
+  border-inline-end-color: var(--nx-border);
+}
+
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
