@@ -442,7 +442,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service]]
+          [authentication username=[service] password=${CI_SIP_PASS_A}]
           Max-Forwards: 70
           User-Agent: SIPp CI Test
           Expires: 120
@@ -559,7 +559,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service]]
+          [authentication username=[service] password=${WRONG_PASS}]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -654,7 +654,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 INVITE
           Contact: <sip:1001@[local_ip]:[local_port]>
-          [authentication username=1001]
+          [authentication username=1001 password=${CI_SIP_PASS_A}]
           Max-Forwards: 70
           Content-Type: application/sdp
           Content-Length: [len]
@@ -879,6 +879,7 @@ jobs:
           write_cross_tenant_scenario() {
             local DOMAIN="$1"
             local FILE="$2"
+            local PASSWORD="$3"
             cat > "${FILE}" <<SIPP_EOF
             <?xml version="1.0" encoding="iso-8859-1" ?>
             <scenario name="Cross-tenant REGISTER [service] — expect 403">
@@ -907,7 +908,7 @@ jobs:
           Call-ID: [call_id]
           CSeq: 2 REGISTER
           Contact: <sip:[service]@[local_ip]:[local_port]>
-          [authentication username=[service]]
+          [authentication username=[service] password=${PASSWORD}]
           Max-Forwards: 70
           Expires: 60
           Content-Length: 0
@@ -923,7 +924,7 @@ jobs:
 
           # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
           # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
-          write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml
+          write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml "${CI_SIP_PASS_A}"
           sipp 127.0.0.1:5060 \
             -sf /tmp/cross_tenant_a_in_b.xml \
             -s 1001 \
@@ -942,7 +943,7 @@ jobs:
 
           # Test B: tenant B's password (-ap CI_SIP_PASS_B) used against tenant A's domain
           # Sipp sends REGISTER for 1001@tenant-a.pbx.test with tenant B's Digest → 403
-          write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml
+          write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml "${CI_SIP_PASS_B}"
           sipp 127.0.0.1:5060 \
             -sf /tmp/cross_tenant_b_in_a.xml \
             -s 1001 \
