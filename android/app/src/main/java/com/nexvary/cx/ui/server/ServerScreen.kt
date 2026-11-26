@@ -1,5 +1,9 @@
 package com.nexvary.cx.ui.server
 
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +66,45 @@ fun ServerScreen(
                 }) { Text("حفظ وتسجيل") }
             },
             dismissButton = { TextButton(onClick = { showSipSetup = false }) { Text("إلغاء") } },
+        )
+    }
+
+    val context = LocalContext.current
+    var showAdmin by remember { mutableStateOf(false) }
+    var portalError by remember { mutableStateOf<String?>(null) }
+    if (showAdmin && pairedCredentials != null) {
+        AlertDialog(
+            onDismissRequest = { showAdmin = false },
+            title = { Text("إدارة الخادم") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("تُفتح لوحة الإدارة في المتصفح باستخدام تسجيل دخول المشرف المعتاد.")
+                    listOf(
+                        AdminPage.Dashboard to "لوحة Nexvary",
+                        AdminPage.Users to "مستخدمو Nexvary",
+                        AdminPage.Telephony to "إدارة السنترال والامتدادات",
+                    ).forEach { (page, label) ->
+                        OutlinedButton(
+                            onClick = {
+                                val url = adminPortalUrl(pairedCredentials.serverUrl, page)
+                                if (url == null) {
+                                    portalError = "عنوان لوحة الإدارة غير صالح"
+                                } else {
+                                    try {
+                                        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                                        showAdmin = false
+                                    } catch (_: ActivityNotFoundException) {
+                                        portalError = "لا يوجد متصفح متاح لفتح لوحة الإدارة"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(label) }
+                    }
+                    portalError?.let { Text(it, color = NxError) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAdmin = false }) { Text("إغلاق") } },
         )
     }
 
@@ -138,6 +181,15 @@ fun ServerScreen(
         if (pairedCredentials != null) {
             OutlinedButton(onClick = { showSipSetup = true }, enabled = !sipState.inCall,
                 modifier = Modifier.fillMaxWidth()) { Text("إعداد حساب SIP") }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (pairedCredentials != null) {
+            OutlinedButton(
+                onClick = { portalError = null
+                    showAdmin = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("إدارة الخادم") }
             Spacer(Modifier.height(12.dp))
         }
 

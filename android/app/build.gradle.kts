@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation("androidx.browser:browser:1.8.0")
 
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
