@@ -48,9 +48,9 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Device provisioning | Missing | Not implemented |
 | Dialplan editor | Missing | Not implemented |
 | Validation | Missing | Not implemented |
-| Configuration activation and rollback | **Partial** | `activate`/`deactivate` endpoints in TrunkController; tested in TrunkLifecycleTest |
+| Configuration activation and rollback | **Partial** | `activate`: writes config → ESL reload (bool-checked) → enable; rolls back config file on ESL failure. `deactivate`: best-effort ESL killgw → removes config file → disables. Tenant isolation enforced via model binding (TenantScope) + explicit tenant_id check. 7 tests in TrunkLifecycleTest (REGED, ESL-down rollback, UNKNOWN status, killgw, ESL-down deactivate, cross-tenant 404). |
 
-**Next action:** Implement configuration rollback; add live FreeSWITCH integration test in Docker CI.
+**Next action:** Live FreeSWITCH integration test in Docker CI; add registered state polling for TRYING→REGED transitions.
 
 ---
 

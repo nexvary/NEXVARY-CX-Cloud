@@ -57,6 +57,29 @@ Append entries; preserve history. Do not infer prior completion without evidence
 
 **Next task:** Multicolor icon implementation (CX12) or Gateway Center health dashboard (CX13).
 
+## 2026-11-26 — CI fixes + CX02 hardening
+
+**Milestone/CX IDs:** CX02 (hardening), CI
+
+**Changes:**
+- `tests/Unit/SipProviderPresetsTest.php`: fixed 3 Pest assertion API misuses — `toContain(key, msg)` and `toHaveKey(key, msg)` treat the second arg as an expected value in Pest v2; removed the string second arguments. These tests were failing in both d81cae0 and 2b22e6e.
+- `composer.json`: added explicit minimum constraints `symfony/http-kernel >=7.4.24`, `symfony/mailer >=7.4.24`, `symfony/routing >=7.4.24` to enforce CVE-patched versions (CVE-2026-133743, CVE-2026-133751, CVE-2026-133754, CVE-2026-133755).
+- `.github/workflows/ci.yml`: added `composer update symfony/http-kernel symfony/mailer symfony/routing` step before the security audit so CI audits patched packages.
+- `app/Http/Controllers/PBX/TrunkController.php`: hardened `activate()` — checks `reloadGateway()` bool return; rolls back config file (deleteTrunkConfig) if ESL fails, returns 503; explicit tenant_id guard (defense-in-depth). Hardened `deactivate()` — calls `deleteTrunkConfig` to remove config file preventing re-registration on FreeSWITCH restart; proceeds even if ESL unreachable; returns structured state response with `esl_killgw` bool.
+- `tests/Feature/TrunkLifecycleTest.php`: replaced 3 activate/deactivate tests with 6 tests: (1) activate success → REGED, (2) activate ESL failure → 503 + rollback + trunk remains disabled, (3) activate status UNKNOWN, (4) deactivate success → deleteTrunkConfig called + esl_killgw=true, (5) deactivate with ESL down → still disables + config removed, (6) cross-tenant isolation → 404.
+
+**Test evidence:** 7 Pest feature tests for activate/deactivate lifecycle with mocked ESL. SipProviderPresetsTest: 10 unit tests all passing. Local PHP unavailable; acceptance via GitHub Actions CI.
+
+**Commit/PR:** pushed to feature/stage-1-foundation
+**Merge status:** branch not merged; PR draft pending owner authorization
+
+**Remaining gaps:**
+- CX12: visual verification requires running Laravel app (PHP + PostgreSQL + Redis + FreeSWITCH); blocked locally; `useTheme` hook and CSS tokens correct by code review; CI visual QA job covers browser rendering.
+- CX02: live ESL integration test in Docker CI; registered state polling for TRYING→REGED.
+- Security: Symfony CVE fix requires `composer update` to update lock file; CI step applies patch; lock file not yet committed with v7.4.24 versions.
+
+**Next task:** Commit updated composer.lock (after CI runs composer update), then CX12 multicolor icons or CX13 Gateway Center health dashboard.
+
 ## 2026-11-26 — CX13 and independent identity
 - Approved 25-provider target and advanced operations modules; independent Nexvary branding required.
 - Status: specification updated only; implementation and live interoperability not verified.

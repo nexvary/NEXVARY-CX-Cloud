@@ -185,9 +185,9 @@ it('reload uses the correct FreeSWITCH gateway name nexvary-{uuid}', function ()
         ->assertJson(['ok' => true]);
 });
 
-// ── Activate / Deactivate (CX02) ─────────────────────────────────────────────
+// ── Activate / Deactivate (CX02 hardened) ────────────────────────────────────
 
-it('activate writes config, reloads gateway, marks trunk enabled, returns status', function () {
+it('activate writes config, reloads gateway, marks trunk enabled, returns REGED status', function () {
     [$tenant, $user] = makeTrunkAdmin();
     [$pbx, $config]  = mockPbxServices();
 
@@ -204,7 +204,8 @@ it('activate writes config, reloads gateway, marks trunk enabled, returns status
            ->withArgs(fn ($t) => $t->id === $trunk->id);
     $pbx->shouldReceive('reloadGateway')
         ->once()
-        ->with("nexvary-{$trunk->id}");
+        ->with("nexvary-{$trunk->id}")
+        ->andReturn(true);
     $pbx->shouldReceive('api')
         ->once()
         ->with("sofia status gateway nexvary-{$trunk->id}")
@@ -213,12 +214,43 @@ it('activate writes config, reloads gateway, marks trunk enabled, returns status
     $this->actingAs($user)
         ->post("/pbx/trunks/{$trunk->id}/activate")
         ->assertOk()
-        ->assertJsonFragment(['ok' => true, 'status' => 'REGED']);
+        ->assertJson(['ok' => true, 'configured' => true, 'enabled' => true, 'status' => 'REGED']);
 
     $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => true]);
 });
 
-it('activate returns UNKNOWN when FreeSWITCH gives no recognizable status token', function () {
+it('activate rolls back config and returns 503 when ESL is unreachable', function () {
+    [$tenant, $user] = makeTrunkAdmin();
+    [$pbx, $config]  = mockPbxServices();
+
+    $trunk = Trunk::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'ESL Down',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'esl-down.example.com',
+        'enabled'   => false,
+    ]);
+
+    $config->shouldReceive('writeTrunkConfig')->once();
+    $pbx->shouldReceive('reloadGateway')
+        ->once()
+        ->with("nexvary-{$trunk->id}")
+        ->andReturn(false);
+    // Rollback: config file must be deleted when ESL fails
+    $config->shouldReceive('deleteTrunkConfig')
+           ->once()
+           ->withArgs(fn ($t) => $t->id === $trunk->id);
+
+    $this->actingAs($user)
+        ->post("/pbx/trunks/{$trunk->id}/activate")
+        ->assertStatus(503)
+        ->assertJson(['ok' => false, 'status' => 'ESL_ERROR', 'enabled' => false]);
+
+    // Trunk must remain disabled in database after ESL failure
+    $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => false]);
+});
+
+it('activate returns UNKNOWN when status query returns no recognizable token', function () {
     [$tenant, $user] = makeTrunkAdmin();
     [$pbx, $config]  = mockPbxServices();
 
@@ -231,8 +263,11 @@ it('activate returns UNKNOWN when FreeSWITCH gives no recognizable status token'
     ]);
 
     $config->shouldReceive('writeTrunkConfig')->once();
-    $pbx->shouldReceive('reloadGateway')->once();
-    $pbx->shouldReceive('api')->once()->andReturn(false);
+    $pbx->shouldReceive('reloadGateway')->once()->andReturn(true);
+    $pbx->shouldReceive('api')
+        ->once()
+        ->with("sofia status gateway nexvary-{$trunk->id}")
+        ->andReturn(false);
 
     $this->actingAs($user)
         ->post("/pbx/trunks/{$trunk->id}/activate")
@@ -240,7 +275,7 @@ it('activate returns UNKNOWN when FreeSWITCH gives no recognizable status token'
         ->assertJsonFragment(['status' => 'UNKNOWN']);
 });
 
-it('deactivate kills gateway, marks trunk disabled, returns DISABLED', function () {
+it('deactivate sends killgw, removes config file, marks trunk disabled', function () {
     [$tenant, $user] = makeTrunkAdmin();
     [$pbx, $config]  = mockPbxServices();
 
@@ -256,12 +291,72 @@ it('deactivate kills gateway, marks trunk disabled, returns DISABLED', function 
         ->once()
         ->with("sofia profile external killgw nexvary-{$trunk->id}")
         ->andReturn('+OK');
+    $config->shouldReceive('deleteTrunkConfig')
+           ->once()
+           ->withArgs(fn ($t) => $t->id === $trunk->id);
 
     $this->actingAs($user)
         ->post("/pbx/trunks/{$trunk->id}/deactivate")
         ->assertOk()
-        ->assertJson(['ok' => true, 'status' => 'DISABLED']);
+        ->assertJson([
+            'ok'         => true,
+            'configured' => false,
+            'enabled'    => false,
+            'status'     => 'DISABLED',
+            'esl_killgw' => true,
+        ]);
 
+    $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => false]);
+});
+
+it('deactivate still removes config and disables trunk when ESL is unreachable', function () {
+    [$tenant, $user] = makeTrunkAdmin();
+    [$pbx, $config]  = mockPbxServices();
+
+    $trunk = Trunk::create([
+        'tenant_id' => $tenant->id,
+        'name'      => 'ESL Down Deactivate',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'esl-down-deact.example.com',
+        'enabled'   => true,
+    ]);
+
+    // ESL unreachable: api() returns false
+    $pbx->shouldReceive('api')
+        ->once()
+        ->with("sofia profile external killgw nexvary-{$trunk->id}")
+        ->andReturn(false);
+    $config->shouldReceive('deleteTrunkConfig')->once();
+
+    $this->actingAs($user)
+        ->post("/pbx/trunks/{$trunk->id}/deactivate")
+        ->assertOk()
+        ->assertJson(['ok' => true, 'enabled' => false, 'esl_killgw' => false]);
+
+    $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => false]);
+});
+
+it('activate is blocked for a trunk belonging to a different tenant', function () {
+    // Tenant A owns the trunk; Tenant B user tries to activate it
+    [$tenantA, $userA] = makeTrunkAdmin();
+    [$tenantB, $userB] = makeTrunkAdmin();
+    mockPbxServices();
+
+    // Create the trunk under tenantA with no global scope bypass
+    $trunk = Trunk::withoutGlobalScopes()->create([
+        'tenant_id' => $tenantA->id,
+        'name'      => 'Tenant A Trunk',
+        'auth_mode' => 'credential',
+        'sip_host'  => 'tenant-a.example.com',
+        'enabled'   => false,
+    ]);
+
+    // TenantScope on model binding: tenantB user will get 404 (scope filters it out)
+    $this->actingAs($userB)
+        ->post("/pbx/trunks/{$trunk->id}/activate")
+        ->assertNotFound();
+
+    // Trunk must remain disabled
     $this->assertDatabaseHas('trunks', ['id' => $trunk->id, 'enabled' => false]);
 });
 

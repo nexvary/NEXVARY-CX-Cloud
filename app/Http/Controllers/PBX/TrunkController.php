@@ -156,33 +156,79 @@ class TrunkController extends Controller
     /**
      * Enable a gateway and register it with the SIP provider.
      *
-     * Writes the config (in case it was removed), instructs FreeSWITCH to
-     * start the gateway, then returns the registration status so the UI can
-     * show REGED / NOREG / TRYING immediately.
+     * Three-state model: configured (config file on disk) → enabled (DB flag) → registered (ESL state).
+     * Rollback: if FreeSWITCH is unreachable, the config file is removed and enabled stays false.
      */
     public function activate(Request $request, Trunk $trunk): JsonResponse
     {
-        $this->config->writeTrunkConfig($trunk);
-        $this->pbx->reloadGateway("nexvary-{$trunk->id}");
+        // Defense-in-depth: TenantScope already enforces isolation via model binding,
+        // but an explicit check ensures no privilege escalation if scope is bypassed.
+        if ($trunk->tenant_id !== $request->user()->tenant_id) {
+            abort(403);
+        }
 
+        // Write gateway XML to disk (configured state = true)
+        $this->config->writeTrunkConfig($trunk);
+
+        // Instruct FreeSWITCH to load the gateway; check ESL connectivity
+        $reloaded = $this->pbx->reloadGateway("nexvary-{$trunk->id}");
+
+        if (!$reloaded) {
+            // Rollback: remove the config file we just wrote so the system stays consistent
+            $this->config->deleteTrunkConfig($trunk);
+
+            return response()->json([
+                'ok'         => false,
+                'configured' => false,
+                'enabled'    => false,
+                'status'     => 'ESL_ERROR',
+                'message'    => 'FreeSWITCH ESL is unreachable. Configuration rolled back.',
+            ], 503);
+        }
+
+        // ESL accepted the command — mark the trunk enabled in the database
         $trunk->update(['enabled' => true]);
 
+        // Query live registration state; the gateway may still be TRYING at this point
         $raw    = $this->pbx->api("sofia status gateway nexvary-{$trunk->id}") ?: '';
         $status = $this->parseGatewayStatus($raw);
 
-        return response()->json(['ok' => true, 'status' => $status, 'raw' => $raw]);
+        return response()->json([
+            'ok'         => true,
+            'configured' => true,
+            'enabled'    => true,
+            'status'     => $status,
+            'raw'        => $raw,
+        ]);
     }
 
     /**
-     * Disable a gateway: kill the registration and mark the trunk disabled.
+     * Disable a gateway: kill the registration, remove the config file, mark disabled.
+     *
+     * Proceeds even if ESL is unreachable: the config file is removed so the gateway
+     * cannot re-register on the next FreeSWITCH restart.
      */
     public function deactivate(Request $request, Trunk $trunk): JsonResponse
     {
-        $this->pbx->api("sofia profile external killgw nexvary-{$trunk->id}");
+        if ($trunk->tenant_id !== $request->user()->tenant_id) {
+            abort(403);
+        }
+
+        // Best-effort ESL kill (non-fatal if FreeSWITCH is unreachable)
+        $killed = $this->pbx->api("sofia profile external killgw nexvary-{$trunk->id}");
+
+        // Remove config file so the gateway cannot re-register on FreeSWITCH restart
+        $this->config->deleteTrunkConfig($trunk);
 
         $trunk->update(['enabled' => false]);
 
-        return response()->json(['ok' => true, 'status' => 'DISABLED']);
+        return response()->json([
+            'ok'         => true,
+            'configured' => false,
+            'enabled'    => false,
+            'status'     => 'DISABLED',
+            'esl_killgw' => $killed !== false,
+        ]);
     }
 
     /** Extract the state token from a "sofia status gateway" response. */

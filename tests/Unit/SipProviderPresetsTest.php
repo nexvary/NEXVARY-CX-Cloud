@@ -13,9 +13,8 @@ $EXPECTED_DOCUMENTED = [
 
 it('provides 25 documented provider presets plus generic', function () use ($EXPECTED_DOCUMENTED) {
     $keys = SipProviderPresets::keys();
-    // All 25 documented providers must be present
     foreach ($EXPECTED_DOCUMENTED as $key) {
-        expect($keys)->toContain($key, "Missing documented preset: {$key}");
+        expect($keys)->toContain($key);
     }
     expect($keys)->toContain('generic');
     expect(count(SipProviderPresets::documented()))->toBe(25);
@@ -38,8 +37,8 @@ it('every preset has required structural fields', function () {
 it('every preset default has at least auth_mode and sip_port', function () {
     foreach (SipProviderPresets::all() as $key => $preset) {
         foreach ($preset['defaults'] as $mode => $defaults) {
-            expect($defaults)->toHaveKey('auth_mode', "Preset {$key}/{$mode} missing auth_mode")
-                ->and($defaults)->toHaveKey('sip_port', "Preset {$key}/{$mode} missing sip_port");
+            expect($defaults)->toHaveKey('auth_mode')
+                ->and($defaults)->toHaveKey('sip_port');
         }
     }
 });
@@ -66,8 +65,8 @@ it('SignalWire preset requires space_name in required_fields', function () {
 
 it('instructions are provided for both en and ar for all presets', function () {
     foreach (SipProviderPresets::all() as $key => $preset) {
-        expect($preset['instructions'])->toHaveKey('en', "Preset {$key} missing en instructions")
-            ->and($preset['instructions'])->toHaveKey('ar', "Preset {$key} missing ar instructions");
+        expect($preset['instructions'])->toHaveKey('en')
+            ->and($preset['instructions'])->toHaveKey('ar');
     }
 });
 
