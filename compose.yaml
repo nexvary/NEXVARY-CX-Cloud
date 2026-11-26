@@ -50,6 +50,24 @@ x-app-common: &app-common
     redis:
       condition: service_healthy
 
+# The app seeds the shared volumes and completes migrations before workers start.
+x-worker-volumes: &worker-volumes
+  - type: volume
+    source: app_storage
+    target: /var/www/nexvary-cx/storage
+    volume:
+      nocopy: true
+  - type: volume
+    source: app_cache
+    target: /var/www/nexvary-cx/bootstrap/cache
+    volume:
+      nocopy: true
+  - fs_conf:/etc/freeswitch
+
+x-worker-dependencies: &worker-dependencies
+  app:
+    condition: service_healthy
+
 services:
 
   # ── Web application (PHP-FPM) ───────────────────────────────────────────────
@@ -74,6 +92,8 @@ services:
   # ── Queue worker ────────────────────────────────────────────────────────────
   queue:
     <<: *app-common
+    volumes: *worker-volumes
+    depends_on: *worker-dependencies
     entrypoint: ["php", "/var/www/nexvary-cx/artisan", "queue:work", "redis",
                  "--sleep=3", "--tries=3", "--timeout=90",
                  "--max-time=3600", "--max-jobs=1000"]
@@ -87,6 +107,8 @@ services:
   # ── Scheduler ───────────────────────────────────────────────────────────────
   scheduler:
     <<: *app-common
+    volumes: *worker-volumes
+    depends_on: *worker-dependencies
     entrypoint:
       - /bin/sh
       - -c

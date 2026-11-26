@@ -1088,8 +1088,11 @@ jobs:
       - name: Collect logs on failure
         if: failure() && steps.compose-env.outcome == 'success'
         run: |
-          docker compose --env-file deploy/.env logs --tail=100 2>&1 | \
-            grep -v 'password\|PASSWORD\|secret\|SECRET\|key\|KEY' || true
+          docker compose --env-file deploy/.env logs --tail=100 2>&1 |
+            grep -viE 'password|secret|key|token|credential' || true
+          docker compose --env-file deploy/.env exec -T freeswitch \
+            tail -n 80 /var/log/freeswitch/freeswitch.log 2>/dev/null |
+            grep -viE 'password|secret|key|token|credential' || true
 
       - name: Tear down Compose stack
         if: always() && steps.compose-env.outcome == 'success'

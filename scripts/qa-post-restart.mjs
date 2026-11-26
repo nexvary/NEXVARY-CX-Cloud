@@ -12,7 +12,7 @@
 
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-import { appendFile, mkdir } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const {
@@ -49,7 +49,7 @@ const screenshot = async (name) => {
 };
 
 try {
-    await appendFile(join(dir, 'index.tsv'),
+    await writeFile(join(dir, 'index.tsv'),
         'file\tscreen\tenvironment\tbrowser\tviewport\tlanguage\tcommit\tresult\n',
     );
 
