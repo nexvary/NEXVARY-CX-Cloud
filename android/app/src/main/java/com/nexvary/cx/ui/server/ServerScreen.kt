@@ -79,9 +79,12 @@ fun ServerScreen(
         InfoCard(
             icon = Icons.Default.Cable,
             iconTint = if (sipState.registered) NxGreen else NxSilver,
-            title = "الاتصال",
-            value = if (sipState.registered) "متصل" else "غير متصل",
-            badgeText = if (sipState.registered) "متصل" else null,
+            title = "تسجيل SIP",
+            value = when {
+                sipState.registered -> "مسجّل"
+                credentials?.extension.isNullOrBlank() -> "الامتداد غير مهيأ"
+                else -> "غير مسجّل"
+            },
             badgeColor = NxGreen,
         )
 
@@ -92,7 +95,7 @@ fun ServerScreen(
             icon = Icons.Default.Phone,
             iconTint = if (sipState.registered) NxGreen else NxSilver,
             title = "الامتداد",
-            value = credentials?.extension ?: "---",
+            value = credentials?.extension?.takeIf { it.isNotBlank() } ?: "غير مهيأ",
             badgeText = if (sipState.registered) "مسجّل" else null,
             badgeColor = NxGreen,
         )
@@ -131,8 +134,8 @@ fun ServerScreen(
         when (val s = serverState) {
             is ServerUiState.Success -> {
                 Spacer(Modifier.height(16.dp))
-                ServiceStatusRow("FreeSWITCH", s.status.services.freeswitch == "up")
-                ServiceStatusRow("PostgreSQL", s.status.services.postgresql == "up")
+                ServiceStatusRow("FreeSWITCH", s.status.services.freeswitch)
+                ServiceStatusRow("PostgreSQL", s.status.services.postgresql)
             }
             is ServerUiState.Error -> {
                 Spacer(Modifier.height(8.dp))
@@ -216,7 +219,14 @@ private fun InfoCard(
 }
 
 @Composable
-private fun ServiceStatusRow(name: String, up: Boolean) {
+private fun ServiceStatusRow(name: String, status: String) {
+    val (label, color) = when (status) {
+        "up" -> "يعمل" to NxGreen
+        "down" -> "متوقف" to NxError
+        "managed" -> "تديره FusionPBX" to NxSilver
+        else -> "الحالة غير متاحة" to NxSilver
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,12 +236,12 @@ private fun ServiceStatusRow(name: String, up: Boolean) {
         Box(
             modifier = Modifier
                 .size(8.dp)
-                .background(if (up) NxGreen else NxError, CircleShape),
+                .background(color, CircleShape),
         )
         Spacer(Modifier.width(10.dp))
         Text(name, color = NxSilver, fontSize = 14.sp)
         Spacer(Modifier.weight(1f))
-        Text(if (up) "يعمل" else "متوقف", color = if (up) NxGreen else NxError, fontSize = 13.sp)
+        Text(label, color = color, fontSize = 13.sp)
     }
 }
 

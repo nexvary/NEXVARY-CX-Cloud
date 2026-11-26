@@ -2,7 +2,7 @@ name: "NEXVARY CX Android — CI"
 
 on:
   push:
-    branches: ["feature/stage-1-foundation"]
+    branches: ["feature/stage-1-foundation", "feature/fusionpbx-status"]
     paths:
       - "android/**"
       - "app/Http/Controllers/API/MobileController.php"
