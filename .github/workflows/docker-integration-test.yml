@@ -288,18 +288,23 @@ jobs:
 
       - name: Test — PostgreSQL connection
         run: |
-          RESULT=$(docker compose --env-file deploy/.env exec -T app \
-            php artisan tinker --no-interaction --execute="echo DB::connection()->getPdo() ? 'PDO_OK' : 'PDO_FAIL';" \
-            2>&1 | tr -d '\r')
-          echo "$RESULT" | grep -q 'PDO_OK' || { echo "FAIL: DB connection failed"; echo "$RESULT"; exit 1; }
+          docker compose --env-file deploy/.env exec -T app php -r '
+            require "vendor/autoload.php";
+            $app = require "bootstrap/app.php";
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            exit((int) $app->make("db")->connection()->scalar("SELECT 1") === 1 ? 0 : 1);
+          '
           echo "PASS: Laravel → PostgreSQL OK"
 
       - name: Test — Redis connection
         run: |
-          RESULT=$(docker compose --env-file deploy/.env exec -T app \
-            php artisan tinker --no-interaction --execute="echo (string) app('redis')->connection()->ping() === 'PONG' ? 'REDIS_OK' : 'REDIS_FAIL';" \
-            2>&1 | tr -d '\r')
-          echo "$RESULT" | grep -q 'REDIS_OK' || { echo "FAIL: Redis connection failed"; echo "$RESULT"; exit 1; }
+          docker compose --env-file deploy/.env exec -T app php -r '
+            require "vendor/autoload.php";
+            $app = require "bootstrap/app.php";
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $pong = $app->make("redis")->connection()->ping();
+            exit($pong === true || (string) $pong === "PONG" ? 0 : 1);
+          '
           echo "PASS: Laravel → Redis OK"
 
       - name: Test — Migrations ran

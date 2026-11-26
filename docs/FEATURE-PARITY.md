@@ -17,7 +17,7 @@ Update this file in the same commit as development work. Do not infer prior comp
 | HTTPS domain access | Partial | Web wizard step checks domain |
 | Setup wizard | Partial | Laravel and Inertia wizard exercised by `scripts/qa-installation.sh` against PostgreSQL and Redis. See the development log for run evidence. |
 | Initial administrator creation | Partial | Wizard creates admin; CI-tested |
-| Database / Redis / ESL connectivity checks | Partial | Wizard checks; CI-tested with live PostgreSQL/Redis |
+| Database / Redis / ESL connectivity checks | Partial | Live PostgreSQL and Redis verified in the wizard. Authenticated ESL and local SIP verified in isolated QA. The rebuilt Docker stack also reached healthy FreeSWITCH. |
 | Certificate reuse | Missing | Not implemented |
 | Rollback | Missing | Not implemented |
 | Migration and recovery | Missing | Not implemented |
