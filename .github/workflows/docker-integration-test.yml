@@ -732,17 +732,22 @@ jobs:
             <recv response="180" optional="true" response_txn="authenticated" />
             <recv response="183" optional="true" response_txn="authenticated" />
             <!-- 200 OK from FS (relayed from sipp UAS 1002 at :5090) -->
-            <recv response="200" response_txn="authenticated" rrs="true" />
+            <recv response="200" response_txn="authenticated" rrs="true">
+              <action>
+                <ereg regexp=".*" search_in="hdr" header="To:" check_it="true" assign_to="dialog_to" />
+              </action>
+            </recv>
             <!-- ACK to establish the dialog -->
             <send ack_txn="authenticated">
               <![CDATA[
           ACK [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:[service]@${CI_SIP_DOMAIN}>[peer_tag_param]
+          To: [$dialog_to]
           Call-ID: [call_id]
           CSeq: 2 ACK
           Max-Forwards: 70
+          [routes]
           Content-Length: 0
 
               ]]>
@@ -755,10 +760,11 @@ jobs:
           BYE [next_url] SIP/2.0
           Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
           From: "1001" <sip:1001@${CI_SIP_DOMAIN}>;tag=[pid]SIPpTag00[call_number]
-          To: <sip:[service]@${CI_SIP_DOMAIN}>[peer_tag_param]
+          To: [$dialog_to]
           Call-ID: [call_id]
           CSeq: 3 BYE
           Max-Forwards: 70
+          [routes]
           Content-Length: 0
 
               ]]>
@@ -811,11 +817,13 @@ jobs:
             -s 1002 -au 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -p 5091 -m 1 -t u1 -timeout 40 \
+            -trace_msg -message_file /tmp/sipp_invite_messages.log \
             2>&1 | tee /tmp/sipp_invite.log \
             || {
               echo "FAIL: Authenticated INVITE 1001→1002 did not complete"
-              echo "--- sipp output ---"
-              cat /tmp/sipp_invite.log
+              echo "--- SIP dialog headers ---"
+              grep -E '^(INVITE |ACK |BYE |SIP/2.0 |Via:|From:|To:|Call-ID:|CSeq:|Contact:|Record-Route:|Route:)' \
+                /tmp/sipp_invite_messages.log || true
               echo "--- FreeSWITCH sofia status ---"
               docker compose --env-file deploy/.env exec -T freeswitch \
                 fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
