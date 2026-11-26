@@ -365,6 +365,21 @@ jobs:
             || { echo "FAIL: Tenant B directory config not found in FreeSWITCH"; exit 1; }
           echo "PASS: Tenant B extension configs visible in FreeSWITCH"
 
+      - name: Locate the FreeSWITCH SIP listener
+        run: |
+          set -euo pipefail
+          profile=$(docker compose --env-file deploy/.env exec -T freeswitch \
+            fs_cli -H 127.0.0.1 -P 8021 -p "$FS_ESL_PASSWORD" \
+            -x 'sofia status profile internal' | tr -d '\r')
+          sip_ip=$(awk '$1 == "SIP-IP" { print $2; exit }' <<< "$profile")
+          [[ "$sip_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || {
+            echo "::error::Cannot determine the internal Sofia profile IPv4 address"
+            exit 1
+          }
+          # FreeSWITCH shares the runner network but listens on its selected
+          # interface. Use that same address for SIPp Contacts and SDP.
+          printf 'SIP_TEST_IP=%s\n' "$sip_ip" >> "$GITHUB_ENV"
+
       # ── Install sipp ──────────────────────────────────────────────────────
       # Package name in Ubuntu 22.04/24.04 is sip-tester; binary is sipp
       - name: Install sipp
@@ -460,12 +475,12 @@ jobs:
           SIPP_EOF
 
           # Register 1001 (sipp -s 1001 substitutes [service]=1001 everywhere in XML)
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_reg_1001.log || {
+            2>&1 | tee /tmp/sipp_reg_1001.log || {
               echo "FAIL: SIP REGISTER 1001 did not complete"
               cat /tmp/sipp_reg_1001.log
               docker compose --env-file deploy/.env exec -T freeswitch \
@@ -476,12 +491,12 @@ jobs:
           echo "PASS: SIP REGISTER ext 1001@${CI_SIP_DOMAIN} → 200 OK"
 
           # Register 1002 (-s 1002 substitutes [service]=1002 in all fields)
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_ext.xml \
             -s 1002 \
             -ap "${CI_SIP_PASS_A}" \
             -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_reg_1002.log || {
+            2>&1 | tee /tmp/sipp_reg_1002.log || {
               echo "FAIL: SIP REGISTER 1002 did not complete"
               cat /tmp/sipp_reg_1002.log
               exit 1
@@ -572,12 +587,12 @@ jobs:
           </scenario>
           SIPP_EOF
 
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_expect_403.xml \
             -s 1001 \
             -ap "${WRONG_PASS}" \
             -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_bad_auth.log || {
+            2>&1 | tee /tmp/sipp_bad_auth.log || {
               echo "FAIL: bad-auth scenario did not complete (FreeSWITCH did not send 403)"
               cat /tmp/sipp_bad_auth.log
               exit 1
@@ -711,31 +726,31 @@ jobs:
           SIPP_EOF
 
           # Step 1: Register 1002 at :5090 (sipp exits after REGISTER success)
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_ext.xml \
             -s 1002 \
             -ap "${CI_SIP_PASS_A}" \
-            -lp 5090 -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' \
+            -p 5090 -m 1 -t u1 -timeout 20 \
+            2>&1 \
             || { echo "FAIL: 1002 REGISTER failed"; exit 1; }
           echo "1002 registered at :5090 (Contact points to :5090)"
 
           # Step 2: Start sipp UAS on :5090 — waits for INVITE from FreeSWITCH
           # Built-in 'uas' scenario: recv INVITE → 180+200 OK → recv ACK → recv BYE → 200
           # -m 1: handle exactly one call then exit cleanly
-          sipp -sn uas \
-            -lp 5090 -t u1 \
+          sipp -sn uas -i "$SIP_TEST_IP" -bind_local \
+            -p 5090 -t u1 \
             -m 1 -timeout 40 \
-            -bg -out /tmp/sipp_uas_1002.log
+            -bg -trace_screen -screen_file /tmp/sipp_uas_1002.log
           echo "sipp UAS started on :5090 (waiting for INVITE from FreeSWITCH)"
 
           # Step 3: Register 1001 at :5091 (sipp exits after REGISTER success)
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
-            -lp 5091 -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' \
+            -p 5091 -m 1 -t u1 -timeout 20 \
+            2>&1 \
             || { echo "FAIL: 1001 REGISTER failed"; exit 1; }
           echo "1001 registered at :5091"
 
@@ -744,12 +759,12 @@ jobs:
 
           # Step 4: sipp UAC as 1001 at :5091 calls 1002@domain via FreeSWITCH
           # sipp exits 0 when all scenarios complete (200 OK + ACK + BYE received)
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/invite_auth.xml \
             -s 1002 \
             -ap "${CI_SIP_PASS_A}" \
-            -lp 5091 -m 1 -t u1 -timeout 40 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/sipp_invite.log \
+            -p 5091 -m 1 -t u1 -timeout 40 \
+            2>&1 | tee /tmp/sipp_invite.log \
             || {
               echo "FAIL: Authenticated INVITE 1001→1002 did not complete"
               echo "--- sipp output ---"
@@ -783,13 +798,13 @@ jobs:
           set -euo pipefail
           CI_SIP_DOMAIN="ci-tenant-a.pbx.test"
 
-          # Step 1: Register 1001 at :5091 so FS knows its contact (127.0.0.1:5091)
-          sipp 127.0.0.1:5060 \
+          # Step 1: Register 1001 at :5091 so FS knows its contact on the runner at port 5091
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/register_ext.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
-            -lp 5091 -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' \
+            -p 5091 -m 1 -t u1 -timeout 20 \
+            2>&1 \
             || { echo "FAIL: 1001 REGISTER (RTP test) failed"; exit 1; }
           echo "1001 registered at :5091 for RTP test"
 
@@ -797,11 +812,11 @@ jobs:
           # When FS sends RTP audio to this port, sipp echoes it back.
           # -sn uas: built-in answer scenario (recv INVITE → 200 OK → recv ACK → recv BYE → 200)
           # -rtp_echo: echo all received RTP UDP packets back to sender
-          sipp -sn uas \
-            -lp 5091 -t u1 \
+          sipp -sn uas -i "$SIP_TEST_IP" -bind_local \
+            -p 5091 -t u1 \
             -rtp_echo \
             -m 1 -timeout 20 \
-            -bg -out /tmp/sipp_rtp_uas.log
+            -bg -trace_screen -screen_file /tmp/sipp_rtp_uas.log
           echo "sipp UAS with -rtp_echo started on :5091"
 
           # Step 3: ESL-originate a call FROM FS TO sipp's registered contact
@@ -925,12 +940,12 @@ jobs:
           # Test A: tenant A's password (-ap CI_SIP_PASS_A) used against tenant B's domain
           # Sipp sends REGISTER for 1001@tenant-b.pbx.test with tenant A's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_B}" /tmp/cross_tenant_a_in_b.xml "${CI_SIP_PASS_A}"
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/cross_tenant_a_in_b.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_A}" \
             -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/cross_a_in_b.log \
+            2>&1 | tee /tmp/cross_a_in_b.log \
             || {
               echo "FAIL: Tenant A credential in tenant B domain was NOT rejected (expected 403)"
               echo "--- FreeSWITCH sofia reg state ---"
@@ -944,12 +959,12 @@ jobs:
           # Test B: tenant B's password (-ap CI_SIP_PASS_B) used against tenant A's domain
           # Sipp sends REGISTER for 1001@tenant-a.pbx.test with tenant B's Digest → 403
           write_cross_tenant_scenario "${CI_DOMAIN_A}" /tmp/cross_tenant_b_in_a.xml "${CI_SIP_PASS_B}"
-          sipp 127.0.0.1:5060 \
+          sipp "${SIP_TEST_IP}:5060" -i "$SIP_TEST_IP" -bind_local \
             -sf /tmp/cross_tenant_b_in_a.xml \
             -s 1001 \
             -ap "${CI_SIP_PASS_B}" \
             -m 1 -t u1 -timeout 20 \
-            2>&1 | grep -v '\[ap\]' | tee /tmp/cross_b_in_a.log \
+            2>&1 | tee /tmp/cross_b_in_a.log \
             || {
               echo "FAIL: Tenant B credential in tenant A domain was NOT rejected (expected 403)"
               exit 1

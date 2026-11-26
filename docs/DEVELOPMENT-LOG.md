@@ -11,7 +11,7 @@
 
 **Commit:** 349609d (fix) + 4ace8d3 (docs) | HEAD: 4ace8d3  
 **Branch:** feature/stage-1-foundation  
-**CI result:** All 7 workflows pass — [Docker Integration Tests run 45903674490](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45903674490) ✓ (21 min, full Compose stack + SIP REGISTER + call + RTP + cross-tenant isolation). PR suite also all green (run 45903681880 ✓).
+**CI result (corrected):** [Docker Integration Tests run 45903674490](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45903674490) failed at SIP REGISTER. It does not establish a passing PR suite or any subsequent SIP/RTP checks.
 
 **Remaining gaps:** Visual QA screenshots of Day/Night theme require running Laravel app. CX02 live registered-state polling (TRYING→REGED transitions) not implemented.
 
@@ -134,3 +134,10 @@ Append entries; preserve history. Do not infer prior completion without evidence
 - The [FreeSWITCH image workflow](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45899176189) built and verified the exact published 1.10.11 image, including the required module files and their linked libraries.
 - The [Docker PR run](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45899187577) started the full stack, authenticated against FreeSWITCH ESL, verified shared directory permissions and obtained HTTP 200 from Laravel. The PostgreSQL step stopped before opening a database connection because Tinker could not create a configuration directory for the non-root app user.
 - The PostgreSQL and Redis steps now bootstrap Laravel directly and require a real query or PING. [CI](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45899176128) recorded 156 passing tests and 1,052 assertions, with no Composer advisories. [Installation and visual QA](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45899176162) passed both jobs on the same revision. [PR #1](https://github.com/nexvary/NEXVARY-CX-Cloud/pull/1) remains open and unmerged.
+
+## 2026-11-27 — CX02 Docker SIP transport recovery
+
+- [Run 45333862511](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45333862511) stopped before SIP testing because Laravel startup failed during view caching. Compose startup and ESL succeeded in the newer [run 45905082801](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45905082801) at `ec7ce31`.
+- At `ec7ce31`, six PR workflows passed. Docker integration failed before the first SIP authentication challenge: SIPp retransmitted REGISTER to loopback, while Sofia reported listening only on the runner's non-loopback IPv4 address. Wrong-password, call, media and cross-tenant checks were skipped.
+- CI now reads the bound IPv4 address from the internal Sofia profile over ESL and uses it for SIPp transport and local endpoint addresses. SIPp uses its documented local port and screen logging options. Expected SIP responses and media assertions are retained.
+- PR #1 remains open. Next evidence required: a Docker run showing both accepted and rejected REGISTERs, call setup and teardown, bidirectional RTP and cross-tenant rejection, followed by success of all seven workflows on the same head.
