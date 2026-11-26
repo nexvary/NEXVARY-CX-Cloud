@@ -22,6 +22,7 @@ use App\Http\Controllers\PBX\TrunkController;
 use App\Http\Controllers\PBX\VoicemailController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
+use App\Http\Controllers\Settings\UserController;
 use App\Http\Middleware\RequireLocalPbx;
 use Illuminate\Support\Facades\Route;
 
@@ -171,7 +172,8 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/organization', fn() => inertia('Settings/Organization'))->name('organization');
         Route::post('/organization', [ServerController::class, 'saveOrganization'])->name('organization.save');
         Route::get('/security',      fn() => inertia('Settings/Security'))->name('security');
-        Route::get('/users',         fn() => inertia('Settings/Users'))->name('users');
+        Route::get('/users', [UserController::class, 'index'])->name('users');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
         Route::get('/integrations',  fn() => inertia('Settings/Integrations'))->name('integrations');
         Route::get('/backup',        fn() => inertia('Settings/Backup'))->name('backup');
         // Mobile device pairing — generates a one-time QR pairing token (web session auth)
