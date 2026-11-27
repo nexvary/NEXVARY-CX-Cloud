@@ -42,7 +42,7 @@ export default function AgentForm({ agent, extensions }: { agent: Agent | null; 
           <div>
             <label className="nx-label">Extension</label>
             <select className="nx-input" value={data.extension_id ?? ''}
-              onChange={e => setData('extension_id', e.target.value || null)}>
+              onChange={e => setData('extension_id', e.target.value)}>
               <option value="">— None —</option>
               {extensions.map(ext => (
                 <option key={ext.id} value={ext.id}>{ext.number}{ext.description ? ` — ${ext.description}` : ''}</option>

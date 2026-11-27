@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(Tests\TestCase::class, RefreshDatabase::class);
+
 use App\Models\IvrMenu;
 use App\Models\IvrEntry;
 use App\Models\Tenant;

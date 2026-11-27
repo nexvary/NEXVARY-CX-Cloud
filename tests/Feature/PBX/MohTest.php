@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(Tests\TestCase::class, RefreshDatabase::class);
+
 use App\Models\MohClass;
 use App\Models\Tenant;
 use App\Models\User;
