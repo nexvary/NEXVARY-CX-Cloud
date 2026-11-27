@@ -97,6 +97,11 @@ nx_print_detection_summary
 nx_check_hardware
 nx_detect_security
 nx_check_conflicts
+nx_detect_existing_install
+
+if [[ "$NX_EXISTING_INSTALL" == 'yes' ]]; then
+  nx_check_upgrade_safety
+fi
 
 if [[ "$NX_SUPPORTED" == 'partial' ]]; then
   nx_warn "This OS version is not explicitly tested. Installation may succeed but is not guaranteed."
@@ -166,6 +171,10 @@ fi
 # ── Phase 4: Application Deployment ──────────────────────────────────────────
 
 nx_section "Phase 4 — Application Deployment"
+if [[ "$NX_EXISTING_INSTALL" == 'yes' ]]; then
+  NX_PRE_UPGRADE_BACKUP="$(nx_backup_config_before_upgrade)"
+  export NX_PRE_UPGRADE_BACKUP
+fi
 
 # shellcheck source=installer/lib/app.sh
 source "${INSTALLER_LIB}/app.sh"

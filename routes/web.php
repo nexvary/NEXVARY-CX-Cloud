@@ -20,6 +20,8 @@ use App\Http\Controllers\PBX\RingGroupController;
 use App\Http\Controllers\PBX\RouteController;
 use App\Http\Controllers\PBX\TrunkController;
 use App\Http\Controllers\PBX\VoicemailController;
+use App\Http\Controllers\PBX\SipProfileController;
+use App\Http\Controllers\PBX\NumberTranslationController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
 use Illuminate\Support\Facades\Route;
@@ -126,6 +128,15 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
         Route::get('/voicemail',              [VoicemailController::class, 'index'])->name('voicemail.index');
         Route::get('/voicemail/{box}',        [VoicemailController::class, 'show'])->name('voicemail.show');
         Route::delete('/voicemail/{box}/{msg}', [VoicemailController::class, 'destroy'])->name('voicemail.destroy');
+
+        // SIP Profiles
+        Route::resource('sip-profiles', SipProfileController::class)->parameters(['sip-profiles' => 'sipProfile']);
+        Route::post('sip-profiles/{sipProfile}/activate',   [SipProfileController::class, 'activate'])->name('sip_profiles.activate');
+        Route::post('sip-profiles/{sipProfile}/deactivate', [SipProfileController::class, 'deactivate'])->name('sip_profiles.deactivate');
+        Route::get('sip-profiles/{sipProfile}/status',      [SipProfileController::class, 'status'])->name('sip_profiles.status');
+
+        // Number Translations
+        Route::resource('number-translations', NumberTranslationController::class)->parameters(['number-translations' => 'numberTranslation']);
     });
 
     // ── Call Center ───────────────────────────────────────────────────────

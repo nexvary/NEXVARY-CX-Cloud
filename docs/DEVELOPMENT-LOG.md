@@ -150,3 +150,37 @@ Append entries; preserve history. Do not infer prior completion without evidence
 - [Run 45908386017](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45908386017) caught Bash expanding the SIPp dialog variable in the XML heredoc. The variable now reaches SIPp literally. RTP and tenant isolation run once registration succeeds even if the separate call step fails. Each failed check still fails the job.
 - [Run 45908854069](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45908854069) at `b9376a2` passed authenticated call setup and teardown and measured bidirectional RTP (157 packets out, 155 echoed in). SIPp could not parse the separately generated cross-tenant XML. Both tenant tests now reuse the verified negative REGISTER scenario. A successful tenant B registration is required before asserting both cross-tenant 403s and unchanged contacts.
 - [Run 45909371913](https://github.com/nexvary/NEXVARY-CX-Cloud/actions/runs/45909371913) at `156242e` passed registration, wrong-password rejection, call and RTP again. Tenant B's positive control received 200 and both contact checks passed. Two calls to the removed XML generator were left in the shell block, which exited before the negative cross-tenant probes. Removed the calls and exercised the complete cross-tenant shell block locally with stubbed SIPp and ESL commands before pushing.
+
+## 2026-11-27 — CX01 existing-install detection + CX02 SIP profiles, codecs, NAT, TLS/SRTP, number translation, caller ID/privacy
+
+**CX01 — Installer enhancements**
+
+- `installer/lib/detect.sh`: added `nx_detect_existing_install()` (scans candidate dirs /var/www/nexvary-cx and /opt/nexvary-cx for artisan+.env, reads .nexvary-version or git rev-parse into NX_EXISTING_VERSION), `nx_check_upgrade_safety()` (--upgrade-from guard, version mismatch prompt), `nx_backup_config_before_upgrade()` (.env + freeswitch-conf.tar.gz to /var/backups/nexvary/pre-upgrade-{ts}/), `nx_rollback_config()` (restores from backup dir).
+- `installer/nexvary-install.sh`: calls `nx_detect_existing_install` and upgrade safety check after conflict detection (line ~99); calls `nx_backup_config_before_upgrade` before Phase 4 migration when NX_EXISTING_INSTALL=yes.
+
+**CX02 — SIP profiles**
+
+- `app/Models/SipProfile.php`: UUID primary key, BelongsToTenant, `defaultCodecs()` returns [PCMU, PCMA, G722, G729, opus], JSON codecs column, all NAT/TLS/codec/ACL fields.
+- `database/migrations/2024_01_03_000001_create_sip_profiles.php`: sip_profiles table with NAT (nat_enabled, ext_sip_ip, ext_rtp_ip, aggressive_nat_detection), TLS (tls_enabled, tls_port, srtp_mode), codecs (JSON), and ACL fields.
+- `database/factories/SipProfileFactory.php`.
+- `app/Services/PBX/SipProfileService.php`: `activate()` writes XML, ESL rescan, rolls back on failure; `deactivate()` ESL stop + file delete; `getStatus()` parses sofia status output for registrations and calls.
+- `app/Services/PBX/FusionPbxConfigService.php`: added `writeSipProfileConfig(SipProfile $profile)` and `deleteSipProfileConfig(SipProfile $profile)`, plus private `renderSipProfileXml()` generating a complete sofia `<profile>` XML with codec-prefs, NAT, TLS, SRTP, ACL, and rtp-timeout params.
+- `app/Http/Controllers/PBX/SipProfileController.php`: resource CRUD + activate/deactivate/status endpoints.
+- `tests/Feature/SipProfileLifecycleTest.php`: 4 Pest tests (create, activate success, activate 503 rollback, cross-tenant 404).
+
+**CX02 — Number translation and caller ID/privacy**
+
+- `app/Models/NumberTranslation.php`: UUID primary key, BelongsToTenant, direction (inbound/outbound/both), pattern, replace, strip_prefix, add_prefix, privacy_enabled, caller_id_override, priority.
+- `database/migrations/2024_01_03_000002_create_number_translations.php`.
+- `database/factories/NumberTranslationFactory.php`.
+- `app/Services/PBX/NumberTranslationService.php`: renders continue=true dialplan XML to `dialplan/{domain}/nexvary-translate-{id}.xml`; `privacy_enabled` sets privacy=yes + sip_h_Privacy=id + anonymous caller-id; `caller_id_override` sets specific effective_caller_id_number; triggers dialplan reload.
+- `app/Http/Controllers/PBX/NumberTranslationController.php`: resource CRUD; regex pattern safety check with preg_match; tenantDomain() uses SIP domain.
+- `tests/Feature/NumberTranslationTest.php`: 4 Pest tests (create + file write, regex rejection, privacy flag, cross-tenant 404).
+
+**Infrastructure**
+
+- `routes/web.php`: added SipProfileController and NumberTranslationController imports and routes (resource + activate/deactivate/status).
+- `app/Providers/AppServiceProvider.php`: bound SipProfileService and NumberTranslationService.
+
+**Next task:** Run Docker CI to verify all 8 new tests pass alongside existing 156. Then CX02 device provisioning, dialplan editor and configuration validation.
+

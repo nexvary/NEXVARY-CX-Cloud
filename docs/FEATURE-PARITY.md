@@ -12,19 +12,19 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Item | Status | Evidence / Notes |
 |------|--------|-----------------|
 | Reproducible Debian/Ubuntu installer | Partial | `INSTALL-NEXVARY.sh` exists; CI installer tests pass (SiteOS installer gate) |
-| Existing-install detection | Missing | Not implemented |
-| Safe upgrades | Missing | Not implemented |
+| Existing-install detection | Partial | `installer/lib/detect.sh`: `nx_detect_existing_install()` scans candidate dirs, reads .nexvary-version; `nx_check_upgrade_safety()` guards version mismatch. |
+| Safe upgrades | Partial | `nx_check_upgrade_safety()` prompts/guards on --upgrade-from; version mismatch check; full backup before migration. |
 | HTTPS domain access | Partial | Web wizard step checks domain |
 | Setup wizard | Partial | Laravel and Inertia wizard exercised by `scripts/qa-installation.sh` against PostgreSQL and Redis. See the development log for run evidence. |
 | Initial administrator creation | Partial | Wizard creates admin; CI-tested |
 | Database / Redis / ESL connectivity checks | Partial | Live PostgreSQL and Redis verified in the wizard. Authenticated ESL and local SIP verified in isolated QA. The rebuilt Docker stack also reached healthy FreeSWITCH. |
 | Certificate reuse | Missing | Not implemented |
-| Rollback | Missing | Not implemented |
+| Rollback | Partial | `installer/lib/detect.sh`: `nx_backup_config_before_upgrade()` backs up .env + freeswitch-conf to /var/backups/nexvary/pre-upgrade-{ts}/; `nx_rollback_config()` restores them. `nexvary-install.sh` calls backup before Phase 4. |
 | Migration and recovery | Missing | Not implemented |
 | Clean install test | Partial | CI covers browser setup, sign-in and an application restart. Docker Compose startup is a separate gate. See the development log for run evidence. |
 | Failed-install recovery test | Partial | Browser QA passed recovery from rejected PostgreSQL credentials and Redis connection failure. OS-level failed-install rollback remains unverified. |
 
-**Next action:** Implement existing-install detection and rollback; add failed-install recovery test.
+**Next action:** Live upgrade test from a prior installed version; certificate reuse; OS-level failed-install rollback test.
 
 ---
 
@@ -39,12 +39,12 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Provider presets (Telnyx + generic SIP) | Partial | 25 documented presets; not live-tested |
 | DIDs | Partial | `PBX/DIDs` UI; assignment not provisioned |
 | Inbound / outbound routing | Partial | `PBX/Routes` UI + backend; `Routes/Form.tsx` added |
-| Caller ID / privacy | Missing | Not implemented |
-| Number translation | Missing | Not implemented |
-| Codecs | Missing | Not configured |
-| SIP profiles | Missing | Not implemented |
-| NAT | Missing | Not configured |
-| TLS / SRTP | Missing | Not configured |
+| Caller ID / privacy | Partial | `NumberTranslationService`: `privacy_enabled` sets `privacy=yes`, `sip_h_Privacy=id`, `effective_caller_id_number=anonymous`; `caller_id_override` sets specific caller ID. 4 Pest tests in `NumberTranslationTest`. |
+| Number translation | Partial | `NumberTranslationService` renders continue=true dialplan XML to `dialplan/{domain}/nexvary-translate-{id}.xml`. CRUD via `NumberTranslationController`. Direction: inbound/outbound/both. 4 Pest tests in `NumberTranslationTest`. |
+| Codecs | Partial | `SipProfile::defaultCodecs()` returns [PCMU, PCMA, G722, G729, opus]; stored per-profile as JSON; rendered in `inbound-codec-prefs` / `outbound-codec-prefs` params of sofia profile XML. |
+| SIP profiles | Partial | `SipProfileService` + `FusionPbxConfigService::writeSipProfileConfig()` write sofia profile XML to `sip_profiles/nexvary-{type}-{id}.xml`. `activate()` / `deactivate()` / `getStatus()` via ESL. `SipProfileController` CRUD. 4 Pest tests in `SipProfileLifecycleTest`. |
+| NAT | Partial | `SipProfile` model: `nat_enabled`, `ext_sip_ip`, `ext_rtp_ip`, `aggressive_nat_detection`. Rendered in sofia profile XML as `NDLB-force-rport` and `aggressive-nat-detection` params. |
+| TLS / SRTP | Partial | `SipProfile` model: `tls_enabled`, `tls_port`, `srtp_mode` (disabled/optional/mandatory). Sofia XML includes `tls`, `tls-sip-port`, `tls-cert-dir`, `tls-version`, `rtp-secure-media` params when configured. |
 | Device provisioning | Missing | Not implemented |
 | Dialplan editor | Missing | Not implemented |
 | Validation | Missing | Not implemented |
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-26 (CX02 activate/deactivate + CX12 Day/Night theme) | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-27 (CX01 existing-install/upgrade/rollback + CX02 SIP profiles, codecs, NAT, TLS/SRTP, number translation, caller ID/privacy) | Branch: feature/stage-1-foundation*

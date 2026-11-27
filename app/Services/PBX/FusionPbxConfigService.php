@@ -6,6 +6,7 @@ use App\Models\Extension;
 use App\Models\InboundRoute;
 use App\Models\OutboundRoute;
 use App\Models\Trunk;
+use App\Models\SipProfile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
@@ -394,6 +395,91 @@ XML;
       <action application="bridge" data="sofia/gateway/{$gateway}/{$prefix}{$dialTarget}"/>
     </condition>
   </extension>
+</include>
+XML;
+    }
+
+
+    // ── SIP Profiles ─────────────────────────────────────────────────────────
+
+    public function writeSipProfileConfig(SipProfile $profile): void
+    {
+        $dir  = "{$this->confDir}/sip_profiles";
+        $this->ensureDir($dir);
+        $xml  = $this->renderSipProfileXml($profile);
+        $name = "nexvary-{$profile->type}-{$profile->id}";
+        $path = "{$dir}/{$name}.xml";
+        File::put($path, $xml);
+        Log::info("FreeSWITCH SIP profile written: {$path}");
+    }
+
+    public function deleteSipProfileConfig(SipProfile $profile): void
+    {
+        $name = "nexvary-{$profile->type}-{$profile->id}";
+        $path = "{$this->confDir}/sip_profiles/{$name}.xml";
+        if (File::exists($path)) {
+            File::delete($path);
+            Log::info("FreeSWITCH SIP profile removed: {$path}");
+        }
+    }
+
+    private function renderSipProfileXml(SipProfile $profile): string
+    {
+        $id      = $profile->id;
+        $type    = htmlspecialchars($profile->type, ENT_XML1);
+        $name    = "nexvary-{$type}-{$id}";
+        $ts      = $this->timestamp();
+        $port    = $profile->sip_port ?? ($profile->type === 'internal' ? 5060 : 5080);
+        $sipIp   = htmlspecialchars($profile->sip_ip   ?? 'auto', ENT_XML1);
+        $rtpIp   = htmlspecialchars($profile->rtp_ip   ?? 'auto', ENT_XML1);
+        $extSip  = htmlspecialchars($profile->ext_sip_ip ?? $sipIp, ENT_XML1);
+        $extRtp  = htmlspecialchars($profile->ext_rtp_ip ?? $rtpIp, ENT_XML1);
+        $rtpTo   = $profile->rtp_timeout      ?? 300;
+        $rtpHold = $profile->rtp_hold_timeout ?? 1800;
+        $acl     = htmlspecialchars($profile->apply_inbound_acl ?? '', ENT_XML1);
+
+        // Codec prefs
+        $codecs     = $profile->codecs ?? SipProfile::defaultCodecs();
+        $codecPrefs = htmlspecialchars(implode(',', $codecs), ENT_XML1);
+
+        // NAT
+        $natEnabled = $profile->nat_enabled            ? 'true' : 'false';
+        $aggNat     = $profile->aggressive_nat_detection ? 'true' : 'false';
+
+        // TLS
+        $tlsEnabled = $profile->tls_enabled ? 'true' : 'false';
+        $tlsPort    = $profile->tls_port    ?? ($port + 1);
+        $srtpMode   = htmlspecialchars($profile->srtp_mode ?? 'disabled', ENT_XML1);
+
+        $acl_line     = $acl     ? "
+    <param name=\"apply-inbound-acl\" value=\"{$acl}\"/>"     : '';
+        $tls_block    = $profile->tls_enabled ? "
+    <param name=\"tls\" value=\"true\"/>
+    <param name=\"tls-sip-port\" value=\"{$tlsPort}\"/>
+    <param name=\"tls-cert-dir\" value=\"/etc/freeswitch/tls\"/>
+    <param name=\"tls-version\" value=\"tlsv1.2,tlsv1.3\"/>" : '';
+        $srtp_line    = $srtpMode !== 'disabled' ? "
+    <param name=\"rtp-secure-media\" value=\"{$srtpMode}\"/>" : '';
+
+        return <<<XML
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- NEXVARY CX Cloud — SIP Profile: {$name} | Generated: {$ts} -->
+<include>
+  <profile name="{$name}">
+    <settings>
+      <param name="sip-port" value="{$port}"/>
+      <param name="sip-ip" value="{$sipIp}"/>
+      <param name="rtp-ip" value="{$rtpIp}"/>
+      <param name="ext-sip-ip" value="{$extSip}"/>
+      <param name="ext-rtp-ip" value="{$extRtp}"/>
+      <param name="aggressive-nat-detection" value="{$aggNat}"/>
+      <param name="NDLB-force-rport" value="{$natEnabled}"/>
+      <param name="rtp-timeout-sec" value="{$rtpTo}"/>
+      <param name="rtp-hold-timeout-sec" value="{$rtpHold}"/>
+      <param name="inbound-codec-prefs" value="{$codecPrefs}"/>
+      <param name="outbound-codec-prefs" value="{$codecPrefs}"/>{$acl_line}{$tls_block}{$srtp_line}
+    </settings>
+  </profile>
 </include>
 XML;
     }

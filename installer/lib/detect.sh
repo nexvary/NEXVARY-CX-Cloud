@@ -189,3 +189,130 @@ nx_print_detection_summary() {
   nx_info "Package mgr:  $NX_PKG_MGR"
   nx_info "Support:      $NX_SUPPORTED"
 }
+
+# ── Existing installation detection ──────────────────────────────────────────
+# Outputs:
+#   NX_EXISTING_INSTALL  'yes'|'no'
+#   NX_EXISTING_VERSION  commit SHA of installed version (if readable)
+#   NX_EXISTING_APP_DIR  path to detected installation
+
+NX_EXISTING_INSTALL='no'
+NX_EXISTING_VERSION=''
+NX_EXISTING_APP_DIR=''
+
+nx_detect_existing_install() {
+  local candidate_dirs=('/var/www/nexvary-cx' '/opt/nexvary-cx' "${NX_APP_DIR:-}")
+  local found_dir=''
+
+  for d in "${candidate_dirs[@]}"; do
+    [[ -z "$d" ]] && continue
+    if [[ -f "${d}/artisan" && -f "${d}/.env" ]]; then
+      found_dir="$d"
+      break
+    fi
+  done
+
+  if [[ -z "$found_dir" ]]; then
+    NX_EXISTING_INSTALL='no'
+    return 0
+  fi
+
+  NX_EXISTING_INSTALL='yes'
+  NX_EXISTING_APP_DIR="$found_dir"
+
+  # Attempt to read the pinned commit SHA written at deploy time
+  local version_file="${found_dir}/.nexvary-version"
+  if [[ -f "$version_file" ]]; then
+    NX_EXISTING_VERSION="$(tr -d '[:space:]' < "$version_file")"
+  fi
+
+  # Fallback: read from git if the app dir is a git working tree
+  if [[ -z "$NX_EXISTING_VERSION" && -d "${found_dir}/.git" ]]; then
+    NX_EXISTING_VERSION="$(git -C "$found_dir" rev-parse HEAD 2>/dev/null || true)"
+  fi
+
+  nx_info "Existing NEXVARY CX Cloud installation detected: ${found_dir}"
+  if [[ -n "$NX_EXISTING_VERSION" ]]; then
+    nx_info "Installed version: ${NX_EXISTING_VERSION}"
+  fi
+}
+
+nx_check_upgrade_safety() {
+  # Called when NX_EXISTING_INSTALL=yes.
+  # If --upgrade-from= was not passed, ask interactively.
+  if [[ "${NX_UPGRADE_FROM:-}" == '' ]]; then
+    if [[ "${NX_YES:-}" == '1' ]]; then
+      nx_warn "--upgrade-from not set; proceeding with upgrade (--yes mode)."
+      return 0
+    fi
+    nx_warn "An existing installation was detected."
+    if ! nx_confirm "Upgrade the existing installation?"; then
+      nx_fatal "Installation cancelled. Run with --upgrade-from=<sha> to confirm."
+    fi
+  fi
+
+  # Version mismatch guard
+  if [[ -n "$NX_EXISTING_VERSION" && -n "${NX_RELEASE_COMMIT:-}" ]]; then
+    if [[ "$NX_EXISTING_VERSION" == "$NX_RELEASE_COMMIT" ]]; then
+      nx_warn "Installed version matches this bundle — reinstalling the same version."
+    fi
+  fi
+}
+
+nx_backup_config_before_upgrade() {
+  # Create a timestamped backup of key config files before an upgrade.
+  # Backup is written to /var/backups/nexvary/pre-upgrade-<timestamp>/.
+  local ts
+  ts="$(date +%Y%m%d-%H%M%S)"
+  local backup_dir="/var/backups/nexvary/pre-upgrade-${ts}"
+  mkdir -p "$backup_dir"
+
+  local app_dir="${NX_EXISTING_APP_DIR:-/var/www/nexvary-cx}"
+
+  for f in '.env' 'storage/app/freeswitch-conf' 'storage/app/backups'; do
+    local src="${app_dir}/${f}"
+    if [[ -e "$src" ]]; then
+      cp -a "$src" "${backup_dir}/" 2>/dev/null || true
+    fi
+  done
+
+  # Back up FreeSWITCH config dir if present
+  if [[ -d /etc/freeswitch ]]; then
+    tar -czf "${backup_dir}/freeswitch-conf.tar.gz" /etc/freeswitch 2>/dev/null || true
+  fi
+
+  nx_ok "Pre-upgrade backup written to: ${backup_dir}"
+  printf '%s\n' "$backup_dir"
+}
+
+nx_rollback_config() {
+  # Restore the most recent pre-upgrade backup.
+  # Usage: nx_rollback_config [backup_dir]
+  local backup_dir="${1:-}"
+
+  if [[ -z "$backup_dir" ]]; then
+    # Find the most recent backup
+    backup_dir="$(find /var/backups/nexvary -maxdepth 1 -name 'pre-upgrade-*' -type d 2>/dev/null | sort | tail -1)"
+  fi
+
+  if [[ -z "$backup_dir" || ! -d "$backup_dir" ]]; then
+    nx_error "No backup directory found for rollback."
+    return 1
+  fi
+
+  nx_warn "Rolling back configuration from: ${backup_dir}"
+
+  local app_dir="${NX_EXISTING_APP_DIR:-/var/www/nexvary-cx}"
+
+  if [[ -f "${backup_dir}/.env" ]]; then
+    cp "${backup_dir}/.env" "${app_dir}/.env"
+    nx_ok "Restored .env"
+  fi
+
+  if [[ -f "${backup_dir}/freeswitch-conf.tar.gz" ]]; then
+    tar -xzf "${backup_dir}/freeswitch-conf.tar.gz" -C / 2>/dev/null || true
+    nx_ok "Restored FreeSWITCH config"
+  fi
+
+  nx_ok "Rollback complete. Review the application state before restarting services."
+}
