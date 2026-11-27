@@ -118,3 +118,12 @@ operators and retain the existing private ESL deployment.
 | PBX email notifications | Email opens an administrator guide to FusionPBX SMTP settings and its delivery queue. SMTP setup, voicemail and missed-call delivery tests are pending on the server. |
 | Call routing and provisioning | FusionPBX controls the operational configuration. Direct management from Nexvary would need an authenticated, audited integration. |
 | Advanced telephony | Transfers, call waiting, DND, Follow Me, parking, queues, ring groups and IVR need acceptance testing per feature. Fax, operator panel and music on hold need separate scope and implementation review. |
+
+## SIP provider catalog
+
+**Settings → Integrations** lists the 25 named SIP configuration presets
+and links to their provider documentation. In FusionPBX mode, carrier
+gateways, credentials, and registration are managed in the PBX console.
+The Telnyx integration card reports Nexvary configuration separately from
+live SIP registration. The generic preset remains available in the local
+gateway editor.

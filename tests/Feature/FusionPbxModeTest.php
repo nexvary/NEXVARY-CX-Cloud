@@ -153,7 +153,11 @@ it('shows FusionPBX integration navigation only to administrators with a safe ad
     $this->actingAs(User::factory()->create())->get('/settings/integrations')->assertForbidden();
     $this->actingAs(fusionPbxAdministrator())->get('/settings/integrations')
         ->assertInertia(fn ($page) => $page->component('Settings/Integrations')
-            ->where('fusionPbx', true)->where('fusionPbxAdminUrl', 'https://pbx.example.test'));
+            ->where('fusionPbx', true)->where('fusionPbxAdminUrl', 'https://pbx.example.test')
+            ->has('sipProviders', 25)
+            ->has('sipProviders.0', fn ($provider) => $provider
+                ->where('key', 'telnyx')->where('label', 'Telnyx')->has('docsUrl'))
+            ->where('sipProviders.24.key', 'sinch'));
     config(['nexvary.freeswitch.fusionpbx_admin_url' => 'https://user:password@pbx.example.test']);
     $this->get('/settings/integrations')->assertInertia(fn ($page) => $page->where('fusionPbxAdminUrl', null));
     config(['nexvary.freeswitch.fusionpbx' => false]);
