@@ -44,7 +44,7 @@ export default function BlacklistForm({ entry }: { entry: Entry | null }) {
 
           <div>
             <label className="nx-label">Pattern Type</label>
-            <select className="nx-input" value={data.pattern_type} onChange={e => setData('pattern_type', e.target.value as any)}>
+            <select className="nx-input" value={data.pattern_type} onChange={e => setData('pattern_type', e.target.value as 'exact' | 'prefix' | 'regex')}>
               <option value="exact">Exact match</option>
               <option value="prefix">Prefix match</option>
               <option value="regex">Regular expression</option>
@@ -53,7 +53,7 @@ export default function BlacklistForm({ entry }: { entry: Entry | null }) {
 
           <div>
             <label className="nx-label">Direction</label>
-            <select className="nx-input" value={data.direction} onChange={e => setData('direction', e.target.value as any)}>
+            <select className="nx-input" value={data.direction} onChange={e => setData('direction', e.target.value as 'inbound' | 'outbound' | 'both')}>
               <option value="inbound">Inbound (block incoming)</option>
               <option value="outbound">Outbound (block dialing)</option>
               <option value="both">Both directions</option>

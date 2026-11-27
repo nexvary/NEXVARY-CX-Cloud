@@ -56,7 +56,7 @@ export default function AgentForm({ agent, extensions }: { agent: Agent | null; 
 
           <div>
             <label className="nx-label">Initial Status</label>
-            <select className="nx-input" value={data.status} onChange={e => setData('status', e.target.value as any)}>
+            <select className="nx-input" value={data.status} onChange={e => setData('status', e.target.value as 'available' | 'unavailable' | 'on_break')}>
               <option value="available">Available</option>
               <option value="unavailable">Unavailable</option>
               <option value="on_break">On Break</option>

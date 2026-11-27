@@ -536,7 +536,11 @@ XML;
     {
         $dir = "{$this->confDir}/autoload_configs/fifo.conf.d";
         $this->ensureDir($dir);
-        File::put("{$dir}/{$filename}", $xml);
+        try {
+            File::put("{$dir}/{$filename}", $xml);
+        } catch (\Throwable $e) {
+            Log::warning("FusionPbxConfigService: cannot write fifo config {$filename}: {$e->getMessage()}");
+        }
     }
 
     /**
@@ -574,10 +578,14 @@ XML;
     private function ensureDir(string $dir): void
     {
         if (!File::isDirectory($dir)) {
-            // 0770: group nexvary-pbx (GID 2000) shared between the app user (uid 1001)
-            // and the FreeSWITCH container (root). Setgid on the parent directory
-            // (set by docker-entrypoint.sh) propagates the group to new subdirs.
-            File::makeDirectory($dir, 0770, true);
+            try {
+                // 0770: group nexvary-pbx (GID 2000) shared between the app user (uid 1001)
+                // and the FreeSWITCH container (root). Setgid on the parent directory
+                // (set by docker-entrypoint.sh) propagates the group to new subdirs.
+                File::makeDirectory($dir, 0770, true);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("FusionPbxConfigService: cannot create directory {$dir}: {$e->getMessage()}");
+            }
         }
     }
 

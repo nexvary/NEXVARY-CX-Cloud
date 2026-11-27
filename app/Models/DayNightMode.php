@@ -4,11 +4,12 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class DayNightMode extends Model
 {
-    use HasUuids, BelongsToTenant;
+    use HasUuids, HasFactory, BelongsToTenant;
 
     protected $table = 'day_night_modes';
 

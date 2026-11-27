@@ -14,7 +14,7 @@ interface MohClass {
 
 export default function MohIndex({ classes }: { classes: MohClass[] }) {
   const [adding, setAdding] = useState(false);
-  const { data, setData, post, processing, reset, errors } = useForm({
+  const { data, setData, post, processing, reset } = useForm({
     name: '', source: 'files' as 'files' | 'stream_url', stream_url: '', shuffle: false, enabled: true,
   });
 
@@ -45,7 +45,7 @@ export default function MohIndex({ classes }: { classes: MohClass[] }) {
               </div>
               <div>
                 <label className="nx-label">Source</label>
-                <select className="nx-input" value={data.source} onChange={e => setData('source', e.target.value as any)}>
+                <select className="nx-input" value={data.source} onChange={e => setData('source', e.target.value as 'files' | 'stream_url')}>
                   <option value="files">Local files</option>
                   <option value="stream_url">Stream URL</option>
                 </select>
