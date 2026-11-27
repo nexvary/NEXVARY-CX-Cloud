@@ -517,6 +517,27 @@ XML;
 XML;
     }
 
+    /**
+     * Write an arbitrary dialplan file into the tenant domain context.
+     */
+    public function writeDialplanFile(string $domain, string $filename, string $xml): void
+    {
+        $dir = "{$this->confDir}/dialplan/{$domain}";
+        $this->ensureDir($dir);
+        File::put("{$dir}/{$filename}", $xml);
+    }
+
+    /**
+     * Remove an arbitrary dialplan file from the tenant domain context.
+     */
+    public function removeDialplanFile(string $domain, string $filename): void
+    {
+        $path = "{$this->confDir}/dialplan/{$domain}/{$filename}";
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+    }
+
     private function ensureDir(string $dir): void
     {
         if (!File::isDirectory($dir)) {

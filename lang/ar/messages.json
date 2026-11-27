@@ -172,7 +172,11 @@
     "sip_profiles": "ملفات SIP",
     "device_provisions": "تزويد الأجهزة",
     "dialplan_rules": "قواعد خطة الاتصال",
-    "number_translations": "ترجمة الأرقام"
+    "number_translations": "ترجمة الأرقام",
+    "blacklist": "القائمة السوداء",
+    "business_hours": "ساعات العمل",
+    "moh": "الموسيقى أثناء الانتظار",
+    "feature_codes": "رموز الميزات"
   },
   "dashboard": {
     "title": "لوحة التحكم",

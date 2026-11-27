@@ -172,7 +172,11 @@
     "sip_profiles": "SIP Profiles",
     "device_provisions": "Device Provisioning",
     "dialplan_rules": "Dialplan Rules",
-    "number_translations": "Number Translations"
+    "number_translations": "Number Translations",
+    "blacklist": "Blacklist",
+    "business_hours": "Business Hours",
+    "moh": "Music on Hold",
+    "feature_codes": "Feature Codes"
   },
   "dashboard": {
     "title": "Dashboard",

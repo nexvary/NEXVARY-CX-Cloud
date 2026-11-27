@@ -24,6 +24,10 @@ use App\Http\Controllers\PBX\SipProfileController;
 use App\Http\Controllers\PBX\NumberTranslationController;
 use App\Http\Controllers\PBX\DeviceProvisionController;
 use App\Http\Controllers\PBX\DialplanRuleController;
+use App\Http\Controllers\PBX\BlacklistController;
+use App\Http\Controllers\PBX\BusinessHoursController;
+use App\Http\Controllers\PBX\MohController;
+use App\Http\Controllers\PBX\FeatureCodeController;
 use App\Http\Controllers\Provision\ProvisionController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
@@ -147,6 +151,24 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
         // Dialplan Rules
         Route::resource('dialplan-rules', DialplanRuleController::class)->parameters(['dialplan-rules' => 'dialplanRule']);
+
+        // ── Blacklist ───────────────────────────────────────────────────────────
+        Route::resource('blacklist', BlacklistController::class)->parameters(['blacklist' => 'entry']);
+
+        // ── Business Hours & Day/Night ──────────────────────────────────────────
+        Route::resource('business-hours', BusinessHoursController::class)->parameters(['business-hours' => 'businessHour']);
+        Route::post('business-hours/day-night', [BusinessHoursController::class, 'storeDayNight'])->name('business-hours.store-day-night');
+        Route::post('business-hours/day-night/{dayNightMode}/toggle', [BusinessHoursController::class, 'toggleDayNight'])->name('business-hours.toggle-day-night');
+        Route::delete('business-hours/day-night/{dayNightMode}', [BusinessHoursController::class, 'destroyDayNight'])->name('business-hours.destroy-day-night');
+
+        // ── Music on Hold ───────────────────────────────────────────────────────
+        Route::get('moh', [MohController::class, 'index'])->name('moh.index');
+        Route::post('moh', [MohController::class, 'store'])->name('moh.store');
+        Route::patch('moh/{moh}', [MohController::class, 'update'])->name('moh.update');
+        Route::delete('moh/{moh}', [MohController::class, 'destroy'])->name('moh.destroy');
+
+        // ── Feature Codes ───────────────────────────────────────────────────────
+        Route::get('feature-codes', [FeatureCodeController::class, 'index'])->name('feature-codes.index');
     });
 
     // ── Call Center ───────────────────────────────────────────────────────
