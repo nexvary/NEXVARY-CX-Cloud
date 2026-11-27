@@ -467,11 +467,35 @@ nx_set_permissions() {
 nx_run_migrations() {
   nx_step "Running database migrations"
 
-  nx_spinner_start "Running migrations…"
-  sudo -u "$NX_APP_USER" php "${NX_APP_DIR}/artisan" migrate --force --no-interaction \
-    2>&1 | nx_log_passthrough
+  local backup_dir=""
+  if declare -f nx_backup_config_before_upgrade > /dev/null 2>&1; then
+    backup_dir="$(nx_backup_config_before_upgrade 2>/dev/null || true)"
+  fi
+
+  nx_spinner_start "Running migrations..."
+  local exit_code=0
+  sudo -u "$NX_APP_USER" php "${NX_APP_DIR}/artisan" migrate --force --no-interaction     2>&1 | nx_log_passthrough || exit_code=$?
   nx_spinner_stop
+
+  if [[ $exit_code -ne 0 ]]; then
+    nx_error "Database migration failed (exit ${exit_code})"
+    if [[ -n "${backup_dir:-}" && -d "$backup_dir" ]]; then
+      nx_warn "Pre-migration backup: ${backup_dir}"
+      nx_warn "Restore with: source ${INSTALLER_LIB}/detect.sh && nx_rollback_config \"${backup_dir}\""
+    fi
+    nx_fatal "Aborting: migration failed. Run with --upgrade-from=<sha> after fixing the issue."
+  fi
+
   nx_ok "Database migrations completed"
+}
+
+nx_recover_install() {
+  local backups
+  backups="$(find /var/backups/nexvary -maxdepth 1 -name 'pre-upgrade-*' -type d 2>/dev/null | sort -r | head -3)"
+  [[ -z "$backups" ]] && return 0
+  nx_warn "Found pre-upgrade backup(s) from a previous run:"
+  while IFS= read -r d; do nx_warn "  ${d}"; done <<< "$backups"
+  nx_info "To restore: source ${INSTALLER_LIB}/detect.sh && nx_rollback_config"
 }
 
 # ── Artisan cache ─────────────────────────────────────────────────────────────

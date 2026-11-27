@@ -18,9 +18,9 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Setup wizard | Partial | Laravel and Inertia wizard exercised by `scripts/qa-installation.sh` against PostgreSQL and Redis. See the development log for run evidence. |
 | Initial administrator creation | Partial | Wizard creates admin; CI-tested |
 | Database / Redis / ESL connectivity checks | Partial | Live PostgreSQL and Redis verified in the wizard. Authenticated ESL and local SIP verified in isolated QA. The rebuilt Docker stack also reached healthy FreeSWITCH. |
-| Certificate reuse | Missing | Not implemented |
+| Certificate reuse | Partial | nx_configure_https_existing_cert() in installer/lib/nginx.sh; auto-detected on re-run; --reuse-cert flag. No test evidence. |
 | Rollback | Partial | `installer/lib/detect.sh`: `nx_backup_config_before_upgrade()` backs up .env + freeswitch-conf to /var/backups/nexvary/pre-upgrade-{ts}/; `nx_rollback_config()` restores them. `nexvary-install.sh` calls backup before Phase 4. |
-| Migration and recovery | Missing | Not implemented |
+| Migration and recovery | Partial | nx_run_migrations() rolls back and surfaces backup path on failure. nx_recover_install() lists pre-upgrade backups at installer start. No OS-level recovery test. |
 | Clean install test | Partial | CI covers browser setup, sign-in and an application restart. Docker Compose startup is a separate gate. See the development log for run evidence. |
 | Failed-install recovery test | Partial | Browser QA passed recovery from rejected PostgreSQL credentials and Redis connection failure. OS-level failed-install rollback remains unverified. |
 
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-27 (CX02 device provisioning, dialplan editor, configuration validation) | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-27 (CX02 web interfaces; CX01 certificate reuse + migration recovery) | Branch: feature/stage-1-foundation*

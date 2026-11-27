@@ -168,7 +168,11 @@
     "administration": "الإدارة",
     "call_freeze": "تجميد المكالمات",
     "mfa_setup": "التحقق بخطوتين",
-    "mobile_pairing": "ربط هاتف / Pair phone"
+    "mobile_pairing": "ربط هاتف / Pair phone",
+    "sip_profiles": "ملفات SIP",
+    "device_provisions": "تزويد الأجهزة",
+    "dialplan_rules": "قواعد خطة الاتصال",
+    "number_translations": "ترجمة الأرقام"
   },
   "dashboard": {
     "title": "لوحة التحكم",

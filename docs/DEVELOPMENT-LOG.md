@@ -212,3 +212,36 @@ Append entries; preserve history. Do not infer prior completion without evidence
 
 **Next task:** CX02 complete — all missing items now Partial. Push and verify CI, then CX01 remaining (certificate reuse, migration/recovery), then CX03 call features.
 
+
+---
+
+## 2026-11-27 — CX02 Web Interfaces + CX01 Certificate Reuse + Migration Recovery
+
+**Branch:** feature/stage-1-foundation | **Commits:** 27866c1, (pending)
+
+### Changes
+
+**CX02 fixes (27866c1):**
+- `DeviceProvision::findByToken()` now calls `withoutGlobalScopes()` — TenantScope returned `WHERE 1=0` for unauthenticated users, causing provision endpoint 404.
+- `DialplanRuleController::tenantDomain()` uses `tenant_id + Tenant::findOrFail()` (matches NumberTranslationController); `$user->tenant` accessor doesn't exist on User model.
+- All 7 CI workflows passed on 27866c1.
+
+**CX02 web interfaces:**
+- `resources/js/Pages/PBX/SipProfiles/Index.tsx` + `Form.tsx` — activate/deactivate buttons, codec selector, TLS/SRTP fields.
+- `resources/js/Pages/PBX/DeviceProvisions/Index.tsx` + `Form.tsx` — one-time token banner, regenerate-token action.
+- `resources/js/Pages/PBX/DialplanRules/Index.tsx` + `Form.tsx` — dynamic condition/action builder, anti-action toggle.
+- `resources/js/Pages/PBX/NumberTranslations/Index.tsx` + `Form.tsx` — strip/prefix/privacy fields.
+- AppLayout.tsx: added SIP Profiles, Dialplan Rules, Number Translations, Device Provisioning nav items.
+- i18n: added `sip_profiles`, `dialplan_rules`, `number_translations`, `device_provisions` keys to en/ar.
+
+**CX01 — Certificate reuse:**
+- Already implemented: `nx_configure_https_existing_cert()` in `installer/lib/nginx.sh`; auto-detected via `/etc/letsencrypt/live/{domain}/fullchain.pem`; `--reuse-cert` flag supported.
+- Updated FEATURE-PARITY.md from Missing → Partial (no CI test evidence yet).
+
+**CX01 — Migration and recovery:**
+- `nx_run_migrations()` now captures exit code, logs backup path on failure, calls `nx_fatal` with recovery instructions.
+- `nx_recover_install()` added to `installer/lib/app.sh` — lists pre-upgrade backups from previous failed runs.
+- Wired into `installer/nexvary-install.sh` before Phase 1.
+- Updated FEATURE-PARITY.md from Missing → Partial (no OS-level test yet).
+
+**Next task:** Verify CI on this commit. Then CX03 call features (transfer, hold, parking, DND, forwarding, feature codes, MoH).

@@ -84,6 +84,11 @@ printf "NEXVARY CX Cloud installer — %s\n" "$(date -Iseconds)"
 
 nx_banner
 
+# ── Existing-install recovery check ──────────────────────────────────────────
+# Surface any leftover backup directories from a previous failed run.
+source "${INSTALLER_LIB}/app.sh"
+nx_recover_install
+
 # ── Phase 1: Detection ────────────────────────────────────────────────────────
 
 nx_section "Phase 1 — System Detection"
@@ -176,8 +181,7 @@ if [[ "$NX_EXISTING_INSTALL" == 'yes' ]]; then
   export NX_PRE_UPGRADE_BACKUP
 fi
 
-# shellcheck source=installer/lib/app.sh
-source "${INSTALLER_LIB}/app.sh"
+# app.sh already sourced above for nx_recover_install
 
 nx_create_app_user
 nx_deploy_app

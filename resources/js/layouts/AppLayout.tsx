@@ -7,7 +7,7 @@ import {
   Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
   Bot, FileText, Package, Hash, HelpCircle, Info, Code2, Smartphone,
-  Sun, Moon
+  Sun, Moon, ArrowLeftRight
 } from 'lucide-react';
 
 interface PageProps {
@@ -101,6 +101,10 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
         { label: t('nav.call_queues'), href: '/pbx/queues', icon: Users },
         { label: t('nav.ring_groups'), href: '/pbx/ring-groups', icon: Radio },
         { label: t('nav.voicemail'), href: '/pbx/voicemail', icon: Voicemail },
+        { label: t('nav.sip_profiles'), href: '/pbx/sip-profiles', icon: Settings },
+        { label: t('nav.dialplan_rules'), href: '/pbx/dialplan-rules', icon: GitBranch },
+        { label: t('nav.number_translations'), href: '/pbx/number-translations', icon: ArrowLeftRight },
+        { label: t('nav.device_provisions'), href: '/pbx/device-provisions', icon: Smartphone },
       ],
     },
     {

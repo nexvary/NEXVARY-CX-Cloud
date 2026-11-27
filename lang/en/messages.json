@@ -168,7 +168,11 @@
     "administration": "Administration",
     "call_freeze": "Call Freeze",
     "mfa_setup": "Two-Factor Auth",
-    "mobile_pairing": "Pair Mobile App"
+    "mobile_pairing": "Pair Mobile App",
+    "sip_profiles": "SIP Profiles",
+    "device_provisions": "Device Provisioning",
+    "dialplan_rules": "Dialplan Rules",
+    "number_translations": "Number Translations"
   },
   "dashboard": {
     "title": "Dashboard",
