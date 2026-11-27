@@ -22,7 +22,11 @@ export default function BlacklistForm({ entry }: { entry: Entry | null }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    entry?.id ? patch(route('pbx.blacklist.update', { entry: entry.id })) : post(route('pbx.blacklist.store'));
+    if (entry?.id) {
+      patch(route('pbx.blacklist.update', { entry: entry.id }));
+    } else {
+      post(route('pbx.blacklist.store'));
+    }
   };
 
   return (

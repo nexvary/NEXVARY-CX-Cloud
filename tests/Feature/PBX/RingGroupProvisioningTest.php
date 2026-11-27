@@ -12,7 +12,7 @@ use App\Services\PBX\FusionPbxConfigService;
 use App\Services\PBX\RingGroupProvisioningService;
 
 beforeEach(function () {
-    $this->tenant = Tenant::factory()->create(['sip_domain' => 'rg-test.example.com']);
+    $this->tenant = Tenant::factory()->create();
     $this->user   = User::factory()->create(['tenant_id' => $this->tenant->id]);
     $this->config = Mockery::mock(FusionPbxConfigService::class)->makePartial();
     $this->config->shouldReceive('writeDialplanFile')->andReturn(null)->byDefault();
@@ -65,7 +65,7 @@ it('renders simultaneous bridge dial string', function () {
 });
 
 it('cross-tenant admin cannot modify another tenant ring group', function () {
-    $other = Tenant::factory()->create(['sip_domain' => 'rg-other.example.com']);
+    $other = Tenant::factory()->create();
     $rg    = RingGroup::factory()->create(['tenant_id' => $other->id]);
 
     actingAs($this->user)

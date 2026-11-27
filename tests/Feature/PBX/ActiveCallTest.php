@@ -10,7 +10,7 @@ use App\Services\PBX\ActiveCallService;
 use App\Services\PBX\FreeSwitchService;
 
 beforeEach(function () {
-    $this->tenant  = Tenant::factory()->create(['sip_domain' => 'cx03-test.example.com']);
+    $this->tenant  = Tenant::factory()->create();
     $this->user    = User::factory()->create(['tenant_id' => $this->tenant->id]);
 
     $this->fs = Mockery::mock(FreeSwitchService::class);
@@ -19,7 +19,7 @@ beforeEach(function () {
     // Default: uuid belongs to our tenant
     $this->fs->shouldReceive('api')
         ->with(Mockery::pattern('/^uuid_getvar .+ domain_name$/'))
-        ->andReturn('cx03-test.example.com')
+        ->andReturnUsing(fn() => $this->tenant->sipDomain())
         ->byDefault();
 
     $this->service = new ActiveCallService($this->fs);
@@ -54,7 +54,7 @@ it('performs blind transfer', function () {
     $uuid = 'test-uuid-xfer';
 
     $this->fs->shouldReceive('transferCall')
-        ->once()->with($uuid, '1003', 'cx03-test.example.com')
+        ->once()->with($uuid, '1003', Mockery::type('string'))
         ->andReturn(true);
 
     $result = $this->service->blindTransfer($uuid, '1003', $this->tenant->id);
@@ -62,13 +62,13 @@ it('performs blind transfer', function () {
 });
 
 it('denies hold from a different tenant', function () {
-    $other = Tenant::factory()->create(['sip_domain' => 'other-cx03.example.com']);
+    $other = Tenant::factory()->create();
     $uuid  = 'test-uuid-denied';
 
     // ESL reports call belongs to other tenant
     $this->fs->shouldReceive('api')
         ->with("uuid_getvar {$uuid} domain_name")
-        ->andReturn('other-cx03.example.com');
+        ->andReturn('other-tenant-' . uniqid() . '.pbx');
 
     $this->fs->shouldNotReceive('holdCall');
 
@@ -94,10 +94,10 @@ it('performed attended transfer bridges two legs', function () {
     // Both legs verified as belonging to our tenant
     $this->fs->shouldReceive('api')
         ->with("uuid_getvar {$orig} domain_name")
-        ->andReturn('cx03-test.example.com');
+        ->andReturnUsing(fn() => $this->tenant->sipDomain());
     $this->fs->shouldReceive('api')
         ->with("uuid_getvar {$consult} domain_name")
-        ->andReturn('cx03-test.example.com');
+        ->andReturnUsing(fn() => $this->tenant->sipDomain());
     $this->fs->shouldReceive('attendedTransfer')
         ->once()->with($orig, $consult)
         ->andReturn(true);

@@ -11,7 +11,7 @@ use App\Services\PBX\BlacklistService;
 use App\Services\PBX\FusionPbxConfigService;
 
 beforeEach(function () {
-    $this->tenant = Tenant::factory()->create(['sip_domain' => 'bl-test.example.com']);
+    $this->tenant = Tenant::factory()->create();
     $this->user   = User::factory()->create(['tenant_id' => $this->tenant->id]);
     $this->config = Mockery::mock(FusionPbxConfigService::class)->makePartial();
     $this->config->shouldReceive('writeDialplanFile')->andReturn(null)->byDefault();
@@ -66,7 +66,7 @@ it('deletes entry and removes dialplan', function () {
 });
 
 it('denies cross-tenant access', function () {
-    $other = Tenant::factory()->create(['sip_domain' => 'other-bl.example.com']);
+    $other = Tenant::factory()->create();
     $entry = CallBlacklist::factory()->create(['tenant_id' => $other->id]);
 
     actingAs($this->user)

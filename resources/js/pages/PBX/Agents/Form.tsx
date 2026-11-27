@@ -23,7 +23,11 @@ export default function AgentForm({ agent, extensions }: { agent: Agent | null; 
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    agent?.id ? patch(route('pbx.agents.update', { agent: agent.id })) : post(route('pbx.agents.store'));
+    if (agent?.id) {
+      patch(route('pbx.agents.update', { agent: agent.id }));
+    } else {
+      post(route('pbx.agents.store'));
+    }
   };
 
   return (

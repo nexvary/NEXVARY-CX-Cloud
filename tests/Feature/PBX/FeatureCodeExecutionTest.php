@@ -12,7 +12,7 @@ use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\FusionPbxConfigService;
 
 beforeEach(function () {
-    $this->tenant = Tenant::factory()->create(['sip_domain' => 'fcode-test.example.com']);
+    $this->tenant = Tenant::factory()->create();
     $this->user   = User::factory()->create(['tenant_id' => $this->tenant->id]);
     $this->fs     = Mockery::mock(FreeSwitchService::class);
     $this->config = Mockery::mock(FusionPbxConfigService::class)->makePartial();

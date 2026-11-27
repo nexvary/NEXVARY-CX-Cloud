@@ -12,7 +12,7 @@ use App\Services\PBX\BusinessHoursService;
 use App\Services\PBX\FusionPbxConfigService;
 
 beforeEach(function () {
-    $this->tenant  = Tenant::factory()->create(['sip_domain' => 'bh-test.example.com']);
+    $this->tenant  = Tenant::factory()->create();
     $this->user    = User::factory()->create(['tenant_id' => $this->tenant->id]);
     $this->config  = Mockery::mock(FusionPbxConfigService::class)->makePartial();
     $this->config->shouldReceive('writeDialplanFile')->andReturn(null)->byDefault();
@@ -69,7 +69,7 @@ it('removes dialplan when schedule disabled', function () {
 });
 
 it('denies cross-tenant access to day/night toggle', function () {
-    $other = Tenant::factory()->create(['sip_domain' => 'other-bh.example.com']);
+    $other = Tenant::factory()->create();
     $dnm   = DayNightMode::factory()->create(['tenant_id' => $other->id, 'mode' => 'day']);
 
     actingAs($this->user)
