@@ -45,9 +45,9 @@ Update this file in the same commit as development work. Do not infer prior comp
 | SIP profiles | Partial | `SipProfileService` + `FusionPbxConfigService::writeSipProfileConfig()` write sofia profile XML to `sip_profiles/nexvary-{type}-{id}.xml`. `activate()` / `deactivate()` / `getStatus()` via ESL. `SipProfileController` CRUD. 4 Pest tests in `SipProfileLifecycleTest`. |
 | NAT | Partial | `SipProfile` model: `nat_enabled`, `ext_sip_ip`, `ext_rtp_ip`, `aggressive_nat_detection`. Rendered in sofia profile XML as `NDLB-force-rport` and `aggressive-nat-detection` params. |
 | TLS / SRTP | Partial | `SipProfile` model: `tls_enabled`, `tls_port`, `srtp_mode` (disabled/optional/mandatory). Sofia XML includes `tls`, `tls-sip-port`, `tls-cert-dir`, `tls-version`, `rtp-secure-media` params when configured. |
-| Device provisioning | Missing | Not implemented |
-| Dialplan editor | Missing | Not implemented |
-| Validation | Missing | Not implemented |
+| Device provisioning | Partial | `DeviceProvision` model (UUID, BelongsToTenant, hashed token, device_type). `DeviceProvisionService` renders vendor-specific XML (Yealink, Polycom, Grandstream, Cisco, Snom, generic). Unauthenticated GET /provision/{token} endpoint (rate-limited 20/min). Token regeneration. 5 Pest tests: create, 404 on unknown token, XML served, disabled record 404, cross-tenant deny. |
+| Dialplan editor | Partial | `DialplanRule` model (UUID, BelongsToTenant, conditions/actions JSON, priority, continue). `DialplanRuleService` renders continue=true/false FreeSWITCH dialplan XML to `dialplan/{domain}/nexvary-rule-{id}.xml`. CRUD via `DialplanRuleController`. ESL dialplan reload on change. 4 Pest tests: create, invalid regex, no actions, cross-tenant deny. |
+| Validation | Partial | `ConfigValidationService::validateSipProfile()`: port range, IP/hostname, codec allowlist, srtp_mode, rtp_timeout. `validateDialplanRule()`: condition field/regex, action application. `validateXml()`: DOMDocument well-formedness. Used by DialplanRuleController before writing. |
 | Configuration activation and rollback | **Partial** | `activate`: writes config → ESL reload (bool-checked) → enable; rolls back config file on ESL failure. `deactivate`: best-effort ESL killgw → removes config file → disables. Tenant isolation enforced via model binding (TenantScope) + explicit tenant_id check. 7 tests in TrunkLifecycleTest (REGED, ESL-down rollback, UNKNOWN status, killgw, ESL-down deactivate, cross-tenant 404). |
 
 **Next action:** Live FreeSWITCH integration test in Docker CI; add registered state polling for TRYING→REGED transitions.
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-27 (CX01 existing-install/upgrade/rollback + CX02 SIP profiles, codecs, NAT, TLS/SRTP, number translation, caller ID/privacy) | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-27 (CX02 device provisioning, dialplan editor, configuration validation) | Branch: feature/stage-1-foundation*

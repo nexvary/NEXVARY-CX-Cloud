@@ -184,3 +184,31 @@ Append entries; preserve history. Do not infer prior completion without evidence
 
 **Next task:** Run Docker CI to verify all 8 new tests pass alongside existing 156. Then CX02 device provisioning, dialplan editor and configuration validation.
 
+
+## 2026-11-27 — CX02 device provisioning, dialplan editor, configuration validation
+
+**Device Provisioning**
+- `DeviceProvision` model: UUID, BelongsToTenant, `provision_token_hash` (SHA256 of raw token), `device_type`, `extension_id`, `mac_address`, `last_provisioned_at`.
+- `DeviceProvision::generateToken()`: returns {raw, hash}; raw delivered once to admin, hash stored; never reversible.
+- `DeviceProvisionService::render()`: returns phone-vendor XML for Yealink, Polycom, Grandstream, Cisco, Snom, generic. No SIP password in provisioning URL or XML.
+- `GET /provision/{token}` (throttle:20,1): unauthenticated, rate-limited. `DeviceProvisionController` admin CRUD + `regenerateToken` (old URL immediately invalidated).
+- 5 tests: create, 404 unknown token, valid XML served, disabled 404, cross-tenant deny.
+
+**Dialplan Editor**
+- `DialplanRule` model: UUID, BelongsToTenant, conditions/actions JSON arrays, priority, continue boolean.
+- `DialplanRuleService::render()`: FreeSWITCH `<extension>` XML with `<condition>/<action>/<anti-action>` elements; writes to `dialplan/{domain}/nexvary-rule-{id}.xml`; ESL reload.
+- `DialplanRuleController`: CRUD with `ConfigValidationService::validateDialplanRule()` before writing.
+- 4 tests: create+write, invalid regex, empty actions validation, cross-tenant deny.
+
+**Configuration Validation**
+- `ConfigValidationService::validateSipProfile()`: port range, IP/hostname, codec allowlist, srtp_mode, rtp_timeout.
+- `validateDialplanRule()`: condition regex safety (preg_match probe), action application present.
+- `validateXml()`: DOMDocument well-formedness gate.
+
+**Infrastructure**
+- 2 new migrations: `device_provisions`, `dialplan_rules`.
+- `ExtensionFactory` added for tests.
+- `routes/web.php`, `AppServiceProvider` updated.
+
+**Next task:** CX02 complete — all missing items now Partial. Push and verify CI, then CX01 remaining (certificate reuse, migration/recovery), then CX03 call features.
+

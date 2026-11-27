@@ -22,6 +22,9 @@ use App\Http\Controllers\PBX\TrunkController;
 use App\Http\Controllers\PBX\VoicemailController;
 use App\Http\Controllers\PBX\SipProfileController;
 use App\Http\Controllers\PBX\NumberTranslationController;
+use App\Http\Controllers\PBX\DeviceProvisionController;
+use App\Http\Controllers\PBX\DialplanRuleController;
+use App\Http\Controllers\Provision\ProvisionController;
 use App\Http\Controllers\Server\ServerController;
 use App\Http\Controllers\SMS\SmsController;
 use Illuminate\Support\Facades\Route;
@@ -137,6 +140,13 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
         // Number Translations
         Route::resource('number-translations', NumberTranslationController::class)->parameters(['number-translations' => 'numberTranslation']);
+
+        // Device Provisioning
+        Route::resource('device-provisions', DeviceProvisionController::class)->parameters(['device-provisions' => 'deviceProvision']);
+        Route::post('device-provisions/{deviceProvision}/regenerate-token', [DeviceProvisionController::class, 'regenerateToken'])->name('device-provisions.regenerate');
+
+        // Dialplan Rules
+        Route::resource('dialplan-rules', DialplanRuleController::class)->parameters(['dialplan-rules' => 'dialplanRule']);
     });
 
     // ── Call Center ───────────────────────────────────────────────────────
@@ -214,6 +224,11 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
     });
 
 });
+
+// ── Device Provisioning (no auth, rate-limited) ─────────────────────────────
+Route::get('/provision/{token}', [ProvisionController::class, 'serve'])
+    ->middleware('throttle:20,1')
+    ->name('provision.serve');
 
 // ── Webhooks (no auth, signature-verified) ────────────────────────────────
 Route::prefix('webhooks')->name('webhooks.')->group(function () {
