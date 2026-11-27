@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Server;
 
+use App\Data\SipProviderPresets;
 use App\Http\Controllers\Controller;
 use App\Services\PBX\FreeSwitchService;
 use App\Services\PBX\PbxMode;
@@ -49,6 +50,14 @@ class ServerController extends Controller
 
         return Inertia::render('Settings/Integrations', [
             'telnyx_configured' => TelnyxService::configured(),
+            'sipProviders' => array_values(array_map(
+                static fn (array $preset): array => [
+                    'key' => $preset['key'],
+                    'label' => $preset['label'],
+                    'docsUrl' => $preset['docs_url'],
+                ],
+                SipProviderPresets::documented(),
+            )),
             'fusionPbx' => $fusionPbx,
             'fusionPbxAdminUrl' => $fusionPbx && ($parts['scheme'] ?? null) === 'https'
                 && !isset($parts['user']) && !isset($parts['query']) && !isset($parts['fragment'])
