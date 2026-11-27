@@ -18,7 +18,7 @@ export default function BlacklistIndex({ entries }: Props) {
 
   const remove = (id: string) => {
     if (!confirm(t('common.confirm_delete'))) return;
-    router.delete(route('pbx.blacklist.destroy', id), { preserveScroll: true });
+    router.delete(route('pbx.blacklist.destroy', { entry: id }), { preserveScroll: true });
   };
 
   const dirBadge = (d: string) =>
@@ -68,7 +68,7 @@ export default function BlacklistIndex({ entries }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
-                      <Link href={route('pbx.blacklist.edit', e.id)} className="text-blue-400 hover:text-blue-300 text-xs">Edit</Link>
+                      <Link href={route('pbx.blacklist.edit', { entry: e.id })} className="text-blue-400 hover:text-blue-300 text-xs">Edit</Link>
                       <button onClick={() => remove(e.id)} className="text-red-400 hover:text-red-300 text-xs">Delete</button>
                     </td>
                   </tr>

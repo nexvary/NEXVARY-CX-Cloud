@@ -31,7 +31,7 @@ export default function BusinessHoursForm({ schedule }: { schedule: Schedule | n
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    schedule?.id ? patch(route('pbx.business-hours.update', schedule.id)) : post(route('pbx.business-hours.store'));
+    schedule?.id ? patch(route('pbx.business-hours.update', { businessHour: schedule.id })) : post(route('pbx.business-hours.store'));
   };
 
   return (

@@ -23,7 +23,7 @@ export default function MohIndex({ classes }: { classes: MohClass[] }) {
     post(route('pbx.moh.store'), { onSuccess: () => { setAdding(false); reset(); } });
   };
 
-  const del = (id: string) => { if (confirm('Delete MoH class?')) router.delete(route('pbx.moh.destroy', id), { preserveScroll: true }); };
+  const del = (id: string) => { if (confirm('Delete MoH class?')) router.delete(route('pbx.moh.destroy', { moh: id }), { preserveScroll: true }); };
 
   return (
     <AppLayout>

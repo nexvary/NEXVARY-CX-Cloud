@@ -20,9 +20,9 @@ interface DayNight {
 interface Props { schedules: Schedule[]; dayNight: DayNight[] }
 
 export default function BusinessHoursIndex({ schedules, dayNight }: Props) {
-  const del = (id: string) => { if (confirm('Delete schedule?')) router.delete(route('pbx.business-hours.destroy', id), { preserveScroll: true }); };
-  const toggle = (id: string) => router.post(route('pbx.business-hours.toggle-day-night', id), {}, { preserveScroll: true });
-  const delDnm = (id: string) => { if (confirm('Delete?')) router.delete(route('pbx.business-hours.destroy-day-night', id), { preserveScroll: true }); };
+  const del = (id: string) => { if (confirm('Delete schedule?')) router.delete(route('pbx.business-hours.destroy', { businessHour: id }), { preserveScroll: true }); };
+  const toggle = (id: string) => router.post(route('pbx.business-hours.toggle-day-night', { dayNightMode: id }), {}, { preserveScroll: true });
+  const delDnm = (id: string) => { if (confirm('Delete?')) router.delete(route('pbx.business-hours.destroy-day-night', { dayNightMode: id }), { preserveScroll: true }); };
 
   return (
     <AppLayout>
@@ -56,7 +56,7 @@ export default function BusinessHoursIndex({ schedules, dayNight }: Props) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-3">
-                        <Link href={route('pbx.business-hours.edit', s.id)} className="text-blue-400 text-xs">Edit</Link>
+                        <Link href={route('pbx.business-hours.edit', { businessHour: s.id })} className="text-blue-400 text-xs">Edit</Link>
                         <button onClick={() => del(s.id)} className="text-red-400 text-xs">Delete</button>
                       </td>
                     </tr>

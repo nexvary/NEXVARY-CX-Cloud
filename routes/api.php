@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\MobileController;
+use App\Http\Controllers\PBX\ActiveCallController;
 use App\Http\Controllers\API\StatusController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Active calls JSON
     Route::get('/calls/active', [StatusController::class, 'activeCalls'])->name('api.calls.active');
+
+    // CX03 active-call control
+    Route::prefix('v1/calls')->name('calls.')->group(function () {
+        Route::get('/', [ActiveCallController::class, 'index'])->name('index');
+        Route::post('/{uuid}/hold', [ActiveCallController::class, 'hold'])->name('hold');
+        Route::delete('/{uuid}/hold', [ActiveCallController::class, 'resume'])->name('resume');
+        Route::post('/{uuid}/transfer', [ActiveCallController::class, 'transfer'])->name('transfer');
+        Route::post('/{uuid}/park', [ActiveCallController::class, 'park'])->name('park');
+        Route::get('/parking', [ActiveCallController::class, 'listParked'])->name('parking');
+        Route::post('/parking/{slot}/pickup', [ActiveCallController::class, 'pickup'])->name('pickup');
+    });
 });
 
 // ── Mobile API v1 (NEXVARY CX Manager Android) ───────────────────────────

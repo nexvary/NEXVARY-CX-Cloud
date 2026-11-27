@@ -243,6 +243,88 @@ class FreeSwitchService
         return $result !== false;
     }
 
+
+    // ── Call Parking (valet_park) ─────────────────────────────────────────────
+
+    /**
+     * Park a call in the valet parking lot.
+     * Returns the slot number or empty string on failure.
+     */
+    public function parkCall(string $uuid, string $slot = ''): string
+    {
+        $slotArg = $slot ? " {$slot}" : '';
+        $result = $this->api("valet_park {$uuid}{$slotArg}");
+        if ($result === false) {
+            return '';
+        }
+        // valet_park returns "+OK <slot>" on success
+        if (preg_match('/\+OK\s+(\d+)/', (string) $result, $m)) {
+            return $m[1];
+        }
+        return '';
+    }
+
+    /**
+     * Retrieve a parked call from a valet slot by transferring the retriever.
+     */
+    public function pickupParked(string $retrieveUuid, string $slot): bool
+    {
+        $result = $this->api("valet_park {$retrieveUuid} {$slot}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * Set the music-on-hold class for a held call.
+     */
+    public function setMoh(string $uuid, string $mohClass): bool
+    {
+        $result = $this->api("uuid_setvar {$uuid} hold_music local_stream://{$mohClass}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * Set an arbitrary channel variable on a call leg.
+     */
+    public function setChannelVar(string $uuid, string $varName, string $value): bool
+    {
+        $result = $this->api("uuid_setvar {$uuid} {$varName} {$value}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * List active parked calls from valet parking.
+     */
+    public function listParkedCalls(): array
+    {
+        $result = $this->api('valet_park list');
+        if ($result === false) {
+            return [];
+        }
+        $parked = [];
+        foreach (explode("\n", (string) $result) as $line) {
+            $line = trim($line);
+            if (preg_match('/^Slot:\s*(\d+)\s+UUID:\s*([\w-]+)/i', $line, $m)) {
+                $parked[] = ['slot' => $m[1], 'uuid' => $m[2]];
+            }
+        }
+        return $parked;
+    }
+
+    /**
+     * Attended (consultative) transfer: bridge two active call legs together.
+     * $origUuid and $consultUuid are both live call legs.
+     */
+    public function attendedTransfer(string $origUuid, string $consultUuid): bool
+    {
+        $result = $this->api("uuid_transfer {$origUuid} -bleg {$consultUuid} inline");
+        if ($result === false || !str_contains((string) $result, '+OK')) {
+            // Try the bridge approach
+            $result = $this->api("uuid_bridge {$origUuid} {$consultUuid}");
+            return $result !== false && str_contains((string) $result, '+OK');
+        }
+        return true;
+    }
+
     // ── Health ────────────────────────────────────────────────────────────────
 
     public function healthCheck(): array

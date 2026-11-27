@@ -10,6 +10,10 @@ use App\Services\PBX\NumberTranslationService;
 use App\Services\PBX\DeviceProvisionService;
 use App\Services\PBX\DialplanRuleService;
 use App\Services\PBX\ConfigValidationService;
+use App\Services\PBX\ActiveCallService;
+use App\Services\PBX\BlacklistService;
+use App\Services\PBX\BusinessHoursService;
+use App\Services\PBX\MohService;
 use App\Http\Controllers\Provision\ProvisionController;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(NumberTranslationService::class, fn() => NumberTranslationService::make());
         $this->app->bind(DeviceProvisionService::class, fn() => new DeviceProvisionService());
         $this->app->bind(DialplanRuleService::class, fn() => DialplanRuleService::make());
+        $this->app->bind(ActiveCallService::class, fn() => new ActiveCallService(app(FreeSwitchService::class)));
+        $this->app->bind(BlacklistService::class, fn() => new BlacklistService(app(FusionPbxConfigService::class)));
+        $this->app->bind(BusinessHoursService::class, fn() => new BusinessHoursService(app(FusionPbxConfigService::class)));
+        $this->app->bind(MohService::class, fn() => new MohService());
         $this->app->bind(ProvisionController::class, fn() => new ProvisionController(app(DeviceProvisionService::class)));
     }
 
