@@ -20,7 +20,7 @@ const DialplanRuleForm: React.FC<Props> = ({ rule }) => {
   const [actions, setActions] = useState<Action[]>(
     (rule?.actions as Action[] | undefined) ?? [{ application: 'bridge', data: '' }]
   );
-  const { data, setData, post, patch, processing, errors } = useForm({
+  const { data, setData, post, patch, processing, errors: formErrors } = useForm({
     name:     rule?.name ?? '',
     context:  rule?.context ?? 'default',
     priority: rule?.priority ?? 100,
@@ -56,9 +56,9 @@ const DialplanRuleForm: React.FC<Props> = ({ rule }) => {
       </div>
       <div className="p-6 max-w-3xl nx-animate-in">
         <form onSubmit={submit} className="space-y-6">
-          {errors.validation && (
+          {(formErrors as Record<string,string>).validation && (
             <div className="p-3 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-sm">
-              {errors.validation}
+              {(formErrors as Record<string,string>).validation}
             </div>
           )}
           <div className="nx-card p-6 space-y-4">
@@ -68,9 +68,9 @@ const DialplanRuleForm: React.FC<Props> = ({ rule }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="nx-label">Rule Name *</label>
-                <input className={`nx-input ${errors.name ? 'error' : ''}`} value={data.name}
+                <input className={`nx-input ${formErrors.name ? 'error' : ''}`} value={data.name}
                   onChange={e => setData('name', e.target.value)} placeholder="e.g. outbound-local" />
-                {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name}</p>}
+                {formErrors.name && <p className="text-xs text-red-400 mt-1">{formErrors.name}</p>}
               </div>
               <div>
                 <label className="nx-label">Context</label>
