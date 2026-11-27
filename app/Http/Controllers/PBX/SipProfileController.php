@@ -39,7 +39,7 @@ class SipProfileController extends Controller
 
         SipProfile::create($validated);
 
-        return redirect()->route('pbx.sip_profiles.index')
+        return redirect()->route('pbx.sip-profiles.index')
             ->with('success', __('messages.sip_profile_created'));
     }
 
@@ -61,7 +61,7 @@ class SipProfileController extends Controller
             $this->profiles->write($sipProfile->fresh());
         }
 
-        return redirect()->route('pbx.sip_profiles.index')
+        return redirect()->route('pbx.sip-profiles.index')
             ->with('success', __('messages.sip_profile_updated'));
     }
 
@@ -70,7 +70,7 @@ class SipProfileController extends Controller
         $this->profiles->deactivate($sipProfile);
         $sipProfile->delete();
 
-        return redirect()->route('pbx.sip_profiles.index')
+        return redirect()->route('pbx.sip-profiles.index')
             ->with('success', __('messages.sip_profile_deleted'));
     }
 

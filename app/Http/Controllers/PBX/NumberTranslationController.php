@@ -38,7 +38,7 @@ class NumberTranslationController extends Controller
 
         $this->translations->create($validated, $domain);
 
-        return redirect()->route('pbx.number_translations.index')
+        return redirect()->route('pbx.number-translations.index')
             ->with('success', __('messages.number_translation_created'));
     }
 
@@ -56,7 +56,7 @@ class NumberTranslationController extends Controller
 
         $this->translations->update($numberTranslation, $validated, $domain);
 
-        return redirect()->route('pbx.number_translations.index')
+        return redirect()->route('pbx.number-translations.index')
             ->with('messages.number_translation_updated');
     }
 
@@ -65,7 +65,7 @@ class NumberTranslationController extends Controller
         $domain = $this->tenantDomain($request);
         $this->translations->delete($numberTranslation, $domain);
 
-        return redirect()->route('pbx.number_translations.index')
+        return redirect()->route('pbx.number-translations.index')
             ->with('success', __('messages.number_translation_deleted'));
     }
 
