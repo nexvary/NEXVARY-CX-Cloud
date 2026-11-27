@@ -65,13 +65,13 @@ Update this file in the same commit as development work. Do not infer prior comp
 | Pickup | Missing | — |
 | DND | Missing | — |
 | Forwarding / Follow Me | Missing | — |
-| Blacklist | Missing | — |
-| Business hours / holidays | Missing | — |
-| Day / night mode | Missing | — |
+| Blacklist | Partial | CallBlacklist model + BlacklistService writes dialplan XML (CALL_REJECTED). Exact/prefix/regex patterns, inbound/outbound/both. 4 Pest tests. CRUD UI. |
+| Business hours / holidays | Partial | BusinessHours model (weekly schedule JSON, holidays, timezone). BusinessHoursService writes time-condition dialplan XML. 4 Pest tests. CRUD UI. |
+| Day / night mode | Partial | DayNightMode model with one-click toggle (day↔night). Destinations per mode. UI toggle on Business Hours page. |
 | Dial by name | Missing | — |
 | Hot desking | Missing | — |
-| Feature codes | Missing | — |
-| Music on hold | Missing | — |
+| Feature codes | Partial | Static display page of standard FreeSWITCH codes (*2 pickup, *3 DND, *4 forward, *52 voicemail, *68 park, *88 retrieve, **transfer, etc.). |
+| Music on hold | Partial | MohClass model (local files or stream URL, shuffle). MohService + renderConfig() for local_stream.conf. 3 Pest tests. Management UI. |
 | Announcements and audio management | Missing | — |
 
 **Next action:** Implement after CX02 live provisioning is established.
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-27 (CX02 web interfaces; CX01 certificate reuse + migration recovery) | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-27 (CX03 Blacklist, Business Hours, Day/Night Mode, MoH, Feature Codes) | Branch: feature/stage-1-foundation*
