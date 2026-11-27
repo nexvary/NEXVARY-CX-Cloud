@@ -25,7 +25,7 @@ it('creates a file-based MoH class', function () {
     ]);
 
     expect($moh->name)->toBe('Default');
-    expect(MohClass::count())->toBe(1);
+    expect(MohClass::withoutGlobalScopes()->count())->toBe(1);
 });
 
 it('renders stream MoH config', function () {
@@ -47,7 +47,7 @@ it('denies cross-tenant moh delete', function () {
     $other = Tenant::factory()->create();
     $moh   = MohClass::factory()->create(['tenant_id' => $other->id]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->delete(route('pbx.moh.destroy', $moh))
         ->assertStatus(404);
 });

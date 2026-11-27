@@ -128,14 +128,30 @@ class ServerController extends Controller
 
     public function saveOrganization(Request $request): RedirectResponse
     {
-        $request->validate([
-            'name'    => ['required', 'string', 'max:255'],
-            'domain'  => ['nullable', 'string'],
-            'country' => ['nullable', 'string'],
-            'locale'  => ['nullable', 'string'],
+        $validated = $request->validate([
+            'name'     => ['required', 'string', 'max:255'],
+            'timezone' => ['nullable', 'string', 'max:100'],
+            'locale'   => ['nullable', 'string', 'max:10'],
+            'country'  => ['nullable', 'string', 'max:10'],
         ]);
 
-        // Stored in app config / settings table in a real implementation
+        $tenant = \App\Models\Tenant::find($request->user()->tenant_id);
+        if ($tenant) {
+            $update = ['name' => $validated['name']];
+            if (!empty($validated['timezone'])) {
+                $update['timezone'] = $validated['timezone'];
+            }
+            if (!empty($validated['locale'])) {
+                $update['locale'] = $validated['locale'];
+            }
+            if (!empty($validated['country'])) {
+                $existing = $tenant->settings ?? [];
+                $existing['country'] = $validated['country'];
+                $update['settings'] = $existing;
+            }
+            $tenant->update($update);
+        }
+
         return redirect()->route('settings.organization')
                          ->with('success', 'Organization settings saved.');
     }

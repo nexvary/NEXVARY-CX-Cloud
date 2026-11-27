@@ -15,7 +15,7 @@ beforeEach(function () {
 });
 
 it('admin can create a call agent', function () {
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->post(route('pbx.agents.store'), [
             'name'        => 'Alice Support',
             'status'      => 'available',
@@ -28,7 +28,7 @@ it('admin can create a call agent', function () {
 });
 
 it('agent belongs to creating tenant', function () {
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->post(route('pbx.agents.store'), [
             'name'   => 'Bob Agent',
             'status' => 'available',
@@ -41,7 +41,7 @@ it('cross-tenant admin cannot access another tenant agent', function () {
     $other = Tenant::factory()->create();
     $agent = CallAgent::factory()->create(['tenant_id' => $other->id]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->delete(route('pbx.agents.destroy', $agent))
         ->assertStatus(404);
 });
@@ -52,7 +52,7 @@ it('agent status can be updated via JSON endpoint', function () {
         'status'    => 'available',
     ]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->postJson(route('pbx.agents.set-status', $agent), ['status' => 'on_break'])
         ->assertJson(['ok' => true, 'status' => 'on_break']);
 

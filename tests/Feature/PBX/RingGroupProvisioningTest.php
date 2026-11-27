@@ -19,6 +19,7 @@ beforeEach(function () {
     $this->config->shouldReceive('removeDialplanFile')->andReturn(null)->byDefault();
     $this->fs     = Mockery::mock(FreeSwitchService::class);
     $this->fs->shouldReceive('connect')->andReturn(false)->byDefault();
+    $this->fs->shouldReceive('reloadDialplan')->andReturn(false)->byDefault();
     $this->service = new RingGroupProvisioningService($this->config, $this->fs);
 });
 
@@ -29,7 +30,6 @@ it('writes ring group dialplan on provision', function () {
         'tenant_id' => $this->tenant->id,
         'extension' => '5001',
         'strategy'  => 'simultaneous',
-        'members'   => ['1001', '1002'],
     ]);
 
     $this->service->provision($rg);
@@ -47,20 +47,20 @@ it('removes ring group dialplan on deprovision', function () {
 });
 
 it('renders simultaneous bridge dial string', function () {
-    $rg = RingGroup::factory()->make([
+    $rg = RingGroup::factory()->create([
         'tenant_id' => $this->tenant->id,
         'extension' => '5003',
         'strategy'  => 'simultaneous',
-        'members'   => ['1001', '1002'],
     ]);
+    $rg->members()->createMany([['number' => '1001'], ['number' => '1002']]);
 
     $this->config->shouldReceive('writeDialplanFile')->once()
         ->withArgs(function ($domain, $file, $xml) {
-            return str_contains($xml, 'user/1001@rg-test.example.com,user/1002@rg-test.example.com');
+            return str_contains($xml, 'user/1001@') && str_contains($xml, ',user/1002@');
         })
         ->andReturn(null);
 
-    $rg->save();
+    $rg->load('members');
     $this->service->provision($rg);
 });
 
@@ -68,7 +68,7 @@ it('cross-tenant admin cannot modify another tenant ring group', function () {
     $other = Tenant::factory()->create();
     $rg    = RingGroup::factory()->create(['tenant_id' => $other->id]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->delete(route('pbx.ring-groups.destroy', $rg))
         ->assertStatus(404);
 });

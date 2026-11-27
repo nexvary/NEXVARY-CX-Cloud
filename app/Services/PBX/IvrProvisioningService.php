@@ -51,9 +51,6 @@ class IvrProvisioningService
 
     private function reloadIvr(): void
     {
-        if ($this->fs->connect()) {
-            $this->fs->api('reloadxml');
-            $this->fs->disconnect();
-        }
+        $this->fs->reloadDialplan();
     }
 }

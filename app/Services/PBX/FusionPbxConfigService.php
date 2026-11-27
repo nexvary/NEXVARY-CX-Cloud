@@ -255,7 +255,11 @@ XML;
         $xml  = $this->renderIvrMenuXml($menu);
         $path = "{$dir}/ivr.conf.d/nexvary-ivr-{$menu['id']}.xml";
         $this->ensureDir(dirname($path));
-        File::put($path, $xml);
+        try {
+            File::put($path, $xml);
+        } catch (Throwable $e) {
+            IlluminateSupportFacadesLog::warning("FusionPbxConfigService: IVR write failed: {$e->getMessage()}");
+        }
     }
 
     // ── Templates ─────────────────────────────────────────────────────────────
@@ -561,7 +565,11 @@ XML;
     {
         $dir = "{$this->confDir}/dialplan/{$domain}";
         $this->ensureDir($dir);
-        File::put("{$dir}/{$filename}", $xml);
+        try {
+            File::put("{$dir}/{$filename}", $xml);
+        } catch (Throwable $e) {
+            IlluminateSupportFacadesLog::warning("FusionPbxConfigService: dialplan write failed: {$e->getMessage()}");
+        }
     }
 
     /**

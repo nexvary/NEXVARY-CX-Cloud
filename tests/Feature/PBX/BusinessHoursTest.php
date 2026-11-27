@@ -34,7 +34,7 @@ it('creates a business hours schedule and writes dialplan', function () {
     ]);
 
     expect($bh->name)->toBe('Standard');
-    expect(BusinessHours::count())->toBe(1);
+    expect(BusinessHours::withoutGlobalScopes()->count())->toBe(1);
 });
 
 it('toggles day/night mode', function () {
@@ -72,7 +72,7 @@ it('denies cross-tenant access to day/night toggle', function () {
     $other = Tenant::factory()->create();
     $dnm   = DayNightMode::factory()->create(['tenant_id' => $other->id, 'mode' => 'day']);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->post(route('pbx.business-hours.toggle-day-night', $dnm))
         ->assertStatus(404);
 });

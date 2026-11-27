@@ -217,7 +217,17 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
     Route::prefix('settings')->name('settings.')->middleware('nexvary.admin')->group(function () {
         Route::get('/server', [ServerController::class, 'index'])->name('server');
         Route::post('/server/freeswitch/restart', [ServerController::class, 'restartFreeswitch'])->name('server.fs_restart');
-        Route::get('/organization', fn() => inertia('Settings/Organization'))->name('organization');
+        Route::get('/organization', function (Illuminate\Http\Request $req) {
+            $tenant = $req->user()?->tenant;
+            return inertia('Settings/Organization', [
+                'organization' => $tenant ? [
+                    'name'     => $tenant->name,
+                    'timezone' => $tenant->timezone ?? '',
+                    'locale'   => $tenant->locale ?? '',
+                    'country'  => $tenant->settings['country'] ?? '',
+                ] : [],
+            ]);
+        })->name('organization');
         Route::post('/organization', [ServerController::class, 'saveOrganization'])->name('organization.save');
         Route::get('/security',      fn() => inertia('Settings/Security'))->name('security');
         Route::get('/users',         fn() => inertia('Settings/Users'))->name('users');

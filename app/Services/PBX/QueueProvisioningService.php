@@ -24,8 +24,6 @@ class QueueProvisioningService
         $xml      = $this->renderXml($queue);
         $this->config->writeFifoConfig($filename, $xml);
 
-        $this->reloadFifo();
-
         // Write dialplan entry that routes calls into the FIFO queue
         $tenant = Tenant::find($queue->tenant_id);
         if ($tenant) {
@@ -33,20 +31,18 @@ class QueueProvisioningService
             $dpFile     = "nexvary-queue-dp-{$queue->id}.xml";
             $dpXml      = $this->renderDialplanXml($queue, $domain);
             $this->config->writeDialplanFile($domain, $dpFile, $dpXml);
-            $this->reloadDialplan();
+            $this->fs->reloadDialplan();
         }
     }
 
     public function deprovision(CallQueue $queue): void
     {
         $this->config->removeFifoConfig("nexvary-queue-{$queue->id}.xml");
-        $this->reloadFifo();
-
         $tenant = Tenant::find($queue->tenant_id);
         if ($tenant) {
             $this->config->removeDialplanFile($tenant->sipDomain(), "nexvary-queue-dp-{$queue->id}.xml");
-            $this->reloadDialplan();
         }
+        $this->fs->reloadDialplan();
     }
 
     private function renderXml(CallQueue $queue): string
@@ -88,19 +84,5 @@ XML;
 XML;
     }
 
-    private function reloadFifo(): void
-    {
-        if ($this->fs->connect()) {
-            $this->fs->api('reloadxml');
-            $this->fs->disconnect();
-        }
-    }
 
-    private function reloadDialplan(): void
-    {
-        if ($this->fs->connect()) {
-            $this->fs->reloadDialplan();
-            $this->fs->disconnect();
-        }
-    }
 }

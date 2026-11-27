@@ -20,6 +20,7 @@ beforeEach(function () {
     $this->config->shouldReceive('removeIvrMenu')->andReturn(null)->byDefault();
     $this->fs     = Mockery::mock(FreeSwitchService::class);
     $this->fs->shouldReceive('connect')->andReturn(false)->byDefault();
+    $this->fs->shouldReceive('reloadDialplan')->andReturn(false)->byDefault();
     $this->service = new IvrProvisioningService($this->config, $this->fs);
 });
 
@@ -41,7 +42,7 @@ it('cross-tenant admin cannot modify another tenant IVR', function () {
     $other = Tenant::factory()->create();
     $menu  = IvrMenu::factory()->create(['tenant_id' => $other->id]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->delete(route('pbx.ivr.destroy', $menu))
         ->assertStatus(404);
 });

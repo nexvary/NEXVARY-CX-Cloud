@@ -31,7 +31,7 @@ it('creates a blacklist entry and writes dialplan', function () {
     ]);
 
     expect($entry->pattern)->toBe('+15550001234');
-    expect(CallBlacklist::count())->toBe(1);
+    expect(CallBlacklist::withoutGlobalScopes()->count())->toBe(1);
 });
 
 it('removes dialplan when disabled', function () {
@@ -69,7 +69,7 @@ it('denies cross-tenant access', function () {
     $other = Tenant::factory()->create();
     $entry = CallBlacklist::factory()->create(['tenant_id' => $other->id]);
 
-    actingAs($this->user)
+    $this->actingAs($this->user)
         ->delete(route('pbx.blacklist.destroy', $entry))
         ->assertStatus(404);
 });

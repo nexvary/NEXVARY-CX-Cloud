@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RingGroup extends Model
 {
-    use HasUuids, SoftDeletes, BelongsToTenant;
+    use HasUuids, HasFactory, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
         'tenant_id', 'name', 'extension', 'strategy', 'timeout',

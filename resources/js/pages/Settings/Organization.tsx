@@ -3,13 +3,21 @@ import { Head, useForm } from '@inertiajs/react';
 import { Save, Building2 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
 
-const OrganizationSettings: React.FC = () => {
+interface OrgProps {
+  organization?: {
+    name?: string;
+    timezone?: string;
+    locale?: string;
+    country?: string;
+  };
+}
+
+const OrganizationSettings: React.FC<OrgProps> = ({ organization = {} }) => {
   const { data, setData, post, processing } = useForm({
-    name:    'My Organization',
-    domain:  '',
-    country: '',
-    locale:  'en',
-    timezone: 'UTC',
+    name:     organization.name     ?? '',
+    country:  organization.country  ?? '',
+    locale:   organization.locale   ?? 'en',
+    timezone: organization.timezone ?? 'UTC',
   });
 
   return (

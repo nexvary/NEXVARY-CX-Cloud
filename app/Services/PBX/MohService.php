@@ -9,7 +9,7 @@ class MohService
 {
     public function list(string $tenantId): Collection
     {
-        return MohClass::where('tenant_id', $tenantId)->orderBy('name')->get();
+        return MohClass::forTenant($tenantId)->orderBy('name')->get();
     }
 
     public function create(array $data): MohClass

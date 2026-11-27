@@ -51,14 +51,16 @@ class RingGroupProvisioningService
         $dom     = htmlspecialchars($domain, ENT_XML1 | ENT_QUOTES);
         $timeout = $ringGroup->timeout ?? 30;
 
-        $members  = $ringGroup->members ?? [];
+        $membersRel = $ringGroup->members;
+        if ($membersRel instanceof IlluminateSupportCollection) {
+            $membersList = $membersRel->pluck('number')->toArray();
+        } else {
+            $membersList = is_array($membersRel) ? $membersRel : [];
+        }
         $strategy = $ringGroup->strategy ?? 'simultaneous';
 
         // Build dial string based on strategy
-        $memberParts = array_map(
-            fn($m) => "user/{$m}@{$dom}",
-            is_array($members) ? $members : []
-        );
+        $memberParts = array_map(fn($m) => "user/{$m}@{$dom}", $membersList);
 
         if (empty($memberParts)) {
             $dialString = "user/operator@{$dom}";
@@ -90,9 +92,6 @@ XML;
 
     private function reloadDialplan(): void
     {
-        if ($this->fs->connect()) {
-            $this->fs->reloadDialplan();
-            $this->fs->disconnect();
-        }
+        $this->fs->reloadDialplan();
     }
 }
