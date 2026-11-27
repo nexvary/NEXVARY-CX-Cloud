@@ -1,0 +1,54 @@
+name: "NEXVARY CX Android — CI"
+
+on:
+  push:
+    branches: ["feature/stage-1-foundation"]
+    paths:
+      - "android/**"
+      - "app/Http/Controllers/API/MobileController.php"
+      - "routes/api.php"
+      - ".github/workflows/android.yml"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - "android/**"
+      - "app/Http/Controllers/API/MobileController.php"
+      - "routes/api.php"
+      - ".github/workflows/android.yml"
+
+jobs:
+  build-and-test:
+    name: Build & Unit Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew :app:test --no-daemon --stacktrace
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexvary-cx-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

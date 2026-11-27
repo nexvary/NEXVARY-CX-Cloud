@@ -1,33 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Phone, Users, MessageSquare, Mail, Ticket,
   CreditCard, BarChart3, Settings, Shield, Server, ChevronDown,
-  Bell, Search, Globe, LogOut, User, Mic, PhoneCall, PhoneOff,
+  Bell, Search, LogOut, User, Mic, PhoneCall,
   Menu, X, Radio, Voicemail, GitBranch, Layers, Building2,
-  Bot, FileText, Package
+  Bot, FileText, Package, Hash, HelpCircle, Info, Code2, Smartphone,
+  Sun, Moon, ArrowLeftRight, ShieldOff, Clock, Music
 } from 'lucide-react';
-
-// ── Types ──────────────────────────────────────────────────────────────────
 
 interface PageProps {
   auth: {
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      role: string;
-      locale: string;
-      avatar?: string;
-    };
+    user: { id?: string; name: string; email?: string; role?: string };
+    roles?: string[];
   };
-  pbxStatus: {
+  pbxStatus?: {
     connected: boolean;
     active_calls: number;
-    registrations: number;
+    version?: string;
   };
-  unread: {
+  unread?: {
     sms: number;
     email: number;
     tickets: number;
@@ -35,8 +28,8 @@ interface PageProps {
   flash?: {
     success?: string;
     error?: string;
-    warning?: string;
   };
+  [key: string]: unknown;
 }
 
 interface NavItem {
@@ -48,15 +41,51 @@ interface NavItem {
   children?: NavItem[];
 }
 
+// ── Theme Hook (CX12) ────────────────────────────────────────────────────────
+// Night = default glossy black; Day = light surfaces + silver accents
+type Theme = 'night' | 'day';
+
+const STORAGE_KEY = 'nx-theme';
+
+const getInitialTheme = (): Theme => {
+  if (typeof window === 'undefined') return 'night';
+  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+  if (stored === 'day' || stored === 'night') return stored;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night';
+};
+
+const useTheme = (): [Theme, () => void] => {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-nx-theme', theme);
+    localStorage.setItem(STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggle = useCallback(() => setTheme(t => t === 'night' ? 'day' : 'night'), []);
+
+  return [theme, toggle];
+};
+
 // ── Navigation Config ─────────────────────────────────────────────────────
 
-const useNavItems = (unread: PageProps['unread']): NavItem[] => {
+const useNavItems = (unread: { sms: number; email: number; tickets: number }): NavItem[] => {
   const { t } = useTranslation();
   return [
     {
       label: t('nav.dashboard'),
       href: '/dashboard',
       icon: LayoutDashboard,
+    },
+    {
+      label: t('nav.administration'),
+      href: '/admin',
+      icon: Shield,
+    },
+    {
+      label: t('nav.call_freeze'),
+      href: '/admin/call-freeze',
+      icon: Phone,
     },
     {
       label: t('nav.pbx'),
@@ -72,6 +101,15 @@ const useNavItems = (unread: PageProps['unread']): NavItem[] => {
         { label: t('nav.call_queues'), href: '/pbx/queues', icon: Users },
         { label: t('nav.ring_groups'), href: '/pbx/ring-groups', icon: Radio },
         { label: t('nav.voicemail'), href: '/pbx/voicemail', icon: Voicemail },
+        { label: t('nav.sip_profiles'), href: '/pbx/sip-profiles', icon: Settings },
+        { label: t('nav.dialplan_rules'), href: '/pbx/dialplan-rules', icon: GitBranch },
+        { label: t('nav.number_translations'), href: '/pbx/number-translations', icon: ArrowLeftRight },
+        { label: t('nav.device_provisions'), href: '/pbx/device-provisions', icon: Smartphone },
+        { label: t('nav.blacklist'), href: '/pbx/blacklist', icon: ShieldOff },
+        { label: t('nav.business_hours'), href: '/pbx/business-hours', icon: Clock },
+        { label: t('nav.moh'), href: '/pbx/moh', icon: Music },
+        { label: t('nav.feature_codes'), href: '/pbx/feature-codes', icon: Hash },
+        { label: t('nav.agents'), href: '/pbx/agents', icon: Users },
       ],
     },
     {
@@ -139,8 +177,20 @@ const useNavItems = (unread: PageProps['unread']): NavItem[] => {
         { label: t('nav.users'), href: '/settings/users', icon: Users },
         { label: t('nav.security'), href: '/settings/security', icon: Shield },
         { label: t('nav.server'), href: '/settings/server', icon: Server },
+        { label: t('nav.mfa_setup'), href: '/settings/mfa/enroll', icon: Shield },
+        { label: t('nav.mobile_pairing'), href: '/settings/devices/pair', icon: Smartphone },
         { label: t('nav.integrations'), href: '/settings/integrations', icon: Package },
         { label: t('nav.backup'), href: '/settings/backup', icon: FileText },
+      ],
+    },
+    {
+      label: t('nav.info'),
+      href: '#info',
+      icon: Info,
+      children: [
+        { label: t('nav.about_system'), href: '/info/about', icon: Info },
+        { label: t('nav.help_faq'), href: '/info/help', icon: HelpCircle },
+        { label: t('nav.about_developer'), href: '/info/developer', icon: Code2 },
       ],
     },
   ];
@@ -149,7 +199,6 @@ const useNavItems = (unread: PageProps['unread']): NavItem[] => {
 // ── Sidebar NavItem Component ─────────────────────────────────────────────
 
 const NavItemComp: React.FC<{ item: NavItem; depth?: number }> = ({ item, depth = 0 }) => {
-  const { t } = useTranslation();
   const { url } = usePage();
   const [expanded, setExpanded] = useState(() =>
     item.children?.some(c => url.startsWith(c.href)) ?? false
@@ -201,12 +250,10 @@ const NavItemComp: React.FC<{ item: NavItem; depth?: number }> = ({ item, depth 
   );
 };
 
-// ── Hash import fix
-const Hash = Phone; // placeholder — replace with actual lucide Hash if needed
 
 // ── PBX Status Chip ───────────────────────────────────────────────────────
 
-const PbxStatusChip: React.FC<{ status: PageProps['pbxStatus'] }> = ({ status }) => {
+const PbxStatusChip: React.FC<{ status: NonNullable<PageProps['pbxStatus']> }> = ({ status }) => {
   const { t } = useTranslation();
   if (!status.connected) {
     return (
@@ -241,11 +288,16 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
   const { t, i18n } = useTranslation();
-  const { auth, pbxStatus, unread, flash } = usePage<PageProps>().props;
+  const rawProps = usePage().props as unknown as PageProps;
+  const { auth, flash } = rawProps;
+  const pbxStatus = rawProps.pbxStatus ?? { connected: false, active_calls: 0 };
+  const unread = rawProps.unread ?? { sms: 0, email: 0, tickets: 0 };
   const navItems = useNavItems(unread);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
 
   // Set document direction from locale
   useEffect(() => {
@@ -253,10 +305,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
     document.documentElement.dir = rtlLocales.includes(i18n.language) ? 'rtl' : 'ltr';
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
-
-  const switchLanguage = (locale: string) => {
-    i18n.changeLanguage(locale);
-  };
 
   const languages = [
     { code: 'ar', label: 'العربية' },
@@ -271,6 +319,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
   return (
     <div className="min-h-screen bg-nx-base">
+      {title && <Head title={title} />}
       {/* ── Header ──────────────────────────────────────────────── */}
       <header className="nx-app-header flex items-center px-4 gap-4">
         {/* Logo + Toggle */}
@@ -278,18 +327,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="nx-btn-ghost p-1.5 -ms-1.5"
+            aria-controls="app-navigation"
+            aria-expanded={sidebarOpen}
           >
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black"
-              style={{ background: 'var(--nx-crimson)', boxShadow: 'var(--nx-glow-crimson)' }}
-            >
-              N
-            </div>
+            <img
+              src="/images/seal.webp"
+              alt="NEXVARY Inc."
+              className="w-8 h-8 rounded-full object-cover shrink-0"
+              style={{ boxShadow: '0 0 10px rgba(200,165,80,0.4)' }}
+            />
             <span className="font-semibold text-sm tracking-wide" style={{ color: 'var(--nx-silver)' }}>
-              NEXVARY <span style={{ color: 'var(--nx-crimson)' }}>CX</span>
+              NEXVARY <span style={{ color: 'var(--nx-green)' }}>CX</span>
             </span>
           </Link>
         </div>
@@ -304,7 +355,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
         {/* Search */}
         <button
-          onClick={() => setSearchOpen(true)}
           className="nx-btn-ghost gap-2 text-sm hidden md:flex"
         >
           <Search className="w-4 h-4" />
@@ -320,20 +370,33 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
           {(unread.sms + unread.email + unread.tickets) > 0 && (
             <span
               className="absolute top-1 end-1 w-2 h-2 rounded-full"
-              style={{ background: 'var(--nx-crimson)' }}
+              style={{ background: 'var(--nx-error)' }}
             />
           )}
         </button>
 
+        {/* Day / Night theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="nx-btn-ghost p-2"
+          aria-label={theme === 'night' ? t('common.switch_to_day') : t('common.switch_to_night')}
+          title={theme === 'night' ? t('common.switch_to_day') : t('common.switch_to_night')}
+        >
+          {theme === 'night' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
+
         {/* Language */}
         <div className="relative">
-          <button
-            className="nx-btn-ghost gap-1.5 text-sm"
-            onClick={() => { /* toggle language dropdown */ }}
+          <select
+            className="nx-btn-ghost gap-1.5 text-sm text-xs bg-transparent border-0 cursor-pointer"
+            value={i18n.language}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            aria-label={t('common.language')}
           >
-            <Globe className="w-4 h-4" />
-            <span className="hidden md:inline text-xs">{i18n.language.toUpperCase()}</span>
-          </button>
+            {languages.map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* User Menu */}
@@ -350,7 +413,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
             </div>
             <div className="hidden md:block text-start">
               <div className="text-xs font-medium text-nx-primary leading-tight">{auth.user.name}</div>
-              <div className="text-xs text-nx-muted capitalize">{auth.user.role}</div>
+              <div className="text-xs text-nx-muted capitalize">{auth.roles?.[0] ?? auth.user.role ?? ''}</div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-nx-muted hidden md:block" />
           </button>
@@ -381,6 +444,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
 
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside
+        id="app-navigation"
         className={`nx-sidebar overflow-y-auto transition-transform ${sidebarOpen ? '' : '-translate-x-full rtl:translate-x-full'}`}
       >
         <nav className="py-3">
@@ -389,10 +453,22 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
           ))}
         </nav>
 
-        {/* Version */}
+        {/* Version + Logout */}
         <div className="px-4 pb-4 mt-4 border-t border-nx pt-4">
-          <div className="text-xs text-nx-muted">NEXVARY CX Cloud v1.0</div>
-          <div className="text-xs text-nx-muted">nexvary.com</div>
+          <div className="text-xs text-nx-muted mb-3 flex items-center gap-2">
+            <img src="/images/seal.webp" alt="" aria-hidden="true" className="w-5 h-5 rounded-full object-cover opacity-60" />
+            NEXVARY CX Cloud v1.0
+          </div>
+          <Link
+            href="/logout"
+            method="post"
+            as="button"
+            data-action="logout"
+            className="nx-nav-item text-red-400 w-full text-start"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{t('auth.logout')}</span>
+          </Link>
         </div>
       </aside>
 

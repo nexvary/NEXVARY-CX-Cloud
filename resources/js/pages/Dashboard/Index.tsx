@@ -1,358 +1,341 @@
-import React from 'react';
-import { Head } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import {
-  Phone, PhoneCall, Users, MessageSquare, Mail, Ticket,
-  CreditCard, Server, AlertTriangle, TrendingUp, TrendingDown,
-  Activity, Wifi, WifiOff, Clock, BarChart3
+    Headphones, Phone, MessageSquare, Users, CreditCard,
+    Video, Bot, Settings, Plus, ChevronRight,
+    Server, Database, Radio, ArrowRight, ArrowLeft,
 } from 'lucide-react';
 import AppLayout from '@/layouts/AppLayout';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+interface Trunk { id: string; name: string; host: string; enabled: boolean }
+interface Services { freeswitch: boolean; database: boolean; redis: boolean }
 
-interface DashboardProps {
-  stats: {
-    active_calls: number;
-    registered_extensions: number;
-    total_extensions: number;
-    online_agents: number;
-    total_agents: number;
-    waiting_calls: number;
-    available_trunks: number;
-    total_trunks: number;
-    unread_sms: number;
-    unread_email: number;
-    open_tickets: number;
-    today_call_cost: string;
-    today_call_count: number;
-    today_call_minutes: number;
-  };
-  pbx: {
-    connected: boolean;
-    version?: string;
-    uptime?: string;
-  };
-  server: {
-    cpu_percent: number;
-    ram_percent: number;
-    disk_percent: number;
-    load_avg: string;
-  };
-  call_volume_chart: Array<{
-    hour: string;
-    calls: number;
-    answered: number;
-  }>;
-  recent_calls: Array<{
-    id: string;
-    caller: string;
-    destination: string;
-    duration: string;
-    status: string;
-    started_at: string;
-  }>;
-  security_alerts: number;
+interface Props {
+    stats: {
+        extensions: number; trunks: number; calls_today: number; open_tickets: number;
+        active_calls: number; available_trunks: number; unread_sms: number; today_call_minutes: number;
+    };
+    pbx_health: { connected: boolean; version?: string };
+    trunks: Trunk[];
+    services: Services;
 }
 
-// ── Stat Card Component ────────────────────────────────────────────────────
+// ── Module card definitions ───────────────────────────────────────────────────
 
-const StatCard: React.FC<{
-  title: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ElementType;
-  color?: 'green' | 'red' | 'blue' | 'yellow' | 'default';
-  trend?: 'up' | 'down' | 'neutral';
-  alert?: boolean;
-}> = ({ title, value, sub, icon: Icon, color = 'default', trend, alert }) => {
-  const colorMap = {
-    green:   'var(--nx-success)',
-    red:     'var(--nx-error)',
-    blue:    'var(--nx-info)',
-    yellow:  'var(--nx-warning)',
-    default: 'var(--nx-silver-dim)',
-  };
-  const iconColor = colorMap[color];
-
-  return (
-    <div className={`nx-stat-card ${alert ? 'border-red-500/30' : ''}`}>
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-nx-muted uppercase tracking-wider">{title}</p>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ background: `${iconColor}15` }}
-        >
-          <Icon className="w-4 h-4" style={{ color: iconColor }} />
-        </div>
-      </div>
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-2xl font-bold text-nx-primary">{value}</p>
-          {sub && <p className="text-xs text-nx-muted mt-0.5">{sub}</p>}
-        </div>
-        {trend && (
-          <div className={`flex items-center gap-1 text-xs ${
-            trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-nx-muted'
-          }`}>
-            {trend === 'up' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+const useModules = () => {
+    const { t } = useTranslation();
+    return [
+        {
+            key: 'call_center',
+            title: t('nav.call_center'),
+            desc: t('dashboard.hub_call_center_desc'),
+            icon: Headphones,
+            href: '/call-center/live',
+            color: 'var(--nx-blue)',
+            glow: 'var(--nx-glow-blue-e)',
+            muted: 'var(--nx-blue-muted)',
+        },
+        {
+            key: 'pbx',
+            title: t('nav.pbx'),
+            desc: t('dashboard.hub_telephony_desc'),
+            icon: Phone,
+            href: '/pbx/extensions',
+            color: 'var(--nx-pink)',
+            glow: 'var(--nx-glow-pink)',
+            muted: 'var(--nx-pink-muted)',
+        },
+        {
+            key: 'sms',
+            title: t('nav.sms'),
+            desc: t('dashboard.hub_messages_desc'),
+            icon: MessageSquare,
+            href: '/sms',
+            color: 'var(--nx-blue)',
+            glow: 'var(--nx-glow-blue-e)',
+            muted: 'var(--nx-blue-muted)',
+        },
+        {
+            key: 'crm',
+            title: t('nav.crm'),
+            desc: t('dashboard.hub_crm_desc'),
+            icon: Users,
+            href: '/crm/contacts',
+            color: 'var(--nx-pink)',
+            glow: 'var(--nx-glow-pink)',
+            muted: 'var(--nx-pink-muted)',
+        },
+        {
+            key: 'billing',
+            title: t('nav.billing'),
+            desc: t('dashboard.hub_billing_desc'),
+            icon: CreditCard,
+            href: '/billing/accounts',
+            color: 'var(--nx-green)',
+            glow: 'var(--nx-glow-green)',
+            muted: 'var(--nx-green-muted)',
+        },
+        {
+            key: 'collaboration',
+            title: t('nav.call_center') + ' — WebRTC',
+            desc: t('dashboard.hub_collaboration_desc'),
+            icon: Video,
+            href: '/call-center/live',
+            color: '#8b5cf6',
+            glow: '0 0 20px rgba(139,92,246,0.3)',
+            muted: 'rgba(139,92,246,0.12)',
+        },
+        {
+            key: 'voice_ai',
+            title: t('nav.voice_ai'),
+            desc: t('dashboard.hub_voice_ai_desc'),
+            icon: Bot,
+            href: '/voice-ai',
+            color: 'var(--nx-pink)',
+            glow: 'var(--nx-glow-pink)',
+            muted: 'var(--nx-pink-muted)',
+        },
+        {
+            key: 'settings',
+            title: t('nav.settings'),
+            desc: t('dashboard.hub_system_desc'),
+            icon: Settings,
+            href: '/settings/server',
+            color: 'var(--nx-blue)',
+            glow: 'var(--nx-glow-blue-e)',
+            muted: 'var(--nx-blue-muted)',
+        },
+    ];
 };
 
-// ── Server Resource Bar ────────────────────────────────────────────────────
+// ── Dot status indicator ──────────────────────────────────────────────────────
 
-const ResourceBar: React.FC<{ label: string; percent: number }> = ({ label, percent }) => {
-  const color = percent > 90 ? 'var(--nx-error)' : percent > 70 ? 'var(--nx-warning)' : 'var(--nx-info)';
-  return (
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-nx-secondary">{label}</span>
-        <span className="text-nx-primary font-medium">{percent}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-nx-elevated overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${percent}%`, background: color }}
+const StatusDot: React.FC<{ ok: boolean }> = ({ ok }) => (
+    <span
+        className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+        style={{
+            background: ok ? 'var(--nx-green)' : 'var(--nx-error)',
+            boxShadow: ok ? 'var(--nx-glow-green)' : 'var(--nx-glow-crimson)',
+        }}
+    />
+);
+
+// ── SIP Gateways Panel ────────────────────────────────────────────────────────
+
+const SipPanel: React.FC<{ trunks: Trunk[]; services: Services }> = ({ trunks, services }) => {
+    const { t, i18n } = useTranslation();
+    const isRtl = i18n.dir() === 'rtl';
+    const NavArrow = isRtl ? ArrowLeft : ArrowRight;
+
+    return (
+        <aside className="flex min-w-0 flex-col gap-3">
+            {/* SIP Gateways */}
+            <div className="nx-card overflow-hidden">
+                <div
+                    className="flex items-center justify-between px-4 py-3 border-b"
+                    style={{ borderColor: 'var(--nx-border)', background: 'var(--nx-bg-elevated)' }}
+                >
+                    <span className="text-sm font-semibold" style={{ color: 'var(--nx-silver)' }}>
+                        {t('dashboard.sip_gateways')}
+                    </span>
+                    <Link
+                        href="/pbx/trunks"
+                        className="flex items-center gap-1 text-xs rounded-md px-2 py-1 transition-colors hover:bg-nx-card"
+                        style={{ color: 'var(--nx-blue)', border: '1px solid var(--nx-blue-muted)' }}
+                    >
+                        <Plus className="w-3 h-3" />
+                        {t('dashboard.add_gateway')}
+                    </Link>
+                </div>
+
+                {trunks.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--nx-text-muted)' }}>
+                        {t('dashboard.not_configured')}
+                    </div>
+                ) : (
+                    <ul className="divide-y" style={{ borderColor: 'var(--nx-border)' }}>
+                        {trunks.map(trunk => (
+                            <li key={trunk.id} className="flex items-center gap-3 px-4 py-2.5">
+                                <StatusDot ok={trunk.enabled} />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate" style={{ color: 'var(--nx-text-primary)' }}>
+                                        {trunk.name}
+                                    </p>
+                                    <p className="text-xs truncate" style={{ color: 'var(--nx-text-muted)' }}>
+                                        {trunk.host || t('dashboard.not_configured')}
+                                    </p>
+                                </div>
+                                <span
+                                    className="text-xs rounded px-1.5 py-0.5"
+                                    style={{
+                                        background: trunk.enabled ? 'var(--nx-green-muted)' : 'rgba(100,100,120,0.2)',
+                                        color: trunk.enabled ? 'var(--nx-green)' : 'var(--nx-text-muted)',
+                                    }}
+                                >
+                                    {trunk.enabled ? t('management.enabled') : t('management.disabled')}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                {/* Quick nav */}
+                <div className="border-t" style={{ borderColor: 'var(--nx-border)' }}>
+                    {[
+                        { label: t('dashboard.inbound_numbers'), href: '/pbx/dids' },
+                        { label: t('dashboard.outbound_routes_link'), href: '/pbx/outbound-routes' },
+                    ].map(item => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className="flex items-center justify-between px-4 py-2 text-xs transition-colors hover:bg-nx-card"
+                            style={{ color: 'var(--nx-text-secondary)', borderBottom: '1px solid var(--nx-border)' }}
+                        >
+                            <span>{item.label}</span>
+                            <NavArrow className="w-3 h-3" />
+                        </Link>
+                    ))}
+                </div>
+            </div>
+
+            {/* Service Monitoring */}
+            <div className="nx-card overflow-hidden">
+                <div
+                    className="px-4 py-3 border-b"
+                    style={{ borderColor: 'var(--nx-border)', background: 'var(--nx-bg-elevated)' }}
+                >
+                    <span className="text-sm font-semibold" style={{ color: 'var(--nx-silver)' }}>
+                        {t('dashboard.service_monitoring')}
+                    </span>
+                </div>
+                <div className="p-4 flex flex-col gap-3">
+                    {[
+                        { icon: Radio, label: 'FreeSWITCH', ok: services.freeswitch },
+                        { icon: Database, label: 'PostgreSQL', ok: services.database },
+                        { icon: Server, label: 'Redis', ok: services.redis },
+                    ].map(({ icon: Icon, label, ok }) => (
+                        <div key={label} className="flex items-center gap-3">
+                            <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                                style={{ background: ok ? 'var(--nx-green-muted)' : 'rgba(224,32,32,0.1)' }}
+                            >
+                                <Icon className="w-4 h-4" style={{ color: ok ? 'var(--nx-green)' : 'var(--nx-error)' }} />
+                            </div>
+                            <span className="flex-1 text-sm" style={{ color: 'var(--nx-text-primary)' }}>{label}</span>
+                            <StatusDot ok={ok} />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </aside>
+    );
+};
+
+// ── Module Card ───────────────────────────────────────────────────────────────
+
+const ModuleCard: React.FC<{
+    title: string; desc: string; icon: React.ElementType;
+    href: string; color: string; glow?: string; muted: string;
+}> = ({ title, desc, icon: Icon, href, color, muted }) => (
+    <Link
+        href={href}
+        className="nx-card group relative overflow-hidden flex items-center gap-4 p-4 transition-all hover:scale-[1.02]"
+        style={{ minHeight: '90px' }}
+    >
+        {/* Left colored accent bar */}
+        <span
+            className="absolute start-0 top-0 bottom-0 w-1 rounded-s-2xl"
+            style={{ background: color }}
+            aria-hidden="true"
         />
-      </div>
-    </div>
-  );
-};
+        {/* Hover glow overlay */}
+        <span
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            style={{ background: `radial-gradient(circle at 20% 50%, ${muted}, transparent 70%)` }}
+            aria-hidden="true"
+        />
 
-// ── Tooltip (Recharts) ─────────────────────────────────────────────────────
-
-const ChartTooltip: React.FC<any> = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="nx-card px-3 py-2 text-xs shadow-xl">
-      <p className="text-nx-muted mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.dataKey} style={{ color: p.color }}>
-          {p.name}: {p.value}
-        </p>
-      ))}
-    </div>
-  );
-};
-
-// ── Dashboard Page ─────────────────────────────────────────────────────────
-
-const Dashboard: React.FC<DashboardProps> = ({
-  stats, pbx, server, call_volume_chart, recent_calls, security_alerts
-}) => {
-  const { t } = useTranslation();
-
-  return (
-    <AppLayout title={t('nav.dashboard')}>
-      <Head title={t('nav.dashboard')} />
-
-      <div className="nx-page-header flex items-center justify-between">
-        <div>
-          <h1 className="nx-page-title">{t('dashboard.title')}</h1>
-          <p className="nx-page-subtitle">{t('dashboard.subtitle')}</p>
+        {/* Icon */}
+        <div
+            className="relative z-10 shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all group-hover:scale-110"
+            style={{ background: muted, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08)` }}
+        >
+            <Icon className="w-5 h-5" style={{ color, filter: `drop-shadow(0 0 6px ${color})` }} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-nx-muted">
-          <Clock className="w-3.5 h-3.5" />
-          <span>{t('dashboard.last_updated')}: {new Date().toLocaleTimeString()}</span>
-        </div>
-      </div>
 
-      <div className="p-6 space-y-6 nx-animate-in">
-        {/* ── Security Alert ─────────────────────────────────────── */}
-        {security_alerts > 0 && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-red-300">
-                {security_alerts} {t('dashboard.security_alerts')}
-              </p>
-              <p className="text-xs text-red-400/70 mt-0.5">
-                <a href="/settings/security" className="underline">{t('common.view_details')}</a>
-              </p>
+        {/* Text */}
+        <div className="relative z-10 flex-1 min-w-0">
+            <h2
+                className="text-sm font-semibold leading-tight wrap-break-word transition-colors"
+                style={{ color: 'var(--nx-text-primary)' }}
+            >
+                {title}
+            </h2>
+            <p className="text-xs mt-0.5 wrap-break-word" style={{ color: 'var(--nx-text-muted)' }}>{desc}</p>
+        </div>
+
+        {/* Arrow */}
+        <ChevronRight
+            className="relative z-10 w-4 h-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rtl:rotate-180"
+            style={{ color }}
+        />
+    </Link>
+);
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
+
+export default function Dashboard({ stats, pbx_health, trunks = [], services }: Props) {
+    const { t } = useTranslation();
+    const modules = useModules();
+
+    return (
+        <AppLayout title={t('dashboard.title')}>
+            {/* Platform title */}
+            <div className="mx-4 mt-4 mb-5 sm:mx-6 sm:mt-6">
+                <h1 className="text-xl font-bold" style={{ color: 'var(--nx-silver)' }}>
+                    {t('dashboard.platform_title')}
+                </h1>
+                <div className="flex flex-wrap gap-4 mt-2 text-xs" style={{ color: 'var(--nx-text-muted)' }}>
+                    <span>
+                        <span style={{ color: pbx_health.connected ? 'var(--nx-green)' : 'var(--nx-error)' }}>●</span>
+                        {' '}FreeSWITCH{pbx_health.version ? ` ${pbx_health.version}` : ''}
+                    </span>
+                    <span>
+                        <span style={{ color: 'var(--nx-blue)' }}>●</span>
+                        {' '}{stats.active_calls} {t('dashboard.active_calls')}
+                    </span>
+                    <span>
+                        <span style={{ color: 'var(--nx-pink)' }}>●</span>
+                        {' '}{stats.unread_sms} {t('dashboard.unread_sms')}
+                    </span>
+                    <span>
+                        <span style={{ color: 'var(--nx-warning)' }}>●</span>
+                        {' '}{stats.open_tickets} {t('dashboard.open_tickets')}
+                    </span>
+                </div>
             </div>
-          </div>
-        )}
 
-        {/* ── Primary Stats Grid ─────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <StatCard
-            title={t('dashboard.active_calls')}
-            value={stats.active_calls}
-            icon={PhoneCall}
-            color={stats.active_calls > 0 ? 'green' : 'default'}
-          />
-          <StatCard
-            title={t('dashboard.registered_ext')}
-            value={`${stats.registered_extensions}/${stats.total_extensions}`}
-            sub={t('dashboard.online')}
-            icon={Phone}
-            color={stats.registered_extensions > 0 ? 'blue' : 'red'}
-          />
-          <StatCard
-            title={t('dashboard.online_agents')}
-            value={`${stats.online_agents}/${stats.total_agents}`}
-            icon={Users}
-            color={stats.online_agents > 0 ? 'green' : 'default'}
-          />
-          <StatCard
-            title={t('dashboard.waiting_calls')}
-            value={stats.waiting_calls}
-            icon={Clock}
-            color={stats.waiting_calls > 5 ? 'yellow' : 'default'}
-            alert={stats.waiting_calls > 10}
-          />
-          <StatCard
-            title={t('dashboard.unread_sms')}
-            value={stats.unread_sms}
-            icon={MessageSquare}
-            color={stats.unread_sms > 0 ? 'blue' : 'default'}
-          />
-          <StatCard
-            title={t('dashboard.open_tickets')}
-            value={stats.open_tickets}
-            icon={Ticket}
-            color={stats.open_tickets > 0 ? 'yellow' : 'default'}
-          />
-        </div>
+            {/* Two-column body */}
+            <div className="mx-4 mb-6 grid grid-cols-1 items-start gap-4 sm:mx-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+                {/* LEFT: SIP + Services panel */}
+                <SipPanel trunks={trunks} services={services ?? { freeswitch: pbx_health.connected, database: true, redis: true }} />
 
-        {/* ── Today Summary ──────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            title={t('dashboard.today_calls')}
-            value={stats.today_call_count}
-            sub={`${stats.today_call_minutes} ${t('dashboard.minutes')}`}
-            icon={Activity}
-            color="blue"
-          />
-          <StatCard
-            title={t('dashboard.today_cost')}
-            value={`$${stats.today_call_cost}`}
-            icon={CreditCard}
-            color="default"
-          />
-          <StatCard
-            title={t('dashboard.trunks')}
-            value={`${stats.available_trunks}/${stats.total_trunks}`}
-            sub={t('dashboard.available')}
-            icon={Server}
-            color={stats.available_trunks > 0 ? 'green' : 'red'}
-          />
-        </div>
-
-        {/* ── Charts Row ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Call Volume Chart */}
-          <div className="nx-card p-5 lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-nx-primary">{t('dashboard.call_volume_today')}</h3>
-              <BarChart3 className="w-4 h-4 text-nx-muted" />
+                {/* RIGHT: Module cards grid */}
+                <div data-testid="dashboard-modules" className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                    {modules.map(m => (
+                        <ModuleCard
+                            key={m.key}
+                            title={m.title}
+                            desc={m.desc}
+                            icon={m.icon}
+                            href={m.href}
+                            color={m.color}
+                            glow={m.glow}
+                            muted={m.muted}
+                        />
+                    ))}
+                </div>
             </div>
-            {call_volume_chart.length > 0 ? (
-              <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={call_volume_chart}>
-                  <defs>
-                    <linearGradient id="callGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#e02020" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#e02020" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="ansGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="hour" tick={{ fill: '#5c5f7a', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#5c5f7a', fontSize: 11 }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="calls" name="Total" stroke="#e02020" fill="url(#callGrad)" strokeWidth={1.5} dot={false} />
-                  <Area type="monotone" dataKey="answered" name="Answered" stroke="#3b82f6" fill="url(#ansGrad)" strokeWidth={1.5} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-40 flex items-center justify-center text-nx-muted text-sm">
-                {t('dashboard.no_calls_today')}
-              </div>
-            )}
-          </div>
-
-          {/* Server Health */}
-          <div className="nx-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-nx-primary">{t('dashboard.server_health')}</h3>
-              <div className="flex items-center gap-1.5 text-xs text-green-400">
-                <span className="nx-dot nx-dot-green" />
-                {t('status.normal')}
-              </div>
-            </div>
-            <div className="space-y-4">
-              <ResourceBar label="CPU" percent={server.cpu_percent} />
-              <ResourceBar label="RAM" percent={server.ram_percent} />
-              <ResourceBar label={t('dashboard.disk')} percent={server.disk_percent} />
-            </div>
-            <div className="mt-4 pt-4 border-t border-nx">
-              <p className="text-xs text-nx-muted">
-                {t('dashboard.load_avg')}: <span className="text-nx-primary">{server.load_avg}</span>
-              </p>
-              <p className="text-xs text-nx-muted mt-1">
-                PBX: {pbx.connected
-                  ? <span className="text-green-400">{t('status.pbx_up')} {pbx.version && `v${pbx.version}`}</span>
-                  : <span className="text-red-400">{t('status.pbx_down')}</span>
-                }
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Recent Calls ───────────────────────────────────────── */}
-        <div className="nx-card overflow-hidden">
-          <div className="nx-page-header flex items-center justify-between py-4">
-            <h3 className="text-sm font-semibold text-nx-primary">{t('dashboard.recent_calls')}</h3>
-            <a href="/call-center/records" className="text-xs text-nx-muted hover:text-nx-primary">{t('common.view_all')}</a>
-          </div>
-          <div className="overflow-x-auto">
-            {recent_calls.length > 0 ? (
-              <table className="nx-table">
-                <thead>
-                  <tr>
-                    <th>{t('calls.caller')}</th>
-                    <th>{t('calls.destination')}</th>
-                    <th>{t('calls.duration')}</th>
-                    <th>{t('calls.status')}</th>
-                    <th>{t('calls.time')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent_calls.map(call => (
-                    <tr key={call.id}>
-                      <td className="font-mono text-sm">{call.caller}</td>
-                      <td className="font-mono text-sm">{call.destination}</td>
-                      <td className="text-nx-secondary">{call.duration}</td>
-                      <td>
-                        <span className={`nx-badge ${
-                          call.status === 'answered' ? 'nx-badge-green' :
-                          call.status === 'missed'   ? 'nx-badge-red' : 'nx-badge-gray'
-                        }`}>
-                          {call.status}
-                        </span>
-                      </td>
-                      <td className="text-xs text-nx-muted">{call.started_at}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-8 text-center text-nx-muted text-sm">
-                {t('dashboard.no_recent_calls')}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </AppLayout>
-  );
-};
-
-export default Dashboard;
+        </AppLayout>
+    );
+}

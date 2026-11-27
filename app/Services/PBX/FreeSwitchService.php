@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  */
 class FreeSwitchService
 {
-    private ?mixed $socket = null;
+    private mixed $socket = null;
     private bool $authenticated = false;
 
     public function __construct(
@@ -53,7 +53,11 @@ class FreeSwitchService
             }
 
             stream_set_timeout($this->socket, 10);
-            $this->readResponse(); // "auth/request"
+            $greeting = $this->readResponse();
+            if (!str_contains($greeting, 'auth/request')) {
+                $this->disconnect();
+                return false;
+            }
 
             fwrite($this->socket, "auth {$this->password}\n\n");
             $response = $this->readResponse();
@@ -71,6 +75,11 @@ class FreeSwitchService
             Log::error('FreeSWITCH ESL connection exception', ['error' => $e->getMessage()]);
             return false;
         }
+    }
+
+    public function probe(): bool
+    {
+        return $this->getStatus()['connected'];
     }
 
     public function disconnect(): void
@@ -96,7 +105,7 @@ class FreeSwitchService
         }
 
         fwrite($this->socket, "api {$command}\n\n");
-        return $this->readResponse();
+        return $this->readResponse(bodyOnly: true);
     }
 
     public function bgapi(string $command): string|false
@@ -114,12 +123,12 @@ class FreeSwitchService
     public function getStatus(): array
     {
         $raw = $this->api('status');
-        if (!$raw) {
+        if (!$raw || !preg_match('/^FreeSWITCH\s+(?:\(Version\s+)?(\d+(?:\.\d+)+)/m', $raw, $version)) {
             return ['connected' => false, 'status' => 'unreachable'];
         }
 
         $lines = explode("\n", trim($raw));
-        $data = ['connected' => true, 'raw' => $raw];
+        $data = ['connected' => true, 'raw' => $raw, 'version' => $version[1]];
 
         foreach ($lines as $line) {
             if (preg_match('/(\d+)\s+session\(s\)\s+since\s+startup/', $line, $m)) {
@@ -128,9 +137,6 @@ class FreeSwitchService
             if (preg_match('/(\d+)\s+session\(s\)\s+-\s+peak\s+(\d+)/', $line, $m)) {
                 $data['current_sessions'] = (int) $m[1];
                 $data['peak_sessions'] = (int) $m[2];
-            }
-            if (preg_match('/FreeSWITCH\s+([\d.]+)\s+/', $line, $m)) {
-                $data['version'] = $m[1];
             }
         }
 
@@ -224,17 +230,99 @@ class FreeSwitchService
         return $result !== false;
     }
 
-    public function reloadSipProfiles(): bool
+    public function reloadSipProfiles(string $profile = 'external'): bool
     {
-        $result = $this->api('sofia profile internal restart');
+        $result = $this->api("sofia profile {$profile} restart");
         return $result !== false;
     }
 
     public function reloadGateway(string $gateway): bool
     {
-        $result = $this->api("sofia profile external killgw {$gateway}");
-        $this->api("sofia profile external startgw {$gateway}");
+        $this->api("sofia profile external killgw {$gateway}");
+        $result = $this->api("sofia profile external startgw {$gateway}");
         return $result !== false;
+    }
+
+
+    // ── Call Parking (valet_park) ─────────────────────────────────────────────
+
+    /**
+     * Park a call in the valet parking lot.
+     * Returns the slot number or empty string on failure.
+     */
+    public function parkCall(string $uuid, string $slot = ''): string
+    {
+        $slotArg = $slot ? " {$slot}" : '';
+        $result = $this->api("valet_park {$uuid}{$slotArg}");
+        if ($result === false) {
+            return '';
+        }
+        // valet_park returns "+OK <slot>" on success
+        if (preg_match('/\+OK\s+(\d+)/', (string) $result, $m)) {
+            return $m[1];
+        }
+        return '';
+    }
+
+    /**
+     * Retrieve a parked call from a valet slot by transferring the retriever.
+     */
+    public function pickupParked(string $retrieveUuid, string $slot): bool
+    {
+        $result = $this->api("valet_park {$retrieveUuid} {$slot}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * Set the music-on-hold class for a held call.
+     */
+    public function setMoh(string $uuid, string $mohClass): bool
+    {
+        $result = $this->api("uuid_setvar {$uuid} hold_music local_stream://{$mohClass}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * Set an arbitrary channel variable on a call leg.
+     */
+    public function setChannelVar(string $uuid, string $varName, string $value): bool
+    {
+        $result = $this->api("uuid_setvar {$uuid} {$varName} {$value}");
+        return $result !== false && str_contains((string) $result, '+OK');
+    }
+
+    /**
+     * List active parked calls from valet parking.
+     */
+    public function listParkedCalls(): array
+    {
+        $result = $this->api('valet_park list');
+        if ($result === false) {
+            return [];
+        }
+        $parked = [];
+        foreach (explode("\n", (string) $result) as $line) {
+            $line = trim($line);
+            if (preg_match('/^Slot:\s*(\d+)\s+UUID:\s*([\w-]+)/i', $line, $m)) {
+                $parked[] = ['slot' => $m[1], 'uuid' => $m[2]];
+            }
+        }
+        return $parked;
+    }
+
+    /**
+     * Attended (consultative) transfer: bridge two active call legs together.
+     * $origUuid and $consultUuid are both live call legs.
+     */
+    public function attendedTransfer(string $origUuid, string $consultUuid): bool
+    {
+        $result = $this->api("uuid_transfer {$origUuid} -bleg {$consultUuid} inline");
+        if ($result === false || !str_contains((string) $result, '+OK')) {
+            // Try the bridge approach
+            $result = $this->api("uuid_bridge {$origUuid} {$consultUuid}");
+            return $result !== false && str_contains((string) $result, '+OK');
+        }
+        return true;
     }
 
     // ── Health ────────────────────────────────────────────────────────────────
@@ -246,8 +334,8 @@ class FreeSwitchService
             return $cached;
         }
 
-        $connected = $this->connect();
-        if (!$connected) {
+        $status = $this->getStatus();
+        if (!$status['connected']) {
             $health = [
                 'status' => 'down',
                 'connected' => false,
@@ -260,7 +348,6 @@ class FreeSwitchService
             return $health;
         }
 
-        $status = $this->getStatus();
         $health = [
             'status' => 'up',
             'connected' => true,
@@ -300,34 +387,38 @@ class FreeSwitchService
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    private function readResponse(): string
+    private function readResponse(bool $bodyOnly = false): string
     {
-        $response = '';
+        $headers = '';
         $contentLength = 0;
 
-        while (!feof($this->socket)) {
-            $line = fgets($this->socket, 4096);
-            if ($line === false) {
-                break;
+        while (($line = fgets($this->socket, 4096)) !== false) {
+            $headers .= $line;
+            if (strlen($headers) > 16_384) {
+                $this->disconnect();
+                return '';
             }
-            $response .= $line;
+            if (preg_match('/^Content-Length:\s*(\d+)/i', $line, $length)) {
+                $contentLength = (int) $length[1];
+            }
+            if (trim($line) !== '') {
+                continue;
+            }
+            if ($contentLength > 16 * 1024 * 1024) {
+                $this->disconnect();
+                return '';
+            }
+            $body = $contentLength ? stream_get_contents($this->socket, $contentLength) : '';
+            if ($body === false || strlen($body) !== $contentLength) {
+                $this->disconnect();
+                return '';
+            }
 
-            if (preg_match('/^Content-Length:\s*(\d+)/i', $line, $m)) {
-                $contentLength = (int) $m[1];
-            }
-
-            if (trim($line) === '' && $contentLength > 0) {
-                $body = fread($this->socket, $contentLength);
-                $response .= $body;
-                break;
-            }
-
-            if (trim($line) === '' && $contentLength === 0) {
-                break;
-            }
+            return $bodyOnly ? $body : $headers.$body;
         }
 
-        return $response;
+        $this->disconnect();
+        return '';
     }
 
     private function ensureConnected(): bool

@@ -1,0 +1,143 @@
+import { Link, useForm, usePage } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
+import { ArrowLeft, ArrowRight, AudioLines, Building2, Cable, ContactRound, CreditCard, Headphones, ListOrdered, MessageSquare, Route, Server, Shield, Workflow } from 'lucide-react';
+import AppLayout from '@/layouts/AppLayout';
+
+const icons = {
+    trunks: Cable, extensions: Headphones, inbound: Route, outbound: Route, ivr: Workflow, queues: ListOrdered,
+    sms: MessageSquare, contacts: ContactRound, billing: CreditCard, voice: AudioLines, security: Shield, maintenance: Server,
+};
+type Module = keyof typeof icons;
+type Row = Record<string, string | number | boolean | null>;
+type TenantOption = { id: string; name: string };
+
+export default function Guide({
+    modules, module, columns = [], records, checks = {}, draftFields = [],
+    noTenantSelected = false, availableTenants = [], selectedTenant,
+}: {
+    modules: Module[]; module?: Module; columns?: string[]; draftFields?: string[];
+    records?: { data: Row[]; next_page_url?: string; prev_page_url?: string };
+    checks?: Record<string, boolean>;
+    noTenantSelected?: boolean;
+    availableTenants?: TenantOption[];
+    selectedTenant?: string;
+}) {
+    const { t, i18n } = useTranslation();
+    const { flash, errors: pageErrors = {} } = usePage<{ flash?: { success?: string }; errors?: Record<string, string> }>().props;
+    const form = useForm({ first_name: '', last_name: '', email: '', phone: '' });
+    const tenantForm = useForm({ tenant_id: selectedTenant ?? '' });
+    const Back = i18n.dir() === 'rtl' ? ArrowRight : ArrowLeft;
+    const title = t(module ? `management.${module}` : 'management.title');
+    const hasRecords = Boolean(records?.data?.length);
+
+    const selectedTenantName = availableTenants.find(t => t.id === selectedTenant)?.name;
+
+    return <AppLayout title={title}>
+        {module && <Link href="/admin" className="nx-btn-secondary mb-4"><Back aria-hidden="true" className="size-4" />{t('setup.back')}</Link>}
+        <h1 className="text-2xl font-semibold">{title}</h1>
+
+        {/* Superadmin tenant selector — only shown when multiple tenants exist (single tenant is auto-selected) */}
+        {availableTenants.length > 1 && <div className="nx-card mt-3 flex flex-wrap items-center gap-3 p-3">
+            <Building2 aria-hidden="true" className="size-4 shrink-0 text-sky-300" />
+            {selectedTenantName
+                ? <span className="text-sm">{t('management.working_as', { name: selectedTenantName })}</span>
+                : <span className="text-sm nx-quiet">{t('management.no_tenant_selected')}</span>}
+            <form className="flex flex-wrap items-center gap-2 ms-auto" onSubmit={event => {
+                event.preventDefault();
+                tenantForm.post('/admin/select-tenant', { preserveScroll: true });
+            }}>
+                <select className="nx-input text-sm" value={tenantForm.data.tenant_id}
+                    onChange={event => tenantForm.setData('tenant_id', event.target.value)}>
+                    <option value="">{t('management.select_tenant_prompt')}</option>
+                    {availableTenants.map(tn => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
+                </select>
+                <button className="nx-btn-secondary text-sm" disabled={!tenantForm.data.tenant_id || tenantForm.processing}>
+                    {t('management.select_tenant_button')}
+                </button>
+            </form>
+        </div>}
+
+        {module ? <>
+            <p className="mb-4 mt-2 text-sm nx-quiet">{t(`management.${module}_help`)}</p>
+
+            {noTenantSelected && <div className="nx-card mb-4 p-4 text-sm nx-quiet" role="alert">
+                {t('management.select_tenant_to_view')}
+            </div>}
+
+            {!noTenantSelected && module === 'contacts' && <form className="nx-card mb-4 grid gap-3 p-4 sm:grid-cols-2" onSubmit={event => {
+                event.preventDefault();
+                form.post('/admin/contacts', { onSuccess: () => form.reset() });
+            }}>
+                {(['first_name', 'last_name', 'email', 'phone'] as const).map(field => <label key={field} className="grid gap-1 text-sm">
+                    {t(`management.field_${field}`)}
+                    <input className="nx-input" required={field === 'first_name'} name={field}
+                        type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
+                        value={form.data[field]} onChange={event => form.setData(field, event.target.value)} aria-invalid={!!form.errors[field]} />
+                    {form.errors[field] && <span className="text-red-300" role="alert">{t('setup.invalid_field')}</span>}
+                </label>)}
+                {pageErrors.tenant && <p className="sm:col-span-2 text-amber-300 text-sm" role="alert">{pageErrors.tenant}</p>}
+                <div className="sm:col-span-2">
+                    <button className="nx-btn-primary" disabled={form.processing}>{t('management.add_contact')}</button>
+                    {flash?.success === 'contact_saved' && <p className="mt-2 text-emerald-300" role="status">{t('management.contact_saved')}</p>}
+                </div>
+            </form>}
+            {!noTenantSelected && draftFields.length > 0 && <DraftConfiguration key={module} module={module!} fields={draftFields}
+                saved={flash?.success === 'draft_saved'} />}
+            {module === 'maintenance' && <section className="nx-card grid gap-2 p-4">
+                {Object.entries(checks).map(([service, ok]) => <p key={service} className="flex flex-wrap justify-between gap-2 text-sm">
+                    <strong>{t(`setup.${service}`)}</strong>
+                    <span className={ok ? 'text-emerald-300' : 'text-amber-300'}>{t(ok ? 'status.connected' : 'status.disconnected')}</span>
+                </p>)}
+                <Link href="/admin/maintenance" className="nx-btn-secondary w-fit">{t('setup.retry')}</Link>
+            </section>}
+            {!noTenantSelected && module !== 'maintenance' && <section className="nx-card p-4">
+                {!hasRecords ? <p className="text-sm nx-quiet">{t('management.empty')}</p> :
+                    <ul className="grid gap-2">
+                        {records?.data.map((row, index) => <li key={index} className="nx-notice grid gap-2 sm:grid-cols-2">
+                            {columns.map(key => <div key={key} className="min-w-0">
+                                <p className="text-xs nx-quiet">{t(`management.field_${key}`)}</p>
+                                <p className="break-words text-sm"><bdi>{key === 'enabled' ? t(row[key] ? 'management.enabled' : 'management.disabled') : row[key] ?? '—'}</bdi></p>
+                            </div>)}
+                        </li>)}
+                    </ul>}
+                <div className="mt-2 flex gap-2">
+                    {records?.prev_page_url && <Link className="nx-btn-secondary" href={records.prev_page_url}>{t('setup.back')}</Link>}
+                    {records?.next_page_url && <Link className="nx-btn-secondary" href={records.next_page_url}>{t('setup.next')}</Link>}
+                </div>
+            </section>}
+        </> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {modules.map(key => {
+                const Icon = icons[key];
+                return <Link key={key} href={`/admin/${key}`} className="nx-card flex items-center gap-3 p-4 text-sm font-semibold hover:border-sky-400">
+                    <Icon aria-hidden="true" className="size-5 shrink-0 text-sky-300" />{t(`management.${key}`)}
+                </Link>;
+            })}
+        </div>}
+    </AppLayout>;
+}
+
+function DraftConfiguration({ module, fields, saved }: { module: Module; fields: string[]; saved: boolean }) {
+    const { t } = useTranslation();
+    const form = useForm<Record<string, string>>(Object.fromEntries(fields.map(field => [
+        field, field === 'sip_port' ? '5060' : field === 'currency' ? 'USD' : '',
+    ])));
+    return <form className="nx-card mb-4 grid gap-3 p-4 sm:grid-cols-2" onSubmit={event => {
+        event.preventDefault();
+        form.post(`/admin/${module}/draft`, { onSuccess: () => form.reset() });
+    }}>
+        <p className="text-sm nx-quiet sm:col-span-2">{t('management.draft_help')}</p>
+        {fields.map(field => <label key={field} className="grid gap-1 text-sm">
+            {t(`management.field_${field}`)}
+            <input className="nx-input" required={field !== 'description'} name={field}
+                type={field === 'sip_port' ? 'number' : 'text'}
+                min={field === 'sip_port' ? 1 : undefined} max={field === 'sip_port' ? 65535 : undefined}
+                value={form.data[field]} onChange={event => form.setData(field, event.target.value)} aria-invalid={!!form.errors[field]} />
+            {form.errors[field] && <span className="text-red-300" role="alert">{t('setup.invalid_field')}</span>}
+        </label>)}
+        {form.errors.tenant && <p className="sm:col-span-2 text-amber-300 text-sm" role="alert">{form.errors.tenant}</p>}
+        <div className="sm:col-span-2">
+            <button className="nx-btn-primary" disabled={form.processing}>{t('management.save_draft')}</button>
+            {saved && <p className="mt-2 text-emerald-300" role="status">{t('management.draft_saved')}</p>}
+        </div>
+    </form>;
+}

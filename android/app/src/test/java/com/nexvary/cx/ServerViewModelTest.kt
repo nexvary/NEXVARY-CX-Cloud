@@ -1,0 +1,637 @@
+package com.nexvary.cx
+
+import com.nexvary.cx.data.CredentialRepository
+import com.nexvary.cx.data.PairingClient
+import com.nexvary.cx.data.PairingErrors
+import com.nexvary.cx.data.PairingException
+import com.nexvary.cx.data.SipCredentials
+import com.nexvary.cx.data.StorageUnavailableException
+import com.nexvary.cx.data.MobileApiService
+import com.nexvary.cx.data.model.PairExchangeRequest
+import com.nexvary.cx.data.model.PairExchangeResponse
+import com.nexvary.cx.data.model.PbxInfo
+import com.nexvary.cx.data.model.ServerInfo
+import com.nexvary.cx.data.model.ServerStatus
+import com.nexvary.cx.data.model.ServicesInfo
+import com.nexvary.cx.sip.SipConfig
+import com.nexvary.cx.sip.SipEngine
+import com.nexvary.cx.sip.SipState
+import com.nexvary.cx.ui.server.ServerUiState
+import com.nexvary.cx.ui.server.ServerViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
+import org.junit.After
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import java.io.IOException
+
+// ── Fakes ─────────────────────────────────────────────────────────────────────
+
+class FakeCredentialRepository(initial: SipCredentials? = null) : CredentialRepository {
+    private val _credentials = MutableStateFlow(initial)
+    override val isStorageAvailable: Boolean = true
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override fun isConfigured() = _credentials.value != null
+    override fun save(credentials: SipCredentials) { _credentials.value = credentials }
+    override fun clear() { _credentials.value = null }
+    override fun clearForRecovery() { _credentials.value = null }
+}
+
+/** Storage unavailable at init — isStorageAvailable=false, save() always throws. */
+class StorageUnavailableCredentialRepository : CredentialRepository {
+    private val _credentials = MutableStateFlow<SipCredentials?>(null)
+    override val isStorageAvailable: Boolean = false
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override fun isConfigured() = false
+    override fun save(credentials: SipCredentials) { throw StorageUnavailableException() }
+    override fun clear() {}
+    override fun clearForRecovery() {}
+}
+
+/** Storage appears available at init but save() fails (key invalidated mid-session). */
+class FailOnSaveCredentialRepository(initial: SipCredentials? = null) : CredentialRepository {
+    private val _credentials = MutableStateFlow(initial)
+    override val isStorageAvailable: Boolean = true
+    override val credentials: StateFlow<SipCredentials?> = _credentials.asStateFlow()
+    override fun isConfigured() = _credentials.value != null
+    override fun save(credentials: SipCredentials) { throw StorageUnavailableException() }
+    override fun clear() { _credentials.value = null }
+    override fun clearForRecovery() { _credentials.value = null }
+}
+
+class FakeMobileApiService(
+    private val exception: Exception? = null,
+) : MobileApiService {
+    override suspend fun serverStatus(): ServerStatus {
+        exception?.let { throw it }
+        return ServerStatus(
+            server = ServerInfo(ramPercent = 20, diskPercent = 30),
+            services = ServicesInfo(postgresql = "up", freeswitch = "up"),
+            pbx = PbxInfo(activeCalls = 0, registrations = 0),
+            checkedAt = "2026-01-01T00:00:00Z",
+        )
+    }
+
+    override suspend fun exchangePairingToken(request: PairExchangeRequest): PairExchangeResponse =
+        PairExchangeResponse(
+            token = "tok-123",
+            expiresAt = "2027-01-01T00:00:00Z",
+            serverUrl = "https://cx.example.com",
+            apiVersion = "v1",
+        )
+}
+
+/**
+ * A test double for [PairingClient]. Subclasses [PairingClient] (which is open)
+ * so it matches the type expected by [ServerViewModel] without needing an
+ * interface extraction.
+ *
+ * PairingClientTest covers the real HTTP behavior using MockWebServer.
+ */
+class FakePairingClient(
+    private val response: PairExchangeResponse? = PairExchangeResponse(
+        token = "new-device-tok-from-server",
+        expiresAt = "2027-01-01T00:00:00Z",
+        serverUrl = "https://cx.example.com",
+        apiVersion = "v1",
+    ),
+    private val exception: PairingException? = null,
+    private val captureRequest: ((serverUrl: String, pairingToken: String) -> Unit)? = null,
+) : PairingClient(Json { ignoreUnknownKeys = true }) {
+
+    override suspend fun exchange(
+        serverUrl: String,
+        pairingToken: String,
+        deviceId: String,
+    ): PairExchangeResponse {
+        captureRequest?.invoke(serverUrl, pairingToken)
+        exception?.let { throw it }
+        return response ?: throw PairingException.ConnectionFailed(RuntimeException("no response"))
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ServerViewModelTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private val testJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    @Before
+    fun setUp() { Dispatchers.setMain(testDispatcher) }
+
+    @After
+    fun tearDown() { Dispatchers.resetMain() }
+
+    private fun makeVm(
+        apiService: MobileApiService = FakeMobileApiService(),
+        credentialStore: CredentialRepository = FakeCredentialRepository(),
+        sipEngine: SipEngine = NoOpSipEngine(),
+        pairingClient: PairingClient = FakePairingClient(),
+    ) = ServerViewModel(
+        apiService = apiService,
+        credentialStore = credentialStore,
+        sipEngine = sipEngine,
+        pairingClient = pairingClient,
+        json = testJson,
+    )
+
+    @Test
+    fun `Server tab does not crash when no credentials are stored`() {
+        // Regression: previously, Retrofit.Builder().baseUrl("null/") was called
+        // when no server was configured, causing an IllegalArgumentException on
+        // first navigation to the Server screen.
+        val vm = makeVm(credentialStore = FakeCredentialRepository(null))
+        assertTrue(
+            "Expected NotConfigured state on fresh launch",
+            vm.serverState.value is ServerUiState.NotConfigured,
+        )
+    }
+
+    @Test
+    fun `credentials flow is null when not configured`() {
+        val vm = makeVm(credentialStore = FakeCredentialRepository(null))
+        assertNull("No credentials should be present before pairing", vm.credentials.value)
+    }
+
+    @Test
+    fun `SIP state is not registered on fresh launch`() {
+        val vm = makeVm(credentialStore = FakeCredentialRepository(null))
+        assertTrue("SIP should be unregistered before configuration", !vm.sipState.value.registered)
+    }
+
+    @Test
+    fun `refresh sets Error state when API throws`() = runTest {
+        val vm = makeVm(
+            apiService = FakeMobileApiService(exception = IOException("unreachable")),
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl = "https://cx.example.com",
+                    extension = "1001",
+                    sipPassword = "pw",
+                    deviceToken = "tok",
+                )
+            ),
+        )
+        // init triggers refresh() because isConfigured() == true
+        advanceUntilIdle()
+        assertTrue(
+            "Expected Error state after failed API call",
+            vm.serverState.value is ServerUiState.Error,
+        )
+    }
+
+    @Test
+    fun `refresh sets Success state when API succeeds`() = runTest {
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl = "https://cx.example.com",
+                    extension = "1001",
+                    sipPassword = "pw",
+                    deviceToken = "tok",
+                )
+            ),
+        )
+        advanceUntilIdle()
+        assertTrue(
+            "Expected Success state after successful API call",
+            vm.serverState.value is ServerUiState.Success,
+        )
+    }
+
+    // ── Re-pairing / server-address change ───────────────────────────────────
+
+    @Test
+    fun `re-pairing to a new server does not send old device token to the new server`() = runTest {
+        var capturedPairingToken: String? = null
+        var capturedServerUrl: String? = null
+
+        val pairingClient = FakePairingClient(captureRequest = { url, token ->
+            capturedServerUrl = url
+            capturedPairingToken = token
+        })
+
+        val store = FakeCredentialRepository(
+            SipCredentials(
+                serverUrl = "https://old.example.com",
+                extension = "1001",
+                sipPassword = "s3cret",
+                deviceToken = "old-device-secret-token",
+            )
+        )
+
+        val vm = makeVm(credentialStore = store, pairingClient = pairingClient)
+
+        val qrPayload = """{"pairing_token":"qr-tok-999","server_url":"https://new.example.com"}"""
+        vm.pair(qrPayload)
+        advanceUntilIdle()
+
+        // The PairingClient must receive the QR token, not the old device token.
+        assertTrue("PairingClient must have been called", capturedPairingToken != null)
+        assertTrue(
+            "PairingClient must receive the QR pairing token, not the old device token",
+            capturedPairingToken == "qr-tok-999",
+        )
+        assertTrue(
+            "PairingClient must target the QR server, not the old server",
+            capturedServerUrl == "https://new.example.com",
+        )
+        // After success, stored token must come from the new server.
+        val saved = store.credentials.value
+        assertTrue("Stored serverUrl must be new server", saved?.serverUrl == "https://new.example.com")
+        assertTrue("Stored token must be from new server", saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    @Test
+    fun `malformed QR payload sets Error state without calling PairingClient`() = runTest {
+        var pairingClientCalled = false
+        val pairingClient = FakePairingClient(captureRequest = { _, _ -> pairingClientCalled = true })
+
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(null),
+            pairingClient = pairingClient,
+        )
+
+        vm.pair("not-valid-json!!")
+        advanceUntilIdle()
+
+        assertTrue("State must be Error for malformed QR", vm.serverState.value is ServerUiState.Error)
+        assertTrue("PairingClient must not be called for invalid QR", !pairingClientCalled)
+    }
+
+    @Test
+    fun `failed pairing leaves existing credentials intact`() = runTest {
+        val originalCreds = SipCredentials(
+            serverUrl = "https://old.example.com",
+            extension = "1001",
+            sipPassword = "pw",
+            deviceToken = "original-device-tok",
+        )
+        val store = FakeCredentialRepository(originalCreds)
+        val vm = makeVm(
+            credentialStore = store,
+            pairingClient = FakePairingClient(
+                response = null,
+                exception = PairingException.TokenExpiredOrRejected(),
+            ),
+        )
+
+        val qrPayload = """{"pairing_token":"expired-tok","server_url":"https://new.example.com"}"""
+        vm.pair(qrPayload)
+        advanceUntilIdle()
+
+        // Error state shown to user
+        assertTrue("State must be Error", vm.serverState.value is ServerUiState.Error)
+        // Original credentials untouched
+        assertTrue("Old credentials must survive a failed re-pair",
+            store.credentials.value?.deviceToken == "original-device-tok")
+        assertTrue("Old server must survive a failed re-pair",
+            store.credentials.value?.serverUrl == "https://old.example.com")
+    }
+
+    @Test
+    fun `Server screen shows NotConfigured state on first launch`() {
+        // Regression guard: ensure the ViewModel starts in NotConfigured (not
+        // Loading or Error) so the screen can render without attempting any
+        // network call.
+        val vm = makeVm(credentialStore = FakeCredentialRepository(null))
+        assertTrue(
+            "Screen must render as NotConfigured before any server is paired",
+            vm.serverState.value is ServerUiState.NotConfigured,
+        )
+    }
+
+    // ── SIP credential isolation ──────────────────────────────────────────────
+
+    @Test
+    fun `pairing with a different server clears SIP credentials`() = runTest {
+        val store = FakeCredentialRepository(
+            SipCredentials(
+                serverUrl   = "https://old.example.com",
+                extension   = "1001",
+                sipPassword = "s3cr3t",
+                deviceToken = "old-device-tok",
+            )
+        )
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        val saved = store.credentials.value
+        assertTrue("serverUrl must update to new server",   saved?.serverUrl == "https://new.example.com")
+        assertTrue("extension must be cleared on server switch",   saved?.extension == "")
+        assertTrue("sipPassword must be cleared on server switch", saved?.sipPassword == "")
+        assertTrue("deviceToken must come from exchange response", saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    @Test
+    fun `pairing with a different server does not configure the SIP engine`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://old.example.com",
+                    extension   = "1001",
+                    sipPassword = "s3cr3t",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine      = recording,
+            pairingClient  = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue(
+            "SIP engine must not be configured after a cross-server pairing",
+            recording.configureCallCount == 0,
+        )
+    }
+
+    @Test
+    fun `re-pairing the same server clears SIP credentials`() = runTest {
+        // The pairing contract contains no account identifier — URL equality is not
+        // a trusted binding. SIP credentials are always cleared on any successful exchange.
+        val store = FakeCredentialRepository(
+            SipCredentials(
+                serverUrl   = "https://same.example.com",
+                extension   = "1002",
+                sipPassword = "sipPw",
+                deviceToken = "old-device-tok",
+            )
+        )
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
+        advanceUntilIdle()
+
+        val saved = store.credentials.value
+        assertTrue("extension must be cleared even on same-server re-pair",   saved?.extension   == "")
+        assertTrue("sipPassword must be cleared even on same-server re-pair", saved?.sipPassword == "")
+        assertTrue("deviceToken must come from the new exchange response",     saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    @Test
+    fun `re-pairing the same server does not configure the SIP engine`() = runTest {
+        // SIP credentials are always cleared on exchange — configure() must never be
+        // called from pair() regardless of URL match.
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://same.example.com",
+                    extension   = "1002",
+                    sipPassword = "sipPw",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine     = recording,
+            pairingClient = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("configure() must NOT be called after any pairing", recording.configureCallCount == 0)
+        assertTrue("reset() must be called after same-server re-pair", recording.resetCallCount == 1)
+    }
+
+    @Test
+    fun `fresh pairing with no prior credentials does not configure SIP engine`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(null),
+            sipEngine       = recording,
+            pairingClient   = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue(
+            "SIP engine must not be configured without SIP credentials",
+            recording.configureCallCount == 0,
+        )
+    }
+
+    @Test
+    fun `cross-server pairing calls sipEngine reset to clear the stale registration`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://old.example.com",
+                    extension   = "1001",
+                    sipPassword = "s3cr3t",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine      = recording,
+            pairingClient  = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("reset() must be called after cross-server pairing", recording.resetCallCount == 1)
+        assertTrue("configure() must NOT be called (no SIP creds for new server)", recording.configureCallCount == 0)
+    }
+
+    @Test
+    fun `any pairing always resets the SIP engine`() = runTest {
+        // reset() must be called unconditionally on any successful exchange — there is
+        // no trusted account binding that would allow preserving a Linphone registration.
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://same.example.com",
+                    extension   = "1002",
+                    sipPassword = "sipPw",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine     = recording,
+            pairingClient = FakePairingClient(),
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://same.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("reset() must be called on every successful pairing",  recording.resetCallCount == 1)
+        assertTrue("configure() must NOT be called after any pairing",    recording.configureCallCount == 0)
+    }
+
+    @Test
+    fun `same-URL re-pairing clears SIP credentials because account identity is unverifiable`() = runTest {
+        // The pairing contract provides no account identifier. URL equality is not proof
+        // of account identity — a different user may have scanned a QR for the same host.
+        // SIP credentials must always be cleared so stale auth is never silently reused.
+        val store = FakeCredentialRepository(
+            SipCredentials(
+                serverUrl   = "https://shared.example.com",
+                extension   = "5001",
+                sipPassword = "acct1pw",
+                deviceToken = "tok-acct1",
+            )
+        )
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok-acct2","server_url":"https://shared.example.com"}""")
+        advanceUntilIdle()
+
+        val saved = store.credentials.value
+        assertTrue("extension must be cleared — account identity unverifiable", saved?.extension   == "")
+        assertTrue("sipPassword must be cleared — account identity unverifiable", saved?.sipPassword == "")
+        assertTrue("New device token stored",                                   saved?.deviceToken == "new-device-tok-from-server")
+    }
+
+    // ── Storage-unavailable regression tests ─────────────────────────────────
+
+    @Test
+    fun `ViewModel starts in StorageUnavailable when storage is not available`() {
+        val vm = makeVm(credentialStore = StorageUnavailableCredentialRepository())
+        assertTrue(
+            "Expected StorageUnavailable state when ESP cannot init",
+            vm.serverState.value is ServerUiState.StorageUnavailable,
+        )
+    }
+
+    @Test
+    fun `pair is refused immediately when storage is unavailable at init`() = runTest {
+        var exchangeCalled = false
+        val pairingClient = FakePairingClient(captureRequest = { _, _ -> exchangeCalled = true })
+        val vm = makeVm(
+            credentialStore = StorageUnavailableCredentialRepository(),
+            pairingClient   = pairingClient,
+        )
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("Exchange must not be called when storage is unavailable", !exchangeCalled)
+        assertTrue(
+            "State must be Error (not Loading or Success) when storage is unavailable",
+            vm.serverState.value is ServerUiState.Error,
+        )
+        val msg = (vm.serverState.value as ServerUiState.Error).message
+        assertTrue(
+            "Error message must reference storage unavailability",
+            msg == PairingErrors.STORAGE_UNAVAILABLE,
+        )
+    }
+
+    @Test
+    fun `save write failure during pair sets storage error state without reporting pairing success`() = runTest {
+        val store = FailOnSaveCredentialRepository(null)
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue(
+            "State must be Error when save() throws mid-pairing",
+            vm.serverState.value is ServerUiState.Error,
+        )
+        val msg = (vm.serverState.value as ServerUiState.Error).message
+        assertTrue(
+            "Error message must reference storage unavailability",
+            msg == PairingErrors.STORAGE_UNAVAILABLE,
+        )
+        // No credentials must have been persisted
+        assertNull(
+            "No credentials must be stored after a failed save",
+            store.credentials.value,
+        )
+    }
+
+    @Test
+    fun `normal encrypted pairing still works when storage is available`() = runTest {
+        val store = FakeCredentialRepository(null)
+        val vm = makeVm(credentialStore = store, pairingClient = FakePairingClient())
+
+        vm.pair("""{"pairing_token":"qr-tok","server_url":"https://cx.example.com"}""")
+        advanceUntilIdle()
+
+        // After a successful pair the ViewModel calls refresh() which yields Success
+        assertTrue(
+            "State must be Success after normal encrypted pairing",
+            vm.serverState.value is ServerUiState.Success,
+        )
+        val saved = store.credentials.value
+        assertTrue("Saved serverUrl must match QR payload",         saved?.serverUrl   == "https://cx.example.com")
+        assertTrue("Saved deviceToken must come from exchange",      saved?.deviceToken == "new-device-tok-from-server")
+        assertTrue("Saved extension must be blank (SIP not in QR)", saved?.extension   == "")
+        assertTrue("Saved sipPassword must be blank",               saved?.sipPassword == "")
+    }
+
+    @Test
+    fun `SIP engine is not configured when exchange fails`() = runTest {
+        val recording = RecordingSipEngine()
+        val vm = makeVm(
+            credentialStore = FakeCredentialRepository(
+                SipCredentials(
+                    serverUrl   = "https://old.example.com",
+                    extension   = "1001",
+                    sipPassword = "s3cr3t",
+                    deviceToken = "old-device-tok",
+                )
+            ),
+            sipEngine      = recording,
+            pairingClient  = FakePairingClient(
+                response  = null,
+                exception = PairingException.TokenExpiredOrRejected(),
+            ),
+        )
+
+        vm.pair("""{"pairing_token":"expired","server_url":"https://new.example.com"}""")
+        advanceUntilIdle()
+
+        assertTrue("SIP engine must not be touched after a failed exchange", recording.configureCallCount == 0)
+        assertTrue("State must be Error after failed exchange", vm.serverState.value is ServerUiState.Error)
+    }
+}
+
+// Minimal SipEngine that never touches Android or Linphone internals
+private class NoOpSipEngine : SipEngine {
+    private val _state = MutableStateFlow(SipState())
+    override val state: StateFlow<SipState> = _state.asStateFlow()
+    override fun configure(config: SipConfig) {}
+    override fun reset() {}
+    override fun makeCall(number: String, hideNumber: Boolean) {}
+    override fun answer() {}
+    override fun hangUp() {}
+    override fun mute(muted: Boolean) {}
+    override fun setSpeaker(enabled: Boolean) {}
+}
+
+// SipEngine that records configure() and reset() calls for assertion
+private class RecordingSipEngine : SipEngine {
+    private val _state = MutableStateFlow(SipState())
+    override val state: StateFlow<SipState> = _state.asStateFlow()
+    var configureCallCount = 0
+    var resetCallCount     = 0
+    var lastConfig: SipConfig? = null
+    override fun configure(config: SipConfig) { configureCallCount++; lastConfig = config }
+    override fun reset() { resetCallCount++; _state.value = SipState() }
+    override fun makeCall(number: String, hideNumber: Boolean) {}
+    override fun answer() {}
+    override fun hangUp() {}
+    override fun mute(muted: Boolean) {}
+    override fun setSpeaker(enabled: Boolean) {}
+}

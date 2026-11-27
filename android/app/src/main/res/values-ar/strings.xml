@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arabic pairing error messages -->
+    <string name="pairing_error_malformed_qr">رمز QR غير صالح</string>
+    <string name="pairing_error_https_required">يلزم HTTPS للإقران</string>
+    <string name="pairing_error_token_expired">انتهت صلاحية رمز الإقران أو تم رفضه</string>
+    <string name="pairing_error_connection_failed">فشل الاتصال بالخادم</string>
+    <string name="pairing_error_sip_config">تم الإقران — خطأ في إعداد SIP</string>
+    <string name="pairing_error_unexpected">حدث خطأ غير متوقع — يرجى المحاولة مجدداً</string>
+</resources>

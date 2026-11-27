@@ -28,7 +28,11 @@ Or download and run:
 sudo bash INSTALL-NEXVARY.sh
 ```
 
-The installer sets up all dependencies on Debian 13 or Ubuntu 24.04 LTS, then opens a graphical setup wizard at `http://your-server/setup`.
+The privileged script provisions the host. Configure HTTPS, then open `https://your-domain/setup`. Retrieve the setup key and PostgreSQL password from `/etc/nexvary-cx/setup-credentials` using an authorized server account. The web wizard checks the server, connects PostgreSQL and Redis, checks the existing FreeSWITCH Event Socket, creates the initial administrator and applies migrations.
+
+The installation settings are encrypted with the Laravel application key and stored in `storage/installation-settings`. Keep this file and the application key together in protected backups. Run the installer against one application instance. Start or restart application workers after the wizard finishes so they load the saved settings.
+
+Administration supports adding customers, reading system and audit status, and saving disabled configuration records for SIP trunks, extensions, routes, voice menus, queues and rate tables. Live provisioning, SMS transmission, usage or invoice billing and Voice AI activation require additional integration.
 
 ---
 
@@ -36,10 +40,10 @@ The installer sets up all dependencies on Debian 13 or Ubuntu 24.04 LTS, then op
 
 | Component | Technology | Status |
 |-----------|-----------|--------|
-| Web Management | Laravel 11 / PHP 8.3 | ✅ Stage 1 |
+| Web Management | Laravel 12 / PHP 8.3 | ✅ Stage 1 |
 | Frontend UI | React 18 + TypeScript + Inertia.js | ✅ Stage 1 |
 | Telephony Engine | FreeSWITCH | ✅ Stage 1 |
-| PBX Config | FusionPBX-compatible XML | ✅ Stage 1 |
+| PBX Config | FreeSWITCH XML | ✅ Stage 1 |
 | Database | PostgreSQL 16 | ✅ Stage 1 |
 | Cache / Queue | Redis | ✅ Stage 1 |
 | WebRTC Bridge | Node.js WebSocket | ✅ Stage 1 |
@@ -83,15 +87,17 @@ npm install
 cp .env.example .env
 php artisan key:generate
 
-# Database (PostgreSQL required)
-php artisan migrate
-
-# Frontend dev
-npm run dev
-
-# Backend dev (separate terminal)
-php artisan serve
+# Allow setup on the loopback-only development server.
+printf '\nSESSION_SECURE_COOKIE=false\nNEXVARY_INSTALL_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env
+npm run build
+php artisan serve --host=127.0.0.1
 ```
+
+Open `http://127.0.0.1:8000/setup` and use a dedicated empty PostgreSQL database and an available Redis server. The wizard applies the schema. The loopback session configuration above is for local development.
+
+### Browser installation evidence
+
+The Installation and visual QA workflow starts a temporary application against PostgreSQL and Redis. It runs the installer in Chromium in Arabic and English on desktop and mobile, exercises rejected connections and retry, signs in, checks administration, and publishes `nexvary-cx-installation-visual-evidence` with a per-viewport screenshot index. A runner with no FreeSWITCH server exercises the explicitly unavailable state.
 
 ---
 
@@ -103,7 +109,7 @@ nexvary-cx-cloud/
 │   ├── Http/Controllers/     # Laravel controllers (Auth, PBX, CRM, Billing…)
 │   ├── Models/               # Eloquent models
 │   └── Services/
-│       ├── PBX/              # FreeSWITCH ESL + FusionPBX config
+│       ├── PBX/              # FreeSWITCH ESL + PBX config
 │       ├── Billing/          # Rating engine
 │       ├── SMS/              # Telnyx SMS
 │       ├── Email/            # IMAP/SMTP integration

@@ -1,0 +1,122 @@
+# NEXVARY CX Cloud — Installation Guide
+
+**Bundle version:** ${BUNDLE_VERSION}
+**Commit:** `${COMMIT_SHA}`
+**Built:** ${BUILD_TIMESTAMP}
+
+---
+
+## Prerequisites
+
+| Requirement | Minimum |
+|-------------|---------|
+| Operating system | Debian 13 (Trixie) or Ubuntu 24.04 LTS |
+| RAM | 2 GB (4 GB recommended when building FreeSWITCH from source) |
+| Disk | 20 GB (add 2 GB if building FreeSWITCH from source) |
+| Root access | Required |
+| Outbound internet | Required (package downloads, GitHub clone) |
+
+## Application source revision
+
+This bundle installs **exactly** commit `${COMMIT_SHA}`.
+The installer reads the pinned SHA from `installer/RELEASE` and uses
+`git fetch origin ${COMMIT_SHA_SHORT}… && git checkout FETCH_HEAD` — it never
+installs the default branch tip. The installed SHA is recorded to
+`/etc/nexvary/installed_revision` and verified before the installer exits.
+
+## FreeSWITCH
+
+FreeSWITCH is **installed by the installer** (`installer/lib/freeswitch.sh`).
+No SignalWire account or token is required.
+
+When `NX_SW_TOKEN` is not set the installer builds FreeSWITCH
+v1.10.11 from the official GitHub source.
+This takes **15–25 minutes** and requires ~2 GB of extra disk space.
+Build dependencies are installed automatically.
+
+If you have a SignalWire FOSS token, pass it to skip the source build:
+
+```bash
+sudo NX_SW_TOKEN=your_token bash INSTALL-NEXVARY.sh --domain=your.domain.com
+```
+
+## Existing Let's Encrypt certificate
+
+If the host already has a valid Let's Encrypt certificate, the installer
+reuses it automatically when `--domain=` matches the certificate's domain name.
+No new certificate is requested and no Certbot flags are needed:
+
+```bash
+sudo bash INSTALL-NEXVARY.sh --domain=your.domain.com
+```
+
+The installer detects `/etc/letsencrypt/live/your.domain.com/fullchain.pem`,
+writes both a port-80 redirect and a port-443 TLS server block, and sets
+`APP_URL=https://your.domain.com` in the application `.env`.
+Automatic renewal via certbot's systemd timer or cron job is preserved.
+
+## Quick install
+
+```bash
+sudo bash INSTALL-NEXVARY.sh --domain=your.domain.com
+```
+
+The installer will:
+1. Detect your OS and verify prerequisites
+2. Install PHP 8.3, Node.js 22, PostgreSQL 16, Redis, Nginx
+3. Build FreeSWITCH v1.10.11 from source (or use SignalWire repo if token set)
+4. Fetch and deploy commit `${COMMIT_SHA}` from GitHub
+5. Run database migrations
+6. Configure Nginx (HTTP-only, or HTTPS if certificate detected)
+7. Configure systemd services and queue workers
+8. Print the setup wizard URL
+
+## Upgrading an existing installation
+
+Re-run the installer with the **new** bundle, passing the SHA that is currently
+installed as `--upgrade-from`:
+
+```bash
+# Find the currently installed SHA:
+cat /etc/nexvary/installed_revision
+
+# Then run the new bundle's installer:
+sudo bash INSTALL-NEXVARY.sh --domain=your.domain.com --upgrade-from=<installed-sha>
+```
+
+The installer will fail with a clear version-mismatch error if the installed
+SHA does not match what `--upgrade-from` specifies, or if the flag is omitted.
+
+## Post-install verification
+
+After installation completes, open the printed HTTPS URL in a browser.
+The setup wizard page should load. Complete the wizard, then sign in.
+
+Verify the installed revision:
+```bash
+cat /etc/nexvary/installed_revision
+```
+Expected: `${COMMIT_SHA}`
+
+Verify the services:
+```bash
+systemctl status nexvary-queue nexvary-scheduler.timer nginx postgresql redis-server freeswitch
+```
+
+## Android APK
+
+The matching debug APK is published as the `nexvary-cx-debug-apk` artifact
+from the **NEXVARY CX Android — CI** workflow run on the same commit.
+
+To pair the Android app:
+1. Install the APK on your device
+2. Sign in to the web admin panel
+3. Navigate to **Settings → Pair Mobile App**
+4. Scan the QR code with the app's Server tab → ربط عبر QR
+
+## Checksums
+
+Verify bundle integrity before installation:
+```bash
+sha256sum -c SHA256SUMS
+```

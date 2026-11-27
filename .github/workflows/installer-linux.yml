@@ -1,0 +1,191 @@
+name: Installer — Multi-Linux Matrix
+
+on:
+  push:
+    branches: ['feature/stage-1-foundation', master, main]
+    paths:
+      - 'installer/**'
+      - 'INSTALL-NEXVARY.sh'
+      - 'UPDATE-NEXVARY.sh'
+      - '.github/workflows/installer-linux.yml'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'installer/**'
+      - 'INSTALL-NEXVARY.sh'
+      - 'UPDATE-NEXVARY.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# ── Supported Linux Matrix ─────────────────────────────────────────────────────
+# Platform              | Support   | Test method
+# ----------------------|-----------|-----------------------------
+# Debian 12 (Bookworm)  | Verified  | Docker — detection + deps
+# Debian 13 (Trixie)    | Verified  | Docker — detection + deps
+# Ubuntu 24.04 LTS      | Verified  | Docker — detection + deps
+# CentOS / RHEL (all)   | REMOVED   | Not supported — see STAGE-2 decision
+
+jobs:
+  detect-and-unit:
+    name: Detection tests — ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Debian 12
+            image: debian:12
+            expected_id: debian
+            expected_version: '12'
+            pkg_mgr: apt
+            supported: 'yes'
+
+          - os: Debian 13
+            image: debian:trixie
+            expected_id: debian
+            expected_version: '13'
+            pkg_mgr: apt
+            supported: 'yes'
+
+          - os: Ubuntu 24.04
+            image: ubuntu:24.04
+            expected_id: ubuntu
+            expected_version: '24.04'
+            pkg_mgr: apt
+            supported: 'yes'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run detection tests in container
+        run: |
+          docker run --rm \
+            -v "$PWD/installer:/installer:ro" \
+            "${{ matrix.image }}" \
+            bash -euo pipefail /installer/tests/test-detect.sh \
+              "${{ matrix.expected_id }}" \
+              "${{ matrix.expected_version }}" \
+              "${{ matrix.pkg_mgr }}" \
+              "${{ matrix.supported }}"
+
+  dependency-install:
+    name: PHP + PostgreSQL + Redis — ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Debian 12
+            image: debian:12
+            adapter: debian
+
+          - os: Debian 13
+            image: debian:trixie
+            adapter: debian
+
+          - os: Ubuntu 24.04
+            image: ubuntu:24.04
+            adapter: debian
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies in container
+        run: |
+          docker run --rm \
+            --privileged \
+            -v "$PWD/installer:/installer:ro" \
+            -e NX_VERBOSE=1 \
+            "${{ matrix.image }}" \
+            bash /installer/tests/test-deps.sh "${{ matrix.adapter }}"
+
+  installer-script-lint:
+    name: ShellCheck — installer scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint installer scripts
+        run: |
+          shellcheck \
+            --severity=error \
+            --exclude=SC1091 \
+            INSTALL-NEXVARY.sh \
+            UPDATE-NEXVARY.sh \
+            installer/nexvary-bootstrap.sh \
+            installer/nexvary-install.sh \
+            installer/lib/ui.sh \
+            installer/lib/detect.sh \
+            installer/lib/debian.sh \
+            installer/lib/freeswitch.sh \
+            installer/lib/app.sh \
+            installer/lib/nginx.sh \
+            installer/lib/systemd.sh \
+            installer/tests/test-pinned-sha.sh \
+            installer/tests/test-postgres-idempotency.sh
+
+  postgres-idempotency:
+    name: PostgreSQL — idempotency (Debian 13)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PostgreSQL idempotency test in Debian 13 container
+        run: |
+          docker run --rm \
+            --privileged \
+            -v "$PWD/installer:/installer:ro" \
+            debian:trixie \
+            bash /installer/tests/test-postgres-idempotency.sh
+
+  compatibility-matrix:
+    name: Publish compatibility matrix
+    runs-on: ubuntu-24.04
+    needs: [detect-and-unit, installer-script-lint, postgres-idempotency]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate matrix report
+        run: |
+          cat > /tmp/matrix.md <<'MD'
+          # NEXVARY CX Cloud — OS Compatibility Matrix
+
+          | Operating System     | Version | Support   | Test Status         |
+          |----------------------|---------|-----------|---------------------|
+          | Debian               | 13      | Verified  | CI tested           |
+          | Debian               | 12      | Verified  | CI tested           |
+          | Ubuntu               | 24.04   | Verified  | CI tested           |
+          | Ubuntu               | 22.04   | Compatible| Not CI tested       |
+          | CentOS / RHEL (all)  | any     | ❌ Removed | Not supported       |
+
+          ## Notes
+          - **Verified**: Tested in CI on each push (detection + dependency install)
+          - **Compatible**: Expected to work, not in automated matrix
+          - **Removed**: Owner decision — CentOS excluded from current release
+
+          Generated: $(date -Iseconds)
+          MD
+
+          cat /tmp/matrix.md
+
+      - name: Upload matrix report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-matrix
+          path: /tmp/matrix.md
+          retention-days: 90

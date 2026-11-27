@@ -1,449 +1,212 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Head } from '@inertiajs/react';
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { router } from '@inertiajs/react';
 import {
-  User, Building2, Globe, Phone, Hash, Users, Settings, CheckCircle,
-  ChevronRight, ChevronLeft, Eye, EyeOff, Loader2, AlertCircle,
-  Check, Server
+    ArrowLeft, ArrowRight, Check, CircleAlert, Database, KeyRound,
+    ListChecks, LoaderCircle, Phone, Server, ShieldCheck, UserRound,
 } from 'lucide-react';
+import axios from 'axios';
 
-// ── Wizard Step Definitions ───────────────────────────────────────────────
+type Connection = { host: string; port: string; user: string; password: string; name?: string };
+type Result = { ok: boolean; checks?: Record<string, boolean>; problem?: string; login?: string; errors?: Record<string, string[]> };
+type Props = { setupEnabled: boolean; secureAccess: boolean; database: Omit<Connection, 'password'>; redis: Omit<Connection, 'password'> };
+const steps = ['welcome', 'readiness', 'database', 'redis', 'freeswitch', 'admin', 'review', 'success'] as const;
+const icons = [ShieldCheck, ListChecks, Database, Server, Phone, UserRound, KeyRound, Check];
+const fieldTypes: Record<string, string> = { port: 'number', password: 'password', email: 'email', password_confirmation: 'password' };
 
-const STEPS = [
-  { id: 1, icon: User,      key: 'admin' },
-  { id: 2, icon: Building2, key: 'organization' },
-  { id: 3, icon: Server,    key: 'server' },
-  { id: 4, icon: Phone,     key: 'provider' },
-  { id: 5, icon: Hash,      key: 'numbers' },
-  { id: 6, icon: Users,     key: 'extensions' },
-  { id: 7, icon: Settings,  key: 'optional' },
-  { id: 8, icon: CheckCircle, key: 'verify' },
-  { id: 9, icon: Check,     key: 'complete' },
-];
+export default function Wizard({ setupEnabled, secureAccess, database, redis }: Props) {
+    const { t, i18n } = useTranslation();
+    const [position, setPosition] = useState(0);
+    const [token, setToken] = useState('');
+    const [db, setDb] = useState({ ...database, password: '' });
+    const [cache, setCache] = useState({ ...redis, password: '' });
+    const [admin, setAdmin] = useState({ name: '', email: '', password: '', password_confirmation: '' });
+    const [result, setResult] = useState<Result>();
+    const [busy, setBusy] = useState(false);
+    const [pbx, setPbx] = useState<boolean>();
+    const [login, setLogin] = useState('/login');
+    const step = steps[position];
+    const Icon = icons[position];
+    const previous = i18n.dir() === 'rtl' ? ArrowRight : ArrowLeft;
+    const next = i18n.dir() === 'rtl' ? ArrowLeft : ArrowRight;
+    const Previous = previous;
+    const Next = next;
+    const copy = (key: string) => t(`setup.${key}`);
 
-// ── Step 1: Admin ─────────────────────────────────────────────────────────
+    const go = (index: number) => {
+        setResult(undefined);
+        setPosition(index);
+    };
 
-const StepAdmin: React.FC<{ onNext: (d: any) => void }> = ({ onNext }) => {
-  const { t } = useTranslation();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm();
-  const [showPass, setShowPass] = useState(false);
-
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <div>
-        <label className="nx-label">{t('install.admin_name')}</label>
-        <input
-          className={`nx-input ${errors.name ? 'error' : ''}`}
-          {...register('name', { required: true, minLength: 2 })}
-          placeholder={t('install.admin_name_placeholder')}
-        />
-      </div>
-      <div>
-        <label className="nx-label">{t('install.admin_email')}</label>
-        <input
-          className={`nx-input ${errors.email ? 'error' : ''}`}
-          type="email"
-          {...register('email', { required: true })}
-          placeholder="admin@example.com"
-        />
-      </div>
-      <div>
-        <label className="nx-label">{t('install.admin_password')}</label>
-        <div className="relative">
-          <input
-            className={`nx-input pe-10 ${errors.password ? 'error' : ''}`}
-            type={showPass ? 'text' : 'password'}
-            {...register('password', { required: true, minLength: 12 })}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPass(!showPass)}
-            className="absolute end-2.5 top-2 text-nx-muted"
-          >
-            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        <p className="text-xs text-nx-muted mt-1">{t('install.password_hint')}</p>
-      </div>
-      <div>
-        <label className="nx-label">{t('install.admin_password_confirm')}</label>
-        <input
-          className={`nx-input ${errors.password_confirmation ? 'error' : ''}`}
-          type="password"
-          {...register('password_confirmation', {
-            required: true,
-            validate: v => v === watch('password'),
-          })}
-        />
-      </div>
-      <button type="submit" className="nx-btn-primary w-full">
-        {t('common.next')} <ChevronRight className="w-4 h-4" />
-      </button>
-    </form>
-  );
-};
-
-// ── Step 2: Organization ──────────────────────────────────────────────────
-
-const StepOrganization: React.FC<{ onNext: (d: any) => void; onBack: () => void }> = ({ onNext, onBack }) => {
-  const { t } = useTranslation();
-  const { register, handleSubmit } = useForm();
-
-  const timezones = Intl.supportedValuesOf?.('timeZone') ?? ['UTC', 'America/New_York', 'Europe/London', 'Asia/Dubai'];
-  const languages = [
-    { value: 'ar', label: 'العربية' },
-    { value: 'en', label: 'English' },
-    { value: 'tr', label: 'Türkçe' },
-    { value: 'es', label: 'Español' },
-    { value: 'fr', label: 'Français' },
-    { value: 'de', label: 'Deutsch' },
-    { value: 'fa', label: 'فارسی' },
-    { value: 'ur', label: 'اردو' },
-  ];
-
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <div>
-        <label className="nx-label">{t('install.org_name')}</label>
-        <input className="nx-input" {...register('org_name', { required: true })} />
-      </div>
-      <div>
-        <label className="nx-label">{t('install.org_email')}</label>
-        <input className="nx-input" type="email" {...register('org_email')} />
-      </div>
-      <div>
-        <label className="nx-label">{t('install.timezone')}</label>
-        <select className="nx-select" {...register('timezone')}>
-          {timezones.slice(0, 50).map(tz => (
-            <option key={tz} value={tz}>{tz}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="nx-label">{t('install.language')}</label>
-        <select className="nx-select" {...register('locale')}>
-          {languages.map(l => (
-            <option key={l.value} value={l.value}>{l.label}</option>
-          ))}
-        </select>
-      </div>
-      <div className="flex gap-3">
-        <button type="button" onClick={onBack} className="nx-btn-secondary flex-1">
-          <ChevronLeft className="w-4 h-4" /> {t('common.back')}
-        </button>
-        <button type="submit" className="nx-btn-primary flex-1">
-          {t('common.next')} <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// ── Step 3: Server & Network ───────────────────────────────────────────────
-
-const StepServer: React.FC<{ onNext: (d: any) => void; onBack: () => void; portChecks?: Record<string,boolean> }> = ({
-  onNext, onBack, portChecks
-}) => {
-  const { t } = useTranslation();
-  const { register, handleSubmit } = useForm({
-    defaultValues: { domain: window.location.hostname, enable_https: false }
-  });
-
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <div>
-        <label className="nx-label">{t('install.domain')}</label>
-        <input className="nx-input font-mono" {...register('domain')} />
-        <p className="text-xs text-nx-muted mt-1">{t('install.domain_hint')}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <input type="checkbox" id="https" {...register('enable_https')} className="accent-crimson" />
-        <label htmlFor="https" className="text-sm text-nx-secondary">{t('install.enable_https')}</label>
-      </div>
-
-      {portChecks && (
-        <div className="nx-card p-4 space-y-2">
-          <p className="text-xs font-medium text-nx-muted uppercase">{t('install.port_checks')}</p>
-          {Object.entries(portChecks).map(([port, available]) => (
-            <div key={port} className="flex items-center justify-between text-sm">
-              <span className="font-mono text-nx-secondary">:{port}</span>
-              <span className={`nx-badge ${available ? 'nx-badge-green' : 'nx-badge-red'}`}>
-                {available ? t('install.port_available') : t('install.port_in_use')}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex gap-3">
-        <button type="button" onClick={onBack} className="nx-btn-secondary flex-1">
-          <ChevronLeft className="w-4 h-4" /> {t('common.back')}
-        </button>
-        <button type="submit" className="nx-btn-primary flex-1">
-          {t('common.next')} <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// ── Step 4: Provider ───────────────────────────────────────────────────────
-
-const StepProvider: React.FC<{ onNext: (d: any) => void; onBack: () => void }> = ({ onNext, onBack }) => {
-  const { t } = useTranslation();
-  const { register, handleSubmit, watch } = useForm({ defaultValues: { provider: 'telnyx' } });
-  const provider = watch('provider');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<null | { ok: boolean; message: string }>(null);
-
-  const testConnection = async (data: any) => {
-    setTesting(true);
-    try {
-      const res = await fetch('/install/test-sip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ?? '' },
-        body: JSON.stringify(data),
-      });
-      const json = await res.json();
-      setTestResult({ ok: json.ok, message: json.message });
-    } catch {
-      setTestResult({ ok: false, message: t('install.connection_failed') });
-    } finally {
-      setTesting(false);
+    async function request(path: string, data: Record<string, unknown> = {}): Promise<Result> {
+        setBusy(true);
+        setResult(undefined);
+        try {
+            const response = await axios.post<Result>(`/setup/${path}`, data, {
+                headers: { Accept: 'application/json', 'X-Setup-Token': token },
+            });
+            setResult(response.data);
+            return response.data;
+        } catch (error) {
+            const response = axios.isAxiosError<Result>(error) ? error.response : undefined;
+            const failed = {
+                ok: false,
+                problem: response?.status === 403 ? 'token' : response?.data?.problem ?? 'request',
+                errors: response?.data?.errors,
+            };
+            setResult(failed);
+            return failed;
+        } finally {
+            setBusy(false);
+        }
     }
-  };
 
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <div>
-        <label className="nx-label">{t('install.provider')}</label>
-        <select className="nx-select" {...register('provider')}>
-          <option value="telnyx">Telnyx</option>
-          <option value="generic">{t('install.generic_sip')}</option>
-        </select>
-      </div>
+    async function testConnection() {
+        const data = step === 'database' ? { database: db } : step === 'redis' ? { redis: cache } : {};
+        const tested = await request(`connection/${step}`, data);
+        if (step === 'freeswitch') {
+            setPbx(tested.ok);
+        }
+    }
 
-      {provider === 'telnyx' ? (
-        <>
-          <div>
-            <label className="nx-label">{t('install.telnyx_api_key')}</label>
-            <input className="nx-input font-mono text-sm" type="password" {...register('telnyx_api_key')} />
-          </div>
-          <div>
-            <label className="nx-label">Connection Profile ID</label>
-            <input className="nx-input font-mono text-sm" {...register('telnyx_connection_id')} />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="nx-label">{t('install.sip_host')}</label>
-              <input className="nx-input font-mono text-sm" {...register('sip_host')} />
+    async function finish() {
+        const completed = await request('complete', { database: db, redis: cache, admin, locale: i18n.language });
+        if (completed.ok) {
+            setLogin(completed.login ?? '/login');
+            setToken('');
+            setDb({ ...db, password: '' });
+            setCache({ ...cache, password: '' });
+            setAdmin({ name: '', email: '', password: '', password_confirmation: '' });
+            go(7);
+        }
+    }
+
+    function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (step === 'welcome') {
+            go(1);
+            void request('readiness');
+        } else if (step === 'database' || step === 'redis' || step === 'freeswitch') {
+            void testConnection();
+        } else if (step === 'admin') {
+            if (admin.password !== admin.password_confirmation || new TextEncoder().encode(admin.password).length > 72) {
+                setResult({ ok: false, problem: 'password' });
+                return;
+            }
+            go(6);
+        } else if (step === 'review') {
+            void finish();
+        }
+    }
+
+    function field(name: string, value: string, change: (value: string) => void, required = true, prefix = '') {
+        const error = result?.errors?.[prefix + name]?.[0];
+        return <label key={name} className="grid min-w-0 gap-1.5 text-sm font-medium">
+            {copy(name)}
+            <input name={name} className="nx-input" value={value} onChange={event => change(event.target.value)}
+                type={fieldTypes[name] ?? 'text'} required={required} dir={name === 'name' && step === 'admin' ? 'auto' : 'ltr'}
+                spellCheck={false} autoComplete={fieldTypes[name] === 'password' ? 'new-password' : 'off'}
+                min={name === 'port' ? 1 : undefined} max={name === 'port' ? 65535 : undefined}
+                minLength={step === 'admin' && name === 'password' ? 12 : undefined} aria-invalid={!!error} />
+            {error && <span className="text-red-300 text-xs">{copy('invalid_field')}</span>}
+        </label>;
+    }
+
+    const connection = step === 'database' ? db : cache;
+    const updateConnection = step === 'database' ? setDb : setCache;
+    const canAdvance = result?.ok || (step === 'freeswitch' && pbx !== undefined);
+    const testsConnection = step === 'database' || step === 'redis' || step === 'freeswitch';
+    const rendersSubmit = ['welcome', 'database', 'redis', 'freeswitch', 'admin', 'review'].includes(step);
+
+    return <main className="nx-setup-shell">
+        <Head title={copy('title')} />
+        <div className="mx-auto w-full max-w-2xl">
+            <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <span className="nx-brand-mark" aria-hidden="true">N</span>
+                    <div>
+                        <p className="font-bold tracking-wide" dir="ltr">NEXVARY CX Cloud</p>
+                        <p className="text-sm nx-quiet">{copy('title')}</p>
+                    </div>
+                </div>
+                <label className="sr-only" htmlFor="setup-locale">{copy('language')}</label>
+                <select id="setup-locale" className="nx-select !w-auto" value={i18n.language} onChange={event => {
+                    const locale = event.target.value;
+                    document.documentElement.lang = locale;
+                    document.documentElement.dir = i18n.dir(locale);
+                    void i18n.changeLanguage(locale);
+                }}>
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                </select>
+            </header>
+            <div className="nx-card nx-setup-card p-5 sm:p-8">
+                <div className="mb-5">
+                    <p className="mb-2 text-sm nx-quiet">{t('setup.progress', { current: position + 1, total: steps.length })}</p>
+                    <div className="grid grid-cols-8 gap-1" role="progressbar" aria-label={copy('title')}
+                        aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={position + 1}>
+                        {steps.map((key, index) => <span key={key} className={index <= position ? 'nx-progress-done' : 'nx-progress-pending'} />)}
+                    </div>
+                </div>
+                <div className="mb-5">
+                    <Icon aria-hidden="true" className="mb-3 size-7 text-sky-300" />
+                    <h1 id="setup-heading" tabIndex={-1} className="text-2xl font-semibold">{copy(step)}</h1>
+                    <p className="mt-2 text-sm nx-quiet">{copy(`${step}_help`)}</p>
+                </div>
+                <form onSubmit={submit} className="grid gap-4" aria-labelledby="setup-heading">
+                    {step === 'welcome' && (setupEnabled && secureAccess
+                        ? <label className="grid gap-1.5 text-sm font-medium">{copy('token')}
+                            <input name="token" className="nx-input" type="password" dir="ltr" required autoComplete="off"
+                                value={token} onChange={event => setToken(event.target.value)} />
+                        </label>
+                        : <p role="alert" className="nx-notice nx-notice-error">{copy(secureAccess ? 'token_missing' : 'fix_https')}</p>)}
+                    {step === 'readiness' && result?.checks && <ul className="grid gap-2">
+                        {Object.entries(result.checks).map(([key, passed]) => <li key={key} className="nx-notice flex items-start gap-2">
+                            {passed ? <Check className="size-5 shrink-0 text-emerald-300" /> : <CircleAlert className="size-5 shrink-0 text-red-300" />}
+                            <span>{copy(`check_${key}`)}{!passed && <small className="block nx-quiet">{copy(`fix_${key}`)}</small>}</span>
+                        </li>)}
+                    </ul>}
+                    {(step === 'database' || step === 'redis') && <div className="grid gap-3 sm:grid-cols-2">
+                        {(['host', 'port', ...(step === 'database' ? ['name'] : []), 'user', 'password'] as (keyof Connection)[]).map(name =>
+                            field(name, connection[name] ?? '', value => {
+                                updateConnection({ ...connection, [name]: value });
+                                setResult(undefined);
+                            }, name !== 'password' && (name !== 'user' || step === 'database'), `${step}.`))}
+                    </div>}
+                    {step === 'admin' && <div className="grid gap-3 sm:grid-cols-2">
+                        {(Object.keys(admin) as (keyof typeof admin)[]).map(name =>
+                            field(name, admin[name], value => setAdmin({ ...admin, [name]: value }), true, 'admin.'))}
+                    </div>}
+                    {step === 'review' && <ul className="nx-notice grid gap-2 text-sm">
+                        <li>{copy('database')}{' · '}<bdi>{db.host}:{db.port} / {db.name}</bdi></li>
+                        <li>{copy('redis')}{' · '}<bdi>{cache.host}:{cache.port}</bdi></li>
+                        <li>{copy('admin')}{' · '}<bdi>{admin.email}</bdi></li>
+                        <li>{copy('freeswitch')}{' · '}{copy(pbx ? 'connected' : 'pbx_pending')}</li>
+                    </ul>}
+                    {busy && <p data-testid="working" role="status" className="nx-notice flex items-center gap-2">
+                        <LoaderCircle className="size-4 animate-spin" />{copy(step === 'review' ? 'installing' : 'checking')}
+                    </p>}
+                    {result && !result.checks && <p data-testid="result" data-ok={result.ok} role={result.ok ? 'status' : 'alert'}
+                        className={`nx-notice ${result.ok ? 'nx-notice-success' : 'nx-notice-error'}`}>
+                        {result.ok ? copy('connected') : copy(result.problem ? `error_${result.problem}` : `error_${step}`)}
+                    </p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {position > 0 && step !== 'success' && <button type="button" className="nx-btn-secondary" disabled={busy}
+                            onClick={() => go(position - 1)}><Previous className="size-4" />{copy('back')}</button>}
+                        {step === 'readiness' && <button type="button" className="nx-btn-secondary" disabled={busy}
+                            onClick={() => void request('readiness')}>{copy('retry')}</button>}
+                        {rendersSubmit && <button type="submit" className="nx-btn-primary" disabled={busy || (step === 'welcome' && (!setupEnabled || !secureAccess))}>
+                            {copy(testsConnection ? 'test' : step === 'review' ? result ? 'retry' : 'finish' : 'next')}
+                            {!testsConnection && step !== 'review' && <Next className="size-4" />}
+                        </button>}
+                        {(testsConnection || step === 'readiness') && canAdvance && <button type="button" className="nx-btn-primary"
+                            disabled={busy} onClick={() => go(position + 1)}>
+                            {copy(step === 'freeswitch' && !pbx ? 'defer' : 'next')}<Next className="size-4" />
+                        </button>}
+                        {step === 'success' && <a className="nx-btn-primary" href={login}>{copy('login')}</a>}
+                    </div>
+                </form>
             </div>
-            <div>
-              <label className="nx-label">{t('install.sip_port')}</label>
-              <input className="nx-input font-mono text-sm" defaultValue="5060" {...register('sip_port')} />
-            </div>
-          </div>
-          <div>
-            <label className="nx-label">{t('install.sip_username')}</label>
-            <input className="nx-input" {...register('sip_username')} />
-          </div>
-          <div>
-            <label className="nx-label">{t('install.sip_password')}</label>
-            <input className="nx-input" type="password" {...register('sip_password')} />
-          </div>
-        </>
-      )}
-
-      {testResult && (
-        <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
-          testResult.ok ? 'bg-green-500/10 border border-green-500/30 text-green-400' :
-                          'bg-red-500/10 border border-red-500/30 text-red-400'
-        }`}>
-          {testResult.ok ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
-          {testResult.message}
         </div>
-      )}
-
-      <div className="flex gap-3">
-        <button type="button" onClick={onBack} className="nx-btn-secondary">
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          className="nx-btn-secondary flex-1"
-          onClick={() => handleSubmit(testConnection)()}
-          disabled={testing}
-        >
-          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          {t('install.test_connection')}
-        </button>
-        <button type="submit" className="nx-btn-primary flex-1">
-          {t('common.next')} <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// ── Step 8: Verification ──────────────────────────────────────────────────
-
-const StepVerify: React.FC<{ checks: Array<{ name: string; status: 'ok' | 'fail' | 'pending' }> }> = ({ checks }) => {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-3">
-      {checks.map((check, i) => (
-        <div key={i} className="flex items-center justify-between p-3 rounded-lg nx-card">
-          <span className="text-sm text-nx-secondary">{check.name}</span>
-          {check.status === 'ok'      && <span className="nx-badge nx-badge-green">{t('status.ok')}</span>}
-          {check.status === 'fail'    && <span className="nx-badge nx-badge-red">{t('status.fail')}</span>}
-          {check.status === 'pending' && <Loader2 className="w-4 h-4 text-nx-muted animate-spin" />}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ── Main Wizard ────────────────────────────────────────────────────────────
-
-interface WizardProps {
-  token: string;
-  portChecks: Record<string, boolean>;
-  verifyChecks: Array<{ name: string; status: 'ok' | 'fail' | 'pending' }>;
+    </main>;
 }
-
-const InstallWizard: React.FC<WizardProps> = ({ token, portChecks, verifyChecks }) => {
-  const { t } = useTranslation();
-  const [step, setStep] = useState(1);
-  const [data, setData] = useState<Record<string, any>>({});
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleNext = (stepData: any) => {
-    setData(prev => ({ ...prev, ...stepData }));
-    setStep(s => s + 1);
-  };
-
-  const handleBack = () => setStep(s => Math.max(1, s - 1));
-
-  const handleFinish = async () => {
-    setSubmitting(true);
-    router.post('/install/complete', { ...data, token }, {
-      onError: () => setSubmitting(false),
-    });
-  };
-
-  return (
-    <div className="min-h-screen bg-nx-base flex flex-col items-center justify-center p-6">
-      {/* Logo */}
-      <div className="mb-8 text-center">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl font-black mx-auto mb-3"
-          style={{ background: 'var(--nx-crimson)', boxShadow: 'var(--nx-glow-crimson)' }}
-        >
-          N
-        </div>
-        <h1 className="text-xl font-bold text-nx-primary">NEXVARY CX Cloud</h1>
-        <p className="text-sm text-nx-muted mt-1">{t('install.setup_wizard')}</p>
-      </div>
-
-      {/* Step Progress */}
-      <div className="flex items-center gap-1.5 mb-8">
-        {STEPS.map((s, i) => {
-          const Icon = s.icon;
-          const done = step > s.id;
-          const active = step === s.id;
-          return (
-            <React.Fragment key={s.id}>
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  done   ? 'bg-nx-crimson text-white' :
-                  active ? 'ring-2 ring-nx-crimson bg-nx-crimson/20 text-nx-crimson' :
-                           'bg-nx-elevated text-nx-muted'
-                }`}
-                title={t(`install.step_${s.key}`)}
-              >
-                {done ? <Check className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
-              </div>
-              {i < STEPS.length - 1 && (
-                <div className={`h-0.5 w-6 rounded transition-all ${done ? 'bg-nx-crimson' : 'bg-nx-border'}`} />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* Step Card */}
-      <div className="nx-card-elevated w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold text-nx-primary mb-1">
-          {t(`install.step_${STEPS[step - 1]?.key}_title`)}
-        </h2>
-        <p className="text-sm text-nx-muted mb-5">
-          {t(`install.step_${STEPS[step - 1]?.key}_desc`)}
-        </p>
-
-        {step === 1 && <StepAdmin onNext={handleNext} />}
-        {step === 2 && <StepOrganization onNext={handleNext} onBack={handleBack} />}
-        {step === 3 && <StepServer onNext={handleNext} onBack={handleBack} portChecks={portChecks} />}
-        {step === 4 && <StepProvider onNext={handleNext} onBack={handleBack} />}
-        {step === 5 && (
-          <div className="space-y-4">
-            <p className="text-sm text-nx-secondary">{t('install.dids_later_hint')}</p>
-            <div className="flex gap-3">
-              <button onClick={handleBack} className="nx-btn-secondary flex-1"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => handleNext({})} className="nx-btn-primary flex-1">{t('install.skip_for_now')}</button>
-            </div>
-          </div>
-        )}
-        {step === 6 && (
-          <div className="space-y-4">
-            <p className="text-sm text-nx-secondary">{t('install.extensions_later_hint')}</p>
-            <div className="flex gap-3">
-              <button onClick={handleBack} className="nx-btn-secondary flex-1"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => handleNext({})} className="nx-btn-primary flex-1">{t('install.skip_for_now')}</button>
-            </div>
-          </div>
-        )}
-        {step === 7 && (
-          <div className="space-y-4">
-            <p className="text-sm text-nx-secondary">{t('install.optional_later_hint')}</p>
-            <div className="flex gap-3">
-              <button onClick={handleBack} className="nx-btn-secondary flex-1"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => handleNext({})} className="nx-btn-primary flex-1">{t('common.next')}<ChevronRight className="w-4 h-4" /></button>
-            </div>
-          </div>
-        )}
-        {step === 8 && (
-          <div className="space-y-5">
-            <StepVerify checks={verifyChecks} />
-            <div className="flex gap-3">
-              <button onClick={handleBack} className="nx-btn-secondary"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={handleFinish} className="nx-btn-primary flex-1" disabled={submitting}>
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {t('install.complete')}
-              </button>
-            </div>
-          </div>
-        )}
-        {step === 9 && (
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
-              <Check className="w-8 h-8 text-green-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-nx-primary">{t('install.complete_title')}</h3>
-            <p className="text-sm text-nx-secondary">{t('install.complete_desc')}</p>
-            <a href="/dashboard" className="nx-btn-primary w-full">{t('install.go_to_dashboard')}</a>
-          </div>
-        )}
-      </div>
-
-      <p className="mt-6 text-xs text-nx-muted">
-        NEXVARY CX Cloud — <a href="https://nexvary.com" className="hover:text-nx-secondary">nexvary.com</a>
-      </p>
-    </div>
-  );
-};
-
-export default InstallWizard;

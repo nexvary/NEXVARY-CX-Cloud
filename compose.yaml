@@ -1,0 +1,274 @@
+# NEXVARY CX Cloud — Production Docker Compose
+# Single-command deployment: sudo bash deploy/docker-install.sh --domain=your.domain.com
+#
+# Service topology:
+#   nginx         → app (PHP-FPM tcp:9000), rtc-bridge (ws:3000)  [bridge network]
+#   app / queue / scheduler  → postgres, redis              [bridge network]
+#   app / rtc-bridge         → freeswitch ESL/WS via host.docker.internal
+#   freeswitch               → host network (SIP/RTP require host networking)
+#
+# FreeSWITCH uses network_mode: host so it binds directly to the server's
+# network interfaces for SIP (5060) and RTP (16384-16484).  All other services
+# use the nexvary-net bridge.  The app and rtc-bridge containers reach
+# FreeSWITCH via host.docker.internal (resolved to the Docker bridge gateway).
+#
+# FreeSWITCH image is built by GitHub Actions and pulled from GHCR.
+# It is NEVER built on the customer server.
+#
+# Nginx is bound to 127.0.0.1:8080 — the existing host Nginx acts as the
+# TLS reverse proxy.  See deploy/nginx-proxy.conf.example.
+#
+# PostgreSQL and Redis do NOT publish host ports.  App services reach them
+# via Docker DNS.  FreeSWITCH's mod_pgsql CDR (optional) requires a
+# docker-compose.override.yaml to publish the port on 127.0.0.1.
+
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: docker/app/Dockerfile
+    target: production
+  image: nexvary-cx-app:${APP_VERSION:-latest}
+  env_file: deploy/.env
+  volumes:
+    - app_storage:/var/www/nexvary-cx/storage
+    - app_cache:/var/www/nexvary-cx/bootstrap/cache
+    # FreeSWITCH config volume shared with the freeswitch service.
+    # FusionPbxConfigService writes per-tenant extension/dialplan/gateway
+    # XML files here; FreeSWITCH reads them on reload.
+    # Directories are mode 2770 root:nexvary-pbx (GID 2000); the app user
+    # (uid 1001) is a member of nexvary-pbx so it can write without o+w.
+    - fs_conf:/etc/freeswitch
+  networks:
+    - nexvary-net
+  # Containers need to reach FreeSWITCH on the host network via host.docker.internal
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+# The app seeds the shared volumes and completes migrations before workers start.
+x-worker-volumes: &worker-volumes
+  - type: volume
+    source: app_storage
+    target: /var/www/nexvary-cx/storage
+    volume:
+      nocopy: true
+  - type: volume
+    source: app_cache
+    target: /var/www/nexvary-cx/bootstrap/cache
+    volume:
+      nocopy: true
+  - fs_conf:/etc/freeswitch
+
+x-worker-dependencies: &worker-dependencies
+  app:
+    condition: service_healthy
+
+services:
+
+  # ── Web application (PHP-FPM) ───────────────────────────────────────────────
+  app:
+    <<: *app-common
+    volumes:
+      - app_storage:/var/www/nexvary-cx/storage
+      - app_cache:/var/www/nexvary-cx/bootstrap/cache
+      # Populate the shared public assets volume; nginx reads from it
+      - app_public:/var/www/nexvary-cx-public
+      # YAML merge (<<:) does not merge sequence values — the anchor's volumes:
+      # list is completely replaced by the service's own list, so fs_conf must
+      # be declared here explicitly or FusionPbxConfigService cannot write configs.
+      - fs_conf:/etc/freeswitch
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  # ── Queue worker ────────────────────────────────────────────────────────────
+  queue:
+    <<: *app-common
+    volumes: *worker-volumes
+    depends_on: *worker-dependencies
+    entrypoint: ["php", "/var/www/nexvary-cx/artisan", "queue:work", "redis",
+                 "--sleep=3", "--tries=3", "--timeout=90",
+                 "--max-time=3600", "--max-jobs=1000"]
+    healthcheck:
+      test: ["CMD", "php", "/var/www/nexvary-cx/artisan", "about", "--json"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  # ── Scheduler ───────────────────────────────────────────────────────────────
+  scheduler:
+    <<: *app-common
+    volumes: *worker-volumes
+    depends_on: *worker-dependencies
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        while true; do
+          php /var/www/nexvary-cx/artisan schedule:run --no-interaction;
+          sleep 60;
+        done
+    healthcheck:
+      test: ["CMD", "php", "/var/www/nexvary-cx/artisan", "about", "--json"]
+      interval: 120s
+      timeout: 10s
+      start_period: 30s
+      retries: 2
+
+  # ── Nginx reverse proxy ─────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./docker/nginx/conf/app.conf:/etc/nginx/conf.d/default.conf:ro
+      # app_public: populated by the app entrypoint on each startup.
+      # Always reflects the Vite assets from the currently-running image.
+      - app_public:/var/www/nexvary-cx/public:ro
+      # app_storage: required so nginx can follow public/storage symlink
+      # (public/storage -> ../storage/app/public) to serve uploaded files.
+      - app_storage:/var/www/nexvary-cx/storage:ro
+    ports:
+      # Bound to loopback — the host Nginx proxies HTTPS requests here.
+      - "127.0.0.1:${NEXVARY_HTTP_PORT:-8080}:80"
+    networks:
+      - nexvary-net
+    depends_on:
+      app:
+        condition: service_healthy
+      rtc-bridge:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/up"]
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # ── WebRTC signaling bridge ─────────────────────────────────────────────────
+  rtc-bridge:
+    build:
+      context: rtc-bridge
+      dockerfile: Dockerfile
+    image: nexvary-cx-rtc-bridge:${APP_VERSION:-latest}
+    env_file: deploy/.env
+    environment:
+      RTC_BIND_ADDRESS: "0.0.0.0"
+      # FreeSWITCH is on the host network; reach it via host.docker.internal
+      FREESWITCH_HOST: "host.docker.internal"
+    networks:
+      - nexvary-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "/app/healthcheck.mjs"]
+      interval: 20s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # ── PostgreSQL 16 ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-bookworm
+    env_file: deploy/.env
+    environment:
+      POSTGRES_DB:       "${DB_DATABASE:-nexvary_cx}"
+      POSTGRES_USER:     "${DB_USERNAME:-nexvary_cx}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    # No host port: app services use Docker DNS (DB_HOST=postgres).
+    # For FreeSWITCH mod_pgsql CDR, add a compose override that publishes
+    # 127.0.0.1:5432:5432 only after verifying no host PostgreSQL conflicts.
+    networks:
+      - nexvary-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-nexvary_cx} -d ${DB_DATABASE:-nexvary_cx}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  # ── Redis 7 ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-bookworm
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}",
+              "--bind", "0.0.0.0", "--loglevel", "warning"]
+    env_file: deploy/.env
+    volumes:
+      - redis_data:/data
+    # No host port: app services use Docker DNS (REDIS_HOST=redis).
+    # Redis binds to 127.0.0.1 inside the container (container loopback only).
+    networks:
+      - nexvary-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  # ── FreeSWITCH 1.10.11 ──────────────────────────────────────────────────────
+  # Pre-built by GitHub Actions, published to GHCR.
+  # NEVER built on the customer server — the installer pulls only.
+  # Uses host networking for SIP/RTP — this is the standard production pattern.
+  freeswitch:
+    image: ghcr.io/nexvary/nexvary-cx-freeswitch:1.10.11
+    # No build: section — this image must come from GHCR.
+    # To build locally for development: docker compose -f compose.yaml -f compose.dev.yaml build freeswitch
+    network_mode: host
+    env_file: deploy/.env
+    environment:
+      FREESWITCH_CONF_DIR: "/etc/freeswitch"
+      FREESWITCH_LOG_DIR:  "/var/log/freeswitch"
+    volumes:
+      - fs_conf:/etc/freeswitch
+      - fs_logs:/var/log/freeswitch
+      - fs_recordings:/var/lib/freeswitch/recordings
+    # host networking means no port mapping — FreeSWITCH uses the host's
+    # interfaces directly (5060/udp, 5060/tcp, 5061/tcp, 8021/tcp, 5066/tcp,
+    # 7443/tcp, RTP 16384-16484/udp)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL",
+             "fs_cli -H 127.0.0.1 -P 8021 -p \"${FREESWITCH_ESL_PASSWORD:-}\" -x 'status' 2>/dev/null | grep -q 'UP' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+
+# ── Named volumes ───────────────────────────────────────────────────────────────
+volumes:
+  pg_data:
+    name: nexvary_pg_data
+  redis_data:
+    name: nexvary_redis_data
+  app_storage:
+    name: nexvary_app_storage
+  app_cache:
+    name: nexvary_app_cache
+  app_public:
+    name: nexvary_app_public
+  fs_conf:
+    name: nexvary_fs_conf
+  fs_logs:
+    name: nexvary_fs_logs
+  fs_recordings:
+    name: nexvary_fs_recordings
+
+# ── Bridge network ──────────────────────────────────────────────────────────────
+networks:
+  nexvary-net:
+    name: nexvary_net
+    driver: bridge
