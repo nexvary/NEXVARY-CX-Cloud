@@ -58,13 +58,13 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 | Item | Status | Evidence / Notes |
 |------|--------|-----------------|
-| Transfer | Missing | — |
-| Hold / resume | Missing | — |
-| Call waiting | Missing | — |
-| Parking | Missing | — |
-| Pickup | Missing | — |
-| DND | Missing | — |
-| Forwarding / Follow Me | Missing | — |
+| Transfer | Partial | `ActiveCallService::blindTransfer/attendedTransfer` via `uuid_transfer`/`uuid_bridge` ESL. `ActiveCallController` POST /{uuid}/transfer. 2 Pest tests. |
+| Hold / resume | Partial | `ActiveCallService::hold/resume` via `uuid_hold`/`uuid_hold off` ESL. MoH class applied on hold. `ActiveCallController` POST/DELETE /{uuid}/hold. 2 Pest tests. |
+| Call waiting | Partial | FreeSWITCH handles call-waiting by default; `uuid_hold` suspends active leg. No dedicated NEXVARY UI yet. |
+| Parking | Partial | `ActiveCallService::park` via `valet_park` ESL. `ActiveCallController` POST /{uuid}/park. Pest test: parks call, returns slot. |
+| Pickup | Partial | `ActiveCallService::pickup` via `valet_park {retrieveUuid} {slot}` ESL. `ActiveCallController` POST /parking/{slot}/pickup. |
+| DND | Partial | `ExtensionService::setDnd()` writes `dnd_enabled` flag. FreeSWITCH dialplan reads `${dnd_enabled}`. Pest test. |
+| Forwarding / Follow Me | Partial | `ExtensionService::setForward()` writes `forward_enabled`/`forward_destination`. Pest tests (enable, null to disable). |
 | Blacklist | Partial | CallBlacklist model + BlacklistService writes dialplan XML (CALL_REJECTED). Exact/prefix/regex patterns, inbound/outbound/both. 4 Pest tests. CRUD UI. |
 | Business hours / holidays | Partial | BusinessHours model (weekly schedule JSON, holidays, timezone). BusinessHoursService writes time-condition dialplan XML. 4 Pest tests. CRUD UI. |
 | Day / night mode | Partial | DayNightMode model with one-click toggle (day↔night). Destinations per mode. UI toggle on Business Hours page. |
@@ -82,11 +82,11 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 | Item | Status | Evidence / Notes |
 |------|--------|-----------------|
-| IVR | Partial | `PBX/IVR` CRUD UI; not provisioned |
-| Ring groups | Partial | `PBX/RingGroups` CRUD UI; not provisioned |
-| Queues | Partial | `PBX/Queues` CRUD UI; not provisioned |
-| Agents | Missing | No agent management UI |
-| Distribution strategies | Missing | Not implemented |
+| IVR | Partial | `IvrProvisioningService` writes `autoload_configs/ivr.conf.d/nexvary-ivr-{id}.xml`. Wired into `IvrController` store/update/destroy. 2 Pest tests. |
+| Ring groups | Partial | `RingGroupProvisioningService` writes dialplan XML with bridge application (simultaneous/sequential). Wired into `RingGroupController`. 3 Pest tests. |
+| Queues | Partial | `QueueProvisioningService` writes `autoload_configs/fifo.conf.d/` XML + dialplan entry. Wired into `CallQueueController`. |
+| Agents | Partial | `CallAgent` model (tenant-scoped, extension FK, skill level, status). `CallAgentController` CRUD + status toggle. Agents/Index.tsx + Form.tsx. 4 Pest tests. |
+| Distribution strategies | Partial | `call_queues.strategy` column (existing). Ring group strategy (simultaneous/sequential/ordered) used by `RingGroupProvisioningService`. |
 | Operator panel / live calls | Partial | `CallCenter/Live.tsx` page exists; mock data only |
 | Authorized hangup | Missing | Not implemented |
 | CDR | Partial | `CallCenter/Records.tsx` page; no live data |
@@ -271,4 +271,4 @@ Update this file in the same commit as development work. Do not infer prior comp
 
 ---
 
-*Last updated: 2026-11-27 (CX03 Blacklist, Business Hours, Day/Night Mode, MoH, Feature Codes) | Branch: feature/stage-1-foundation*
+*Last updated: 2026-11-27 (CX03 active-call: hold/resume/transfer/park/pickup/DND/forwarding; CX04: IVR/ring-group/queue live provisioning, call agents) | Branch: feature/stage-1-foundation*

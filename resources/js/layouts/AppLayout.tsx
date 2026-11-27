@@ -109,6 +109,7 @@ const useNavItems = (unread: { sms: number; email: number; tickets: number }): N
         { label: t('nav.business_hours'), href: '/pbx/business-hours', icon: Clock },
         { label: t('nav.moh'), href: '/pbx/moh', icon: Music },
         { label: t('nav.feature_codes'), href: '/pbx/feature-codes', icon: Hash },
+        { label: t('nav.agents'), href: '/pbx/agents', icon: Users },
       ],
     },
     {

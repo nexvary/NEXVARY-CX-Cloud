@@ -5,13 +5,17 @@ namespace App\Http\Controllers\PBX;
 use App\Http\Controllers\Controller;
 use App\Models\RingGroup;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\RingGroupProvisioningService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RingGroupController extends Controller
 {
-    public function __construct(private readonly FreeSwitchService $pbx) {}
+    public function __construct(
+        private readonly FreeSwitchService $pbx,
+        private readonly RingGroupProvisioningService $provisioning,
+    ) {}
 
     public function index(): Response
     {
@@ -46,7 +50,7 @@ class RingGroupController extends Controller
             }
         }
 
-        $this->pbx->reloadDialplan();
+        $this->provisioning->provision($rg);
 
         return redirect()->route('pbx.ring-groups.index')
                          ->with('success', 'Ring group created.');
@@ -80,7 +84,7 @@ class RingGroupController extends Controller
             }
         }
 
-        $this->pbx->reloadDialplan();
+        $this->provisioning->provision($ringGroup->fresh());
 
         return redirect()->route('pbx.ring-groups.index')
                          ->with('success', 'Ring group updated.');
@@ -88,9 +92,9 @@ class RingGroupController extends Controller
 
     public function destroy(RingGroup $ringGroup): \Illuminate\Http\RedirectResponse
     {
+        $this->provisioning->deprovision($ringGroup);
         $ringGroup->members()->delete();
         $ringGroup->delete();
-        $this->pbx->reloadDialplan();
 
         return redirect()->route('pbx.ring-groups.index')
                          ->with('success', 'Ring group deleted.');

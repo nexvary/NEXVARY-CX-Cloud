@@ -5,6 +5,7 @@ namespace App\Http\Controllers\PBX;
 use App\Http\Controllers\Controller;
 use App\Models\IvrMenu;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\IvrProvisioningService;
 use App\Services\PBX\FusionPbxConfigService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,6 +16,7 @@ class IvrController extends Controller
     public function __construct(
         private readonly FreeSwitchService $pbx,
         private readonly FusionPbxConfigService $config,
+        private readonly IvrProvisioningService $provisioning,
     ) {}
 
     public function index(): Response
@@ -39,8 +41,8 @@ class IvrController extends Controller
             'max_failures'  => ['integer', 'min:1', 'max:10'],
         ]);
 
-        IvrMenu::create($validated);
-        $this->pbx->reloadDialplan();
+        $menu = IvrMenu::create($validated);
+        $this->provisioning->provision($menu);
 
         return redirect()->route('pbx.ivr.index')
                          ->with('success', __('messages.ivr_created'));
@@ -68,7 +70,7 @@ class IvrController extends Controller
         ]);
 
         $ivr->update($validated);
-        $this->pbx->reloadDialplan();
+        $this->provisioning->provision($ivr->fresh());
 
         return redirect()->route('pbx.ivr.index')
                          ->with('success', __('messages.ivr_updated'));
@@ -76,8 +78,8 @@ class IvrController extends Controller
 
     public function destroy(IvrMenu $ivr): \Illuminate\Http\RedirectResponse
     {
+        $this->provisioning->deprovision($ivr);
         $ivr->delete();
-        $this->pbx->reloadDialplan();
 
         return redirect()->route('pbx.ivr.index')
                          ->with('success', __('messages.ivr_deleted'));

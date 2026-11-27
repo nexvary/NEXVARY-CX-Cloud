@@ -14,6 +14,9 @@ use App\Services\PBX\ActiveCallService;
 use App\Services\PBX\BlacklistService;
 use App\Services\PBX\BusinessHoursService;
 use App\Services\PBX\MohService;
+use App\Services\PBX\IvrProvisioningService;
+use App\Services\PBX\RingGroupProvisioningService;
+use App\Services\PBX\QueueProvisioningService;
 use App\Http\Controllers\Provision\ProvisionController;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(BlacklistService::class, fn() => new BlacklistService(app(FusionPbxConfigService::class)));
         $this->app->bind(BusinessHoursService::class, fn() => new BusinessHoursService(app(FusionPbxConfigService::class)));
         $this->app->bind(MohService::class, fn() => new MohService());
+        $this->app->bind(IvrProvisioningService::class, fn() => new IvrProvisioningService(app(FusionPbxConfigService::class), app(FreeSwitchService::class)));
+        $this->app->bind(RingGroupProvisioningService::class, fn() => new RingGroupProvisioningService(app(FusionPbxConfigService::class), app(FreeSwitchService::class)));
+        $this->app->bind(QueueProvisioningService::class, fn() => new QueueProvisioningService(app(FusionPbxConfigService::class), app(FreeSwitchService::class)));
         $this->app->bind(ProvisionController::class, fn() => new ProvisionController(app(DeviceProvisionService::class)));
     }
 

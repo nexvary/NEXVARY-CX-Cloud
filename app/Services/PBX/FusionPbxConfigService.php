@@ -517,6 +517,39 @@ XML;
 XML;
     }
 
+
+    /**
+     * Remove an IVR menu config file.
+     */
+    public function removeIvrMenu(string $menuId): void
+    {
+        $path = "{$this->confDir}/autoload_configs/ivr.conf.d/nexvary-ivr-{$menuId}.xml";
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+    }
+
+    /**
+     * Write a FIFO queue config file into autoload_configs/fifo.conf.d/
+     */
+    public function writeFifoConfig(string $filename, string $xml): void
+    {
+        $dir = "{$this->confDir}/autoload_configs/fifo.conf.d";
+        $this->ensureDir($dir);
+        File::put("{$dir}/{$filename}", $xml);
+    }
+
+    /**
+     * Remove a FIFO queue config file.
+     */
+    public function removeFifoConfig(string $filename): void
+    {
+        $path = "{$this->confDir}/autoload_configs/fifo.conf.d/{$filename}";
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+    }
+
     /**
      * Write an arbitrary dialplan file into the tenant domain context.
      */

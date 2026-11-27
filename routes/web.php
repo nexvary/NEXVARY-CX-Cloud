@@ -27,6 +27,7 @@ use App\Http\Controllers\PBX\DialplanRuleController;
 use App\Http\Controllers\PBX\BlacklistController;
 use App\Http\Controllers\PBX\BusinessHoursController;
 use App\Http\Controllers\PBX\MohController;
+use App\Http\Controllers\PBX\CallAgentController;
 use App\Http\Controllers\PBX\FeatureCodeController;
 use App\Http\Controllers\Provision\ProvisionController;
 use App\Http\Controllers\Server\ServerController;
@@ -169,6 +170,10 @@ Route::middleware(['installed', 'auth', \App\Http\Middleware\RequireVerifiedSess
 
         // ── Feature Codes ───────────────────────────────────────────────────────
         Route::get('feature-codes', [FeatureCodeController::class, 'index'])->name('feature-codes.index');
+
+        // -- Call Agents
+        Route::resource('agents', CallAgentController::class);
+        Route::post('agents/{agent}/set-status', [CallAgentController::class, 'setStatus'])->name('agents.set-status');
     });
 
     // ── Call Center ───────────────────────────────────────────────────────

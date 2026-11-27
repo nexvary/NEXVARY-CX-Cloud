@@ -5,6 +5,7 @@ namespace App\Http\Controllers\PBX;
 use App\Http\Controllers\Controller;
 use App\Models\CallQueue;
 use App\Services\PBX\FreeSwitchService;
+use App\Services\PBX\QueueProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,7 +13,10 @@ use Inertia\Response;
 
 class CallQueueController extends Controller
 {
-    public function __construct(private readonly FreeSwitchService $pbx) {}
+    public function __construct(
+        private readonly FreeSwitchService $pbx,
+        private readonly QueueProvisioningService $provisioning,
+    ) {}
 
     public function index(): Response
     {
@@ -35,8 +39,8 @@ class CallQueueController extends Controller
             'moh_sound' => ['nullable', 'string'],
         ]);
 
-        CallQueue::create($validated);
-        $this->pbx->reloadDialplan();
+        $queue = CallQueue::create($validated);
+        $this->provisioning->provision($queue);
 
         return redirect()->route('pbx.queues.index')
                          ->with('success', __('messages.queue_created'));
@@ -63,7 +67,7 @@ class CallQueueController extends Controller
         ]);
 
         $queue->update($validated);
-        $this->pbx->reloadDialplan();
+        $this->provisioning->provision($queue->fresh());
 
         return redirect()->route('pbx.queues.index')
                          ->with('success', __('messages.queue_updated'));
@@ -71,6 +75,7 @@ class CallQueueController extends Controller
 
     public function destroy(CallQueue $queue): \Illuminate\Http\RedirectResponse
     {
+        $this->provisioning->deprovision($queue);
         $queue->delete();
 
         return redirect()->route('pbx.queues.index')
