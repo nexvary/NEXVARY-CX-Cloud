@@ -42,7 +42,8 @@ class DeviceProvision extends Model
 
     public static function findByToken(string $rawToken): ?static
     {
-        return static::where('provision_token_hash', hash('sha256', $rawToken))
+        return static::withoutGlobalScopes()
+            ->where('provision_token_hash', hash('sha256', $rawToken))
             ->where('enabled', true)
             ->first();
     }

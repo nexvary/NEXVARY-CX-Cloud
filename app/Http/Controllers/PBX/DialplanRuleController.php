@@ -3,6 +3,7 @@ namespace App\Http\Controllers\PBX;
 
 use App\Http\Controllers\Controller;
 use App\Models\DialplanRule;
+use App\Models\Tenant;
 use App\Services\PBX\ConfigValidationService;
 use App\Services\PBX\DialplanRuleService;
 use Illuminate\Http\Request;
@@ -68,9 +69,9 @@ class DialplanRuleController extends Controller
 
     private function tenantDomain(Request $request): string
     {
-        $t = $request->user()->tenant;
-        abort_if(!$t, 403, 'Dialplan rules require a tenant context.');
-        return $t->sipDomain();
+        $tenantId = $request->user()->tenant_id;
+        abort_if(empty($tenantId), 403, 'Dialplan rules require a tenant context.');
+        return Tenant::findOrFail($tenantId)->sipDomain();
     }
 
     private function validateRule(Request $request): array
